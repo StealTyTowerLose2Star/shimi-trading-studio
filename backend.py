@@ -1265,6 +1265,13 @@ def index():
     return app.send_static_file("index.html")
 
 
+@app.route("/api/monitor")
+def api_monitor():
+    """服务器资源监控"""
+    from monitor import get_monitor_status
+    return jsonify(get_monitor_status())
+
+
 if __name__ == "__main__":
     print("🚀 拾米交易工作室 Backend (tushare) 启动中...")
     print(f"   Dashboard: http://localhost:7890")

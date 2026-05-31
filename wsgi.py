@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("SHIMI_DB_TYPE", "postgresql")
 os.environ.setdefault("SHIMI_USE_REDIS", "true")
 
-from backend import app as application
+from backend import app
 
 if __name__ == "__main__":
-    application.run()
+    app.run()

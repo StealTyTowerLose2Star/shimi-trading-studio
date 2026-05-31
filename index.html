@@ -151,10 +151,101 @@
   /* Error */
   .error { padding: 20px; text-align: center; color: var(--red); }
 
-  @media (max-width: 900px) {
+  /* ===== 服务器监控栏 ===== */
+  .monitor-bar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 6px 32px; background: rgba(0,0,0,.3);
+    border-bottom: 1px solid var(--border);
+    font-size: 11px; color: var(--text-muted);
+    overflow-x: auto; white-space: nowrap;
+  }
+  .monitor-bar::-webkit-scrollbar { height: 2px; }
+  .monitor-item { display: flex; align-items: center; gap: 4px; }
+  .monitor-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .monitor-dot.ok { background: var(--green); }
+  .monitor-dot.warn { background: var(--gold); }
+  .monitor-dot.crit { background: var(--red); animation: pulse-warn .8s infinite; }
+  @keyframes pulse-warn { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .monitor-sep { color: var(--border); font-size: 10px; }
+  .alert-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 10px;
+    background: rgba(239,68,68,.15); color: var(--red);
+    font-size: 11px; font-weight: 600; cursor: pointer;
+  }
+  .alert-badge.hidden { display: none; }
+
+  /* ===== Toast 告警 ===== */
+  .toast-container {
+    position: fixed; top: 60px; right: 16px; z-index: 9999;
+    display: flex; flex-direction: column; gap: 8px;
+    max-width: 360px; pointer-events: none;
+  }
+  .toast {
+    padding: 10px 14px; border-radius: 10px;
+    border: 1px solid; font-size: 13px; line-height: 1.4;
+    animation: toast-in .3s ease;
+    pointer-events: auto; cursor: pointer;
+  }
+  .toast.warning { background: rgba(240,180,41,.12); border-color: var(--gold); color: var(--gold); }
+  .toast.critical { background: rgba(239,68,68,.12); border-color: var(--red); color: var(--red); }
+  .toast.info { background: rgba(59,130,246,.12); border-color: var(--blue); color: var(--blue); }
+  @keyframes toast-in { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
+
+  /* ===== 移动端适配 ===== */
+  @media (max-width: 768px) {
+    .topbar { padding: 8px 12px; flex-wrap: wrap; gap: 8px; }
+    .brand-text { font-size: 15px; }
+    .brand-sub { display: none; }
+    .brand-logo { width: 28px; height: 28px; font-size: 14px; }
+    .topbar-center { gap: 8px; flex-wrap: wrap; }
+    .topbar-status { font-size: 10px; }
+    .topbar-time { font-size: 11px; }
+    .btn-refresh { font-size: 10px; padding: 4px 10px; }
+    .dashboard { padding: 8px 10px; }
+    .monitor-bar { padding: 4px 12px; font-size: 10px; gap: 6px; }
+    .row { gap: 8px; margin-bottom: 8px; }
+
+    /* 指数卡片 2行2列 */
     .indices { grid-template-columns: 1fr 1fr; }
+    .idx-card { padding: 10px 12px; }
+    .idx-price { font-size: 18px; }
+
+    /* 单列 */
     .two-col, .three-col { grid-template-columns: 1fr; }
+
+    /* 情绪网格 3列 */
     .sentiment-grid { grid-template-columns: repeat(3, 1fr); }
+    .sent-item { padding: 6px 4px; }
+    .sent-val { font-size: 16px; }
+
+    /* 表格—横滚 */
+    .card { padding: 12px; overflow-x: auto; }
+    table { min-width: 100%; }
+    th, td { padding: 4px 6px; font-size: 11px; }
+    .card-title { font-size: 11px; }
+
+    /* 策略卡片横滚 */
+    .strategy-tabs { overflow-x: auto; }
+    .strategy-tab { font-size: 11px; padding: 4px 12px; }
+
+    /* 交易日志统计 */
+    .card > div[style*="display:flex"] { gap: 8px !important; }
+    .card > div[style*="display:flex"] > div { flex: 1 1 45%; }
+
+    /* 建议横幅 */
+    #marketAdviceBanner { padding: 8px !important; gap: 8px !important; font-size: 12px !important; }
+
+    /* Toast 缩小 */
+    .toast-container { right: 8px; max-width: 280px; }
+    .toast { font-size: 12px; padding: 8px 10px; }
+  }
+
+  @media (max-width: 480px) {
+    .indices { grid-template-columns: 1fr; }
+    .idx-card { padding: 8px 10px; }
+    .sentiment-grid { grid-template-columns: repeat(2, 1fr); }
+    #marketAdviceBanner > div { flex: 1 1 100%; }
   }
 </style>
 </head>
@@ -175,11 +266,28 @@
   </div>
   <div>
     <span id="userDisplay" style="font-size:13px;color:var(--text-secondary);margin-right:8px;display:none"></span>
+    <span id="alertBadge" class="alert-badge hidden" onclick="showMonitorDetail()">🔔 <span id="alertCount">0</span></span>
     <button id="loginBtn" class="btn-icon" onclick="showLoginModal()" title="登录">👤</button>
     <button id="logoutBtn" class="btn-icon" style="display:none" onclick="logout()" title="退出">🚪</button>
     <button class="btn-refresh" onclick="refreshAll()">🔄 刷新数据</button>
   </div>
 </header>
+
+<!-- 监控栏 -->
+<div class="monitor-bar" id="monitorBar">
+  <span class="monitor-item"><span class="monitor-dot ok" id="cpuDot"></span> CPU <span id="cpuVal">--</span>%</span>
+  <span class="monitor-sep">|</span>
+  <span class="monitor-item"><span class="monitor-dot ok" id="memDot"></span> 内存 <span id="memVal">--</span>%</span>
+  <span class="monitor-sep">|</span>
+  <span class="monitor-item"><span class="monitor-dot ok" id="diskDot"></span> 磁盘 <span id="diskVal">--</span>%</span>
+  <span class="monitor-sep">|</span>
+  <span class="monitor-item">负载 <span id="loadVal">--</span></span>
+  <span class="monitor-sep">|</span>
+  <span class="monitor-item" style="color:var(--text-muted)">运行 <span id="uptimeVal">--</span></span>
+</div>
+
+<!-- Toast 告警容器 -->
+<div class="toast-container" id="toastContainer"></div>
 
 <div class="dashboard">
 
@@ -524,11 +632,12 @@ function renderHotStocks(data) {
 
 function renderSectorFlow(data) {
   const tbody = $('sectorFlowBody');
-  $('sectorFlowCount').textContent = `${data.length} 个板块`;
-  if (!data || data.length === 0) {
+  if (!data || !Array.isArray(data) || data.length === 0) {
+    $('sectorFlowCount').textContent = `暂无数据`;
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">暂无数据</td></tr>';
     return;
   }
+  $('sectorFlowCount').textContent = `${data.length} 个板块`;
   tbody.innerHTML = data.slice(0, 12).map(s => {
     const hotBadge = s.hot ? '<span style="padding:1px 6px;border-radius:3px;background:rgba(240,180,41,.15);color:var(--gold);font-size:11px;font-weight:600">🔥 热点</span>' : '';
     return `<tr>
@@ -581,6 +690,91 @@ async function refreshAll() {
   btn.textContent = '🔄 刷新数据';
   btn.disabled = false;
 }
+
+// ===== 服务器监控 =====
+let seenAlerts = new Set();
+
+function dotClass(val, warn, crit) {
+  if (val >= crit) return 'crit';
+  if (val >= warn) return 'warn';
+  return 'ok';
+}
+
+async function loadMonitor() {
+  try {
+    const d = await fetchJSON('/api/monitor');
+    // CPU
+    const cpuPct = d.cpu.percent;
+    $('cpuVal').textContent = cpuPct;
+    $('cpuDot').className = 'monitor-dot ' + dotClass(cpuPct, 60, 80);
+
+    // 内存
+    const memPct = d.memory.percent;
+    $('memVal').textContent = memPct;
+    $('memDot').className = 'monitor-dot ' + dotClass(memPct, 70, 85);
+
+    // 磁盘
+    const diskPct = d.disk.percent;
+    $('diskVal').textContent = diskPct;
+    $('diskDot').className = 'monitor-dot ' + dotClass(diskPct, 80, 90);
+
+    // 负载
+    $('loadVal').textContent = d.load.load_1min.toFixed(2);
+
+    // 运行时间
+    $('uptimeVal').textContent = d.uptime.display;
+
+    // 告警
+    const badge = $('alertBadge');
+    if (d.has_alerts) {
+      badge.classList.remove('hidden');
+      $('alertCount').textContent = d.alert_count;
+    } else {
+      badge.classList.add('hidden');
+    }
+
+    // Toast 新告警
+    (d.alerts || []).forEach(a => {
+      const key = a.type + ':' + a.message;
+      if (!seenAlerts.has(key)) {
+        seenAlerts.add(key);
+        showToast(a);
+        // 限制记忆数量
+        if (seenAlerts.size > 100) seenAlerts.clear();
+      }
+    });
+
+  } catch (e) {
+    // Silently fail
+  }
+}
+
+function showToast(alert) {
+  const container = $('toastContainer');
+  const toast = document.createElement('div');
+  const lvl = alert.level === 'critical' ? 'critical' : 'warning';
+  toast.className = 'toast ' + lvl;
+  toast.textContent = '⚠️ ' + alert.message;
+  toast.onclick = () => { toast.remove(); };
+  container.appendChild(toast);
+  // 自动消失（8秒后）
+  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 8000);
+}
+
+function showMonitorDetail() {
+  // 展开当前告警列表
+  fetchJSON('/api/monitor').then(d => {
+    if (!d.has_alerts) { alert('✅ 服务器资源正常，无告警'); return; }
+    const info = (d.alerts || []).map(a =>
+      '⚠️ [' + a.level.toUpperCase() + '] ' + a.message
+    ).join('\n');
+    alert(info + '\n\nCPU: ' + d.cpu.percent + '%  |  内存: ' + d.memory.percent + '%\n磁盘: ' + d.disk.percent + '%  |  负载: ' + d.load.load_1min.toFixed(2));
+  }).catch(() => {});
+}
+
+// 启动监控定时器（每10秒刷新）
+loadMonitor();
+setInterval(loadMonitor, 10000);
 
 // Auto-reload every 60s
 loadDashboard();
