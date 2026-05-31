@@ -1039,10 +1039,12 @@ def api_pnl_report():
     period = request.args.get("period", "month")
     trades = get_trades(user_id=user["id"])
     closed = [t for t in trades if t.get("exit_price")]
+    open_positions = [t for t in trades if not t.get("exit_price")]
 
     from collections import defaultdict
-    buckets = defaultdict(lambda: {"trades": 0, "won": 0, "pnl": 0.0})
+    buckets = defaultdict(lambda: {"trades": 0, "won": 0, "pnl": 0.0, "open_pnl": 0.0})
 
+    # Count closed trades
     for t in closed:
         exit_date = t.get("date", "")
         if not exit_date:
@@ -1062,6 +1064,29 @@ def api_pnl_report():
             buckets[key]["won"] += 1
         buckets[key]["pnl"] += pnl
 
+    # Include open positions' unrealized P&L in their entry date bucket
+    for t in open_positions:
+        entry_date = t.get("date", "")
+        if not entry_date:
+            continue
+        if period == "month":
+            key = entry_date[:7]
+        elif period == "year":
+            key = entry_date[:4]
+        else:
+            key = entry_date
+        try:
+            from realtime_scorer import get_kline
+            kline = get_kline(t["code"], days=5)
+            if kline is not None and len(kline) > 0:
+                cur = float(kline["close"].iloc[-1])
+                pnl = (cur - t["entry_price"]) * t["qty"] if t["direction"] == "buy" else (t["entry_price"] - cur) * t["qty"]
+                buckets[key]["trades"] += 1
+                buckets[key]["pnl"] += pnl
+                buckets[key]["open_pnl"] += pnl
+        except:
+            pass
+
     result = []
     for k in sorted(buckets, reverse=True):
         b = buckets[k]
@@ -1071,6 +1096,8 @@ def api_pnl_report():
             "won": b["won"],
             "win_rate": round(b["won"] / b["trades"] * 100, 1) if b["trades"] > 0 else 0,
             "pnl": round(b["pnl"], 2),
+            "has_open": b.get("open_pnl", 0) != 0,
+            "open_pnl": round(b.get("open_pnl", 0), 2),
         })
 
     return jsonify({"period": period, "report": result})
@@ -1242,4 +1269,4 @@ if __name__ == "__main__":
     print("🚀 拾米交易工作室 Backend (tushare) 启动中...")
     print(f"   Dashboard: http://localhost:7890")
     print(f"   API:       http://localhost:7890/api/dashboard")
-    app.run(host="0.0.0.0", port=7890, debug=True)
+    app.run(host="127.0.0.1", port=config.SERVER_PORT, debug=config.DEBUG)
