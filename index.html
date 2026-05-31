@@ -151,22 +151,12 @@
   /* Error */
   .error { padding: 20px; text-align: center; color: var(--red); }
 
-  /* ===== 服务器监控栏 ===== */
-  .monitor-bar {
-    display: flex; align-items: center; gap: 12px;
-    padding: 6px 32px; background: rgba(0,0,0,.3);
-    border-bottom: 1px solid var(--border);
-    font-size: 11px; color: var(--text-muted);
-    overflow-x: auto; white-space: nowrap;
-  }
-  .monitor-bar::-webkit-scrollbar { height: 2px; }
-  .monitor-item { display: flex; align-items: center; gap: 4px; }
-  .monitor-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  /* 监控弹窗（复用监控栏样式） */
+  .monitor-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; display: inline-block; vertical-align: middle; margin-right: 6px; }
   .monitor-dot.ok { background: var(--green); }
   .monitor-dot.warn { background: var(--gold); }
   .monitor-dot.crit { background: var(--red); animation: pulse-warn .8s infinite; }
   @keyframes pulse-warn { 0%,100%{opacity:1} 50%{opacity:.3} }
-  .monitor-sep { color: var(--border); font-size: 10px; }
   .alert-badge {
     display: inline-flex; align-items: center; gap: 4px;
     padding: 2px 8px; border-radius: 10px;
@@ -175,7 +165,7 @@
   }
   .alert-badge.hidden { display: none; }
 
-  /* ===== Toast 告警 ===== */
+  /* ===== 告警 Toast ===== */
   .toast-container {
     position: fixed; top: 60px; right: 16px; z-index: 9999;
     display: flex; flex-direction: column; gap: 8px;
@@ -203,7 +193,6 @@
     .topbar-time { font-size: 11px; }
     .btn-refresh { font-size: 10px; padding: 4px 10px; }
     .dashboard { padding: 8px 10px; }
-    .monitor-bar { padding: 4px 12px; font-size: 10px; gap: 6px; }
     .row { gap: 8px; margin-bottom: 8px; }
 
     /* 指数卡片 2行2列 */
@@ -266,28 +255,50 @@
   </div>
   <div>
     <span id="userDisplay" style="font-size:13px;color:var(--text-secondary);margin-right:8px;display:none"></span>
-    <span id="alertBadge" class="alert-badge hidden" onclick="showMonitorDetail()">🔔 <span id="alertCount">0</span></span>
+    <span id="alertBadge" class="alert-badge hidden" onclick="showMonitorModal()">🔔 0</span>
     <button id="loginBtn" class="btn-icon" onclick="showLoginModal()" title="登录">👤</button>
     <button id="logoutBtn" class="btn-icon" style="display:none" onclick="logout()" title="退出">🚪</button>
+    <button class="btn-icon" onclick="showMonitorModal()" title="服务器状态">📊</button>
     <button class="btn-refresh" onclick="refreshAll()">🔄 刷新数据</button>
   </div>
 </header>
 
-<!-- 监控栏 -->
-<div class="monitor-bar" id="monitorBar">
-  <span class="monitor-item"><span class="monitor-dot ok" id="cpuDot"></span> CPU <span id="cpuVal">--</span>%</span>
-  <span class="monitor-sep">|</span>
-  <span class="monitor-item"><span class="monitor-dot ok" id="memDot"></span> 内存 <span id="memVal">--</span>%</span>
-  <span class="monitor-sep">|</span>
-  <span class="monitor-item"><span class="monitor-dot ok" id="diskDot"></span> 磁盘 <span id="diskVal">--</span>%</span>
-  <span class="monitor-sep">|</span>
-  <span class="monitor-item">负载 <span id="loadVal">--</span></span>
-  <span class="monitor-sep">|</span>
-  <span class="monitor-item" style="color:var(--text-muted)">运行 <span id="uptimeVal">--</span></span>
-</div>
-
 <!-- Toast 告警容器 -->
 <div class="toast-container" id="toastContainer"></div>
+
+<!-- 监控弹窗 -->
+<div id="monitorModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:24px;width:420px;max-width:90vw">
+    <div style="font-size:16px;font-weight:700;margin-bottom:14px">📊 服务器状态</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;justify-content:space-between;padding:8px 10px;background:rgba(255,255,255,.03);border-radius:8px">
+        <span style="color:var(--text-muted)">CPU</span>
+        <span><span id="mcCpuDot" class="monitor-dot" style="display:inline-block;vertical-align:middle;margin-right:6px"></span><span id="mcCpuVal">--</span>% (<span id="mcCpuCores">--</span> 核)</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:8px 10px;background:rgba(255,255,255,.03);border-radius:8px">
+        <span style="color:var(--text-muted)">内存</span>
+        <span><span id="mcMemDot" class="monitor-dot" style="display:inline-block;vertical-align:middle;margin-right:6px"></span><span id="mcMemVal">--</span>% (<span id="mcMemUsed">--</span> / <span id="mcMemTotal">--</span> MB)</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:8px 10px;background:rgba(255,255,255,.03);border-radius:8px">
+        <span style="color:var(--text-muted)">磁盘</span>
+        <span><span id="mcDiskDot" class="monitor-dot" style="display:inline-block;vertical-align:middle;margin-right:6px"></span><span id="mcDiskVal">--</span>% (<span id="mcDiskUsed">--</span> / <span id="mcDiskTotal">--</span> GB)</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:8px 10px;background:rgba(255,255,255,.03);border-radius:8px">
+        <span style="color:var(--text-muted)">系统负载</span>
+        <span><span id="mcLoad1">--</span> / <span id="mcLoad5">--</span> / <span id="mcLoad15">--</span> (1/5/15min)</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:8px 10px;background:rgba(255,255,255,.03);border-radius:8px">
+        <span style="color:var(--text-muted)">运行时间</span>
+        <span id="mcUptime">--</span>
+      </div>
+      <div id="monitorAlertList" style="margin-top:4px"></div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:2px">刷新周期: 10秒</div>
+    </div>
+    <div style="margin-top:14px;text-align:right">
+      <button onclick="document.getElementById('monitorModal').style.display='none'" style="padding:8px 20px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text-secondary);cursor:pointer">关闭</button>
+    </div>
+  </div>
+</div>
 
 <div class="dashboard">
 
@@ -691,7 +702,7 @@ async function refreshAll() {
   btn.disabled = false;
 }
 
-// ===== 服务器监控 =====
+// ===== 服务器监控（后台静默运行） =====
 let seenAlerts = new Set();
 
 function dotClass(val, warn, crit) {
@@ -703,50 +714,89 @@ function dotClass(val, warn, crit) {
 async function loadMonitor() {
   try {
     const d = await fetchJSON('/api/monitor');
-    // CPU
     const cpuPct = d.cpu.percent;
-    $('cpuVal').textContent = cpuPct;
-    $('cpuDot').className = 'monitor-dot ' + dotClass(cpuPct, 60, 80);
-
-    // 内存
-    const memPct = d.memory.percent;
-    $('memVal').textContent = memPct;
-    $('memDot').className = 'monitor-dot ' + dotClass(memPct, 70, 85);
-
-    // 磁盘
-    const diskPct = d.disk.percent;
-    $('diskVal').textContent = diskPct;
-    $('diskDot').className = 'monitor-dot ' + dotClass(diskPct, 80, 90);
-
-    // 负载
-    $('loadVal').textContent = d.load.load_1min.toFixed(2);
-
-    // 运行时间
-    $('uptimeVal').textContent = d.uptime.display;
 
     // 告警
     const badge = $('alertBadge');
     if (d.has_alerts) {
       badge.classList.remove('hidden');
-      $('alertCount').textContent = d.alert_count;
+      badge.textContent = '🔔 ' + d.alert_count;
     } else {
       badge.classList.add('hidden');
+      badge.textContent = '🔔 0';
     }
 
-    // Toast 新告警
+    // Toast 新告警（仅当告警首次出现时）
     (d.alerts || []).forEach(a => {
       const key = a.type + ':' + a.message;
       if (!seenAlerts.has(key)) {
         seenAlerts.add(key);
         showToast(a);
-        // 限制记忆数量
         if (seenAlerts.size > 100) seenAlerts.clear();
       }
     });
 
-  } catch (e) {
-    // Silently fail
+  } catch (e) {}
+}
+
+function updateMonitorModal(d) {
+  if (!d) return;
+  const cpuPct = d.cpu.percent;
+  $('mcCpuVal').textContent = cpuPct;
+  $('mcCpuDot').className = 'monitor-dot ok';
+  $('mcCpuDot').classList.add(dotClass(cpuPct, 60, 80));
+  $('mcCpuCores').textContent = d.cpu.cores;
+
+  const memPct = d.memory.percent;
+  $('mcMemVal').textContent = memPct;
+  $('mcMemDot').className = 'monitor-dot ok';
+  $('mcMemDot').classList.add(dotClass(memPct, 70, 85));
+  $('mcMemUsed').textContent = d.memory.used_mb;
+  $('mcMemTotal').textContent = d.memory.total_mb;
+
+  const diskPct = d.disk.percent;
+  $('mcDiskVal').textContent = diskPct;
+  $('mcDiskDot').className = 'monitor-dot ok';
+  $('mcDiskDot').classList.add(dotClass(diskPct, 80, 90));
+  $('mcDiskUsed').textContent = d.disk.used_gb;
+  $('mcDiskTotal').textContent = d.disk.total_gb;
+
+  $('mcLoad1').textContent = d.load.load_1min.toFixed(2);
+  $('mcLoad5').textContent = d.load.load_5min.toFixed(2);
+  $('mcLoad15').textContent = d.load.load_15min.toFixed(2);
+  $('mcUptime').textContent = d.uptime.display;
+
+  // 告警列表
+  const alertDiv = $('monitorAlertList');
+  if (d.has_alerts && d.alerts.length > 0) {
+    alertDiv.innerHTML = '<div style="font-size:12px;color:var(--red);margin-bottom:6px">⚠️ 当前告警</div>' +
+      d.alerts.map(a =>
+        '<div style="padding:4px 8px;margin-bottom:4px;border-radius:4px;font-size:12px;' +
+        (a.level === 'critical'
+          ? 'background:rgba(239,68,68,.12);color:var(--red)'
+          : 'background:rgba(240,180,41,.12);color:var(--gold)') +
+        '">⚠️ ' + a.message + '</div>'
+      ).join('');
+  } else {
+    alertDiv.innerHTML = '<div style="padding:6px 8px;border-radius:4px;font-size:12px;background:rgba(34,197,94,.1);color:var(--green);text-align:center">✅ 服务器资源正常，无告警</div>';
   }
+}
+
+function showMonitorModal() {
+  const modal = $('monitorModal');
+  modal.style.display = 'flex';
+  // 立刻填充最新的监控数据
+  fetchJSON('/api/monitor').then(d => updateMonitorModal(d)).catch(() => {});
+  // 启动定时刷新（每3秒），关闭时停止
+  if (window._monitorTimer) clearInterval(window._monitorTimer);
+  window._monitorTimer = setInterval(() => {
+    if (modal.style.display === 'none') {
+      clearInterval(window._monitorTimer);
+      window._monitorTimer = null;
+      return;
+    }
+    fetchJSON('/api/monitor').then(d => updateMonitorModal(d)).catch(() => {});
+  }, 3000);
 }
 
 function showToast(alert) {
@@ -757,24 +807,12 @@ function showToast(alert) {
   toast.textContent = '⚠️ ' + alert.message;
   toast.onclick = () => { toast.remove(); };
   container.appendChild(toast);
-  // 自动消失（8秒后）
   setTimeout(() => { if (toast.parentNode) toast.remove(); }, 8000);
 }
 
-function showMonitorDetail() {
-  // 展开当前告警列表
-  fetchJSON('/api/monitor').then(d => {
-    if (!d.has_alerts) { alert('✅ 服务器资源正常，无告警'); return; }
-    const info = (d.alerts || []).map(a =>
-      '⚠️ [' + a.level.toUpperCase() + '] ' + a.message
-    ).join('\n');
-    alert(info + '\n\nCPU: ' + d.cpu.percent + '%  |  内存: ' + d.memory.percent + '%\n磁盘: ' + d.disk.percent + '%  |  负载: ' + d.load.load_1min.toFixed(2));
-  }).catch(() => {});
-}
-
-// 启动监控定时器（每10秒刷新）
+// 监控定时器（每15秒，仅检测告警，不显示在页面）
 loadMonitor();
-setInterval(loadMonitor, 10000);
+setInterval(loadMonitor, 15000);
 
 // Auto-reload every 60s
 loadDashboard();

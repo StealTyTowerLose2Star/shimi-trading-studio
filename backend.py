@@ -932,12 +932,35 @@ def api_portfolio_advice():
         except:
             pass
 
+        # 场景分析
+        distance_to_sl = "--"
+        scenario = ""
+        try:
+            ev = evaluate_position(code, entry, t["direction"])
+            if ev and isinstance(ev, dict):
+                sl_label = ev.get("stop_loss_label", "--")
+                distance = ev.get("distance_to_sl_pct")
+                if distance is not None:
+                    distance_to_sl = f"{distance}%"
+                    if distance < 3:
+                        scenario = "⚠️ 距止损很近，密切关注"
+                    elif distance < 8:
+                        scenario = "正常持仓区间"
+                    else:
+                        scenario = "安全距离充足"
+                trail = ev.get("trailing_level", 0)
+                if trail >= 1:
+                    scenario += "·浮动止盈已激活 ✅" if trail == 1 else "·已锁定利润 ✅"
+        except:
+            pass
+
         positions.append({
             "code": code, "name": t.get("name", ""),
             "entry_price": round(entry, 2), "current_price": round(current_price, 2),
             "qty": qty, "invested": round(invested, 2),
             "pnl": round(pnl, 2), "pnl_pct": round(pnl_pct, 1),
-            "stop_loss": sl_label, "advice": advice, "reason": reason,
+            "stop_loss": sl_label, "distance_to_sl": distance_to_sl,
+            "advice": advice, "reason": reason, "scenario": scenario,
             "trend_score": trend["total_score"] if trend else None,
             "trend_stage": trend["stage"] if trend else None,
             "hybrid_score": hybrid["score"] if hybrid else None,
