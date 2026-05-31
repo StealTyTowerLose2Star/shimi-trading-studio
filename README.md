@@ -1,71 +1,177 @@
 # 拾米交易工作室 · ShiMi Trading Studio
 
-> **全栈量化交易管理平台 | 策略总控 · 持仓管理 · 实时评分**
+> **全栈量化交易管理平台 | 策略总控 · 持仓管理 · 实时评分 · 服务器监控**
 
-将三个独立策略仓库（趋势跟踪、混合趋势、龙头战法）整合到统一的可视化控制面板。Flask 后端 + 单页前端，实现策略评分可视化、持仓动态管理、市场情绪监控的一站式体验。
+将三个独立策略仓库（[趋势跟踪](https://github.com/StealTyTowerLose2Star/a-share-trend-strategy)、[混合趋势](https://github.com/StealTyTowerLose2Star/a-share-hybrid-strategy)、[龙头战法](https://github.com/StealTyTowerLose2Star/a-share-dragon-strategy)）整合到统一的可视化控制面板。Flask 后端 + 单页前端，实现策略评分可视化、持仓动态管理、市场情绪监控的一站式体验。
 
 ---
 
 ## 🏗️ 系统架构
 
+### 三层模块解耦
+
 ```
-┌──────────────────────────────────────────────────────┐
-│                   前端 (index.html)                    │
-│   暗色主题SPA · 实时数据展示 · 策略评分卡片 · 持仓表格 │
-└────────────────────────┬─────────────────────────────┘
-                         │ HTTP (localhost:7890)
-┌────────────────────────▼─────────────────────────────┐
-│                 Flask 后端 (backend.py)                │
-│                                                       │
-│  ┌──────────────┐  ┌──────────────┐  ┌────────────┐  │
-│  │ 市场数据API    │  │ 策略评分引擎   │  │ 账户交易API │  │
-│  │ 大盘指数       │  │ 趋势评分      │  │ 用户认证    │  │
-│  │ 板块排行       │  │ 混合策略评分   │  │ 持仓CRUD   │  │
-│  │ 涨停池        │  │ 龙头战法评分   │  │ 交易记录    │  │
-│  │ 情绪指标      │  │ 持仓评估      │  │ 组合分析    │  │
-│  └──────────────┘  └──────────────┘  └────────────┘  │
-└────────────────────────┬─────────────────────────────┘
-                         │ 数据源
-┌────────────────────────▼─────────────────────────────┐
-│                   数据层                               │
-│  ┌──────────────────┐  ┌───────────────────────────┐  │
-│  │ Tushare Pro 数据源│  │ SQLite 数据库 (shimi.db)    │  │
-│  │ 日线/行情/基本面   │  │ 用户/交易记录/持仓持久化    │  │
-│  └──────────────────┘  └───────────────────────────┘  │
-└──────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│                      app.py (应用工厂)                           │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  api/ (Flask Blueprints — 路由层)                         │  │
+│  │  ┌─────────┐ ┌──────────┐ ┌─────────┐ ┌───────┐ ┌────┐ │  │
+│  │  │ market  │ │ strategy │ │ advice  │ │ trade │ │mon │ │  │
+│  │  └────┬────┘ └────┬─────┘ └────┬────┘ └───┬───┘ └──┬─┘ │  │
+│  └───────┼───────────┼────────────┼──────────┼────────┼──────┘  │
+│          ▼           ▼            ▼          ▼        ▼        │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  services/ (业务层 — 纯逻辑，不依赖 Flask)                  │  │
+│  │  ┌───────────────┐  ┌───────────────────┐                 │  │
+│  │  │ strategy.py   │  │ advice.py         │                 │  │
+│  │  │ 策略扫描编排    │  │ 操作建议引擎       │                 │  │
+│  │  └───────┬───────┘  └────────┬──────────┘                 │  │
+│  └──────────┼───────────────────┼────────────────────────────┘  │
+│             ▼                   ▼                               │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  data/ (数据层 — 只负责数据抓取)                            │  │
+│  │  ┌───────────────┐                                        │  │
+│  │  │ fetcher.py    │  ← 15 个 tushare 数据函数              │  │
+│  │  └───────┬───────┘                                        │  │
+│  └──────────┼────────────────────────────────────────────────┘  │
+│             ▼                                                   │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  config / cache / db / monitor / realtime_scorer         │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────┘
+```
+
+### 依赖方向（单向，无循环）
+
+```
+app.py → api/ → services/ → data/ → config / cache / db
+```
+
+**修改保障**：
+- 改 `data/fetcher.py` → 只影响数据格式，不影响业务逻辑
+- 改 `services/advice.py` → 只影响建议逻辑，不影响 API 路由
+- 改 `api/trade.py` → 只影响交易接口，不影响策略评分
+- 新增数据源（如 AKShare）→ 只需加新 fetcher 函数，零改动业务层
+
+### 生产部署架构
+
+```
+                    公网 IP
+                       │ :80
+                ┌──────┴──────┐
+                │   Nginx      │  ← 反向代理 + 静态缓存
+                └──────┬──────┘
+                       │ 127.0.0.1:7890
+                ┌──────┴──────┐
+                │  Gunicorn    │  ← 4 workers 并发
+                ├─────────────┤
+                │ PostgreSQL  │  ← 持久化存储
+                ├─────────────┤
+                │   Redis     │  ← 持久缓存
+                └─────────────┘
 ```
 
 ---
 
-## 🚀 核心功能
+## 🚀 部署方式
 
-### 📊 市场总览看板
-- **大盘指数** — 上证/深证/创业板/科创50 实时行情
-- **板块排行** — 行业板块涨幅/资金流向排行榜
-- **涨停池** — 今日涨停股票列表 + 连板数
-- **市场情绪** — 涨跌比/涨停跌停数/情绪评分
+### 方式一：Docker 部署（推荐）
 
-### 🧠 三策略并行评分
+```bash
+# 1. 克隆仓库
+git clone https://github.com/StealTyTowerLose2Star/shimi-trading-studio.git
+cd shimi-trading-studio
 
-系统集成三个独立策略仓库的评分引擎：
+# 2. 配置环境变量
+cp .env.example .env
+vim .env   # 填入你的 TUSHARE_TOKEN
 
-| 策略 | 来源仓库 | 评分维度 |
-|:----|:--------|:--------|
-| 📈 **趋势跟踪** | a-share-trend-strategy | 均线排列 + 突破强度 + 成交量确认 + 相对强度 + 板块热度 |
-| 🔀 **混合策略** | a-share-hybrid-strategy | 6维评分(d1-d7): 趋势形态+动量+量能+价格安全+板块排名+持续性 |
-| 🐉 **龙头战法** | a-share-dragon-strategy | 连板高度+涨停时间+带动效应+抗跌性+板块地位 |
+# 3. 一键启动
+docker compose up -d
 
-### 💼 持仓管理
-- **持仓录入** — 记录买入价/数量/方向
-- **动态止损** — ATR自适应止损/MACD死叉/MA20趋势
-- **目标价位** — 3档自动止盈计算
-- **组合分析** — 总盈亏/胜率/风险评级
-- **操作建议** — 持有/增持/减仓/清仓智能判断
+# 4. 查看日志
+docker compose logs -f
 
-### 🔐 用户系统
-- 多用户支持
-- JWT 身份认证
-- 个人交易记录独立管理
+# 访问 http://localhost:80
+```
+
+#### 依赖的 Docker 镜像
+
+| 镜像 | 版本 | 说明 |
+|:----|:----|:-----|
+| `postgres:16-alpine` | 16 | 数据库 |
+| `redis:7-alpine` | 7 | 缓存 |
+| `nginx:1.24-alpine` | 1.24 | 反向代理 |
+| `python:3.12-slim` | 3.12 | 应用（自构建） |
+
+#### 服务端口
+
+| 端口 | 服务 | 外部可访问 |
+|:---:|:----|:---------:|
+| `:80` | Nginx (Web) | ✅ |
+| `:5432` | PostgreSQL | ❌ (仅内部) |
+| `:6379` | Redis | ❌ (仅内部) |
+| `:7890` | Gunicorn | ❌ (仅内部) |
+
+### 方式二：本地开发部署
+
+#### 前置条件
+- Python 3.10+
+- Tushare Pro Token（免费注册 [tushare.pro](https://tushare.pro)）
+- PostgreSQL + Redis（可选，默认 SQLite + 内存缓存）
+
+#### 安装与启动
+
+```bash
+# 1. 克隆
+git clone https://github.com/StealTyTowerLose2Star/shimi-trading-studio.git
+cd shimi-trading-studio
+
+# 2. 创建虚拟环境
+python3 -m venv venv
+source venv/bin/activate
+
+# 3. 安装依赖
+pip install -r requirements.txt
+
+# 4. 设置环境变量
+export TUSHARE_TOKEN=your_token_here
+
+# 5. 启动（开发模式，SQLite + 内存缓存）
+python3 backend.py
+
+# 或启动（生产模式，PostgreSQL + Redis）
+export SHIMI_DB_TYPE=postgresql
+export SHIMI_USE_REDIS=true
+gunicorn wsgi:app -b 127.0.0.1:7890 -w 4
+```
+
+访问:
+- **控制面板**: http://localhost:7890
+- **API 聚合数据**: http://localhost:7890/api/dashboard
+- **服务器监控**: http://localhost:7890/api/monitor
+
+---
+
+## ⚙️ 环境变量
+
+| 变量 | 默认值 | 说明 |
+|:----|:------|:----|
+| `TUSHARE_TOKEN` | — | **Tushare Pro Token（必填）** |
+| `SHIMI_DB_TYPE` | `postgresql` | 数据库类型: `sqlite` / `postgresql` |
+| `SHIMI_DB_HOST` | `localhost` | PostgreSQL 地址 |
+| `SHIMI_DB_PORT` | `5432` | PostgreSQL 端口 |
+| `SHIMI_DB_NAME` | `shimi` | PostgreSQL 数据库名 |
+| `SHIMI_DB_USER` | `shimi` | PostgreSQL 用户名 |
+| `SHIMI_DB_PASS` | `shimi_secret` | PostgreSQL 密码 |
+| `SHIMI_USE_REDIS` | `true` | 启用 Redis 缓存: `true` / `false` |
+| `SHIMI_REDIS_HOST` | `localhost` | Redis 地址 |
+| `SHIMI_REDIS_PORT` | `6379` | Redis 端口 |
+| `SHIMI_REDIS_DB` | `0` | Redis 数据库编号 |
+| `SHIMI_HOST` | `0.0.0.0` | 监听地址 |
+| `SHIMI_PORT` | `7890` | 监听端口 |
+| `SHIMI_DEBUG` | `false` | Flask 调试模式 |
+| `SHIMI_TOKEN_HOURS` | `72` | JWT Token 有效期（小时） |
 
 ---
 
@@ -73,48 +179,45 @@
 
 ```
 shimi-trading-studio/
-├── backend.py              ★ Flask 后端服务（1090行）
-│                           ★ 所有API路由 + 缓存 + 策略调用
-├── db.py                   ★ SQLite 数据库模块
-│                           ★ 用户管理 + 交易记录CRUD
-├── position_manager.py     ★ 持仓管理引擎
-│                           ★ 动态止损/止盈/浮动止盈计算
-├── realtime_scorer.py      ★ 策略评分引擎 (v2)
-│                           ★ 三大策略真实评分公式适配
-├── index.html              ★ 单页前端（暗色主题SPA）
-│                           ★ 实时数据可视化 + 交互操作
-├── shimi.db                ☆ SQLite 数据库文件（自动生成）
-├── venv/                   ☆ Python 虚拟环境（Git忽略）
-├── .gitignore
-└── README.md
+│
+├── app.py                  ← 应用工厂（组装所有模块）
+├── wsgi.py                 ← Gunicorn 入口
+├── backend.py              ← 旧版入口（向后兼容）
+│
+├── config.py               ← 配置管理
+├── cache.py                ← 缓存引擎（Redis/内存）
+├── db.py                   ← 数据库（SQLite/PostgreSQL）
+├── monitor.py              ← 服务器监控
+├── position_manager.py     ← 持仓管理引擎（ATR动态风控）
+├── realtime_scorer.py      ← 三大策略评分引擎
+│
+├── data/
+│   └── fetcher.py          ← 数据层：15个tushare数据函数
+│
+├── services/
+│   ├── strategy.py         ← 业务层：策略扫描编排
+│   └── advice.py           ← 业务层：操作建议引擎
+│
+├── api/
+│   ├── __init__.py         ← 蓝图注册
+│   ├── auth.py             ← 认证辅助
+│   ├── market.py           ← 市场数据路由
+│   ├── strategy.py         ← 策略评分路由
+│   ├── advice.py           ← 操作建议路由
+│   ├── trade.py            ← 账户交易路由
+│   └── monitor.py          ← 服务器监控路由
+│
+├── index.html              ← 单页前端（暗色主题SPA）
+│
+├── Dockerfile              ← Docker 镜像构建
+├── docker-compose.yml      ← Docker Compose 编排
+├── nginx/default.conf      ← Nginx 配置
+├── requirements.txt        ← Python 依赖
+├── .env.example            ← 环境变量模板
+│
+├── DEPLOY.md               ← 详细部署文档
+└── README.md               ← 本文件
 ```
-
-**符号说明**: ★ = Git 跟踪 | ☆ = Git 忽略
-
----
-
-## 🚀 快速开始
-
-### 前置条件
-- Python 3.10+
-- Tushare Pro Token（免费注册 [tushare.pro](https://tushare.pro)）
-- 已安装 `tushare` / `flask` / `flask-cors` / `pandas` / `numpy`
-
-### 安装依赖
-```bash
-pip install flask flask-cors pandas numpy tushare
-```
-
-### 启动服务
-```bash
-cd shimi-trading-studio
-python3 backend.py
-```
-
-启动后访问：
-- **控制面板**: http://localhost:7890
-- **API 聚合数据**: http://localhost:7890/api/dashboard
-- **健康检查**: http://localhost:7890/api/health
 
 ---
 
@@ -125,11 +228,14 @@ python3 backend.py
 | 接口 | 方法 | 说明 | 缓存 |
 |:----|:----|:----|:---:|
 | `/api/health` | GET | 健康检查 + 最新交易日 | — |
-| `/api/indices` | GET | 大盘指数行情 | 30s |
+| `/api/indices` | GET | 上证/深证/创业板/科创50 | 30s |
 | `/api/sectors` | GET | 行业板块排行 | 120s |
+| `/api/sector-flow` | GET | 板块强度排行 | 60s |
 | `/api/hot-stocks` | GET | 热门股票 | 30s |
-| `/api/limit-up` | GET | 涨停板数据 | 60s |
+| `/api/limit-up` | GET | 涨停板 | 60s |
 | `/api/sentiment` | GET | 市场情绪指标 | 30s |
+| `/api/stock/lookup` | GET | 股票代码→名称查询 | — |
+| `/api/dashboard` | GET | 聚合所有数据 | 混合 |
 
 ### 策略评分
 
@@ -139,81 +245,44 @@ python3 backend.py
 | `/api/strategy/hybrid` | GET | 混合策略评分 | 120s |
 | `/api/strategy/dragon` | GET | 龙头战法评分 | 120s |
 | `/api/strategy/<name>/refresh` | GET | 强制刷新策略缓存 | — |
-| `/api/advice` | GET | 综合交易建议 | 120s |
-| `/api/portfolio/advice` | GET | 持仓组合分析（需登录） | — |
 
-### 持仓管理
+### 操作建议
 
 | 接口 | 方法 | 说明 |
-|:----|:----|:----|
+|:----|:----|:-----|
+| `/api/advice` | GET | 综合交易建议 |
 | `/api/positions/evaluate` | POST | 批量评估持仓（止损/目标） |
+| `/api/portfolio/advice` | GET | 持仓组合分析（需登录） |
 
-### 用户与交易
+### 账户与交易
 
 | 接口 | 方法 | 说明 |
-|:----|:----|:----|
+|:----|:----|:-----|
 | `/api/auth/login` | POST | 用户登录 |
 | `/api/auth/register` | POST | 用户注册 |
 | `/api/auth/me` | GET | 当前用户信息 |
 | `/api/users` | GET | 用户列表 |
 | `/api/trades` | GET | 获取交易记录 |
-| `/api/trades/all` | GET | 获取全部交易记录 |
 | `/api/trades` | POST | 新增交易 |
 | `/api/trades/<id>` | PUT | 更新交易 |
 | `/api/trades/<id>` | DELETE | 删除交易 |
+| `/api/trades/pnl-report` | GET | 盈亏日历统计 |
 
-### 聚合接口
+### 服务器监控
 
 | 接口 | 方法 | 说明 |
-|:----|:----|:----|
-| `/api/dashboard` | GET | 聚合所有市场+策略数据（一站式） |
+|:----|:----|:-----|
+| `/api/monitor` | GET | CPU/内存/磁盘/负载/告警 |
 
 ---
 
-## 🔗 关联项目
+## 🧠 三大策略引擎
 
-| 项目 | 说明 | 仓位 |
-|:----|:----|:---:|
-| [a-share-trend-strategy](https://github.com/StealTyTowerLose2Star/a-share-trend-strategy) | 中期趋势跟踪系统 | 80% |
-| [a-share-hybrid-strategy](https://github.com/StealTyTowerLose2Star/a-share-hybrid-strategy) | 混合趋势策略系统 | — |
-| [a-share-dragon-strategy](https://github.com/StealTyTowerLose2Star/a-share-dragon-strategy) | 龙头战法策略系统 | 20% |
-
----
-
-## ⚙️ 技术栈
-
-| 层级 | 技术 |
-|:----|:----|
-| **后端** | Python 3.12 · Flask · Flask-CORS · NumPy |
-| **前端** | 原生 HTML/CSS/JS · 暗色主题 · 响应式设计 |
-| **数据源** | Tushare Pro · AKShare |
-| **数据库** | SQLite (WAL模式) |
-| **认证** | JWT Token · SHA256密码加密 |
-| **缓存** | 内存字典缓存 (TTL自适应) |
-
----
-
-## 📊 界面预览
-
-控制面板包含以下核心模块：
-
-```
-┌─────────────────────────────────────────────────────────┐
-│ 🚀 拾米交易工作室 · 策略总控                               │
-├──────────┬──────────┬──────────┬──────────┬──────────────┤
-│ 大盘指数   │ 板块排行  │ 涨停池    │ 情绪指标   │ 策略评分     │
-│ 上证 3xxx │ 1.通信  │ 600xxx  │ 涨跌比   │ 趋势 72分    │
-│ 深证 1xxx │ 2.芯片  │ 涨停 8只  │ 情绪 65   │ 混合 58分    │
-│ 创业板 xxx │ 3.军工  │ 连板最高3 │ 温度 偏暖  │ 龙头 81分    │
-├──────────┴──────────┴──────────┴──────────┴──────────────┤
-│ 📋 我的持仓                                               │
-│ ┌──────┬──────┬──────┬──────┬──────┬──────┬──────────┐ │
-│ │ 代码  │ 名称  │ 成本  │ 现价  │ 盈亏  │ 建议  │ 止损位   │ │
-│ ├──────┼──────┼──────┼──────┼──────┼──────┼──────────┤ │
-│ │300750│ 宁德  │ 180  │ 195  │+8.3% │ 持有  │ 172.5   │ │
-│ └──────┴──────┴──────┴──────┴──────┴──────┴──────────┘ │
-└─────────────────────────────────────────────────────────┘
-```
+| 策略 | 来源仓库 | 评分维度 |
+|:----|:--------|:--------|
+| 📈 **趋势跟踪** | [a-share-trend-strategy](https://github.com/StealTyTowerLose2Star/a-share-trend-strategy) | MA30% + 突破25% + 量能20% + 斜率25% |
+| 🔀 **混合策略** | [a-share-hybrid-strategy](https://github.com/StealTyTowerLose2Star/a-share-hybrid-strategy) | 7维: 趋势+动量+量能+安全+板块+持续+爆发 |
+| 🐉 **龙头战法** | [a-share-dragon-strategy](https://github.com/StealTyTowerLose2Star/a-share-dragon-strategy) | 5维: 板块+连板+时间+带动+阻力 |
 
 ---
 
@@ -233,4 +302,4 @@ MIT License
 
 ---
 
-**版本**: v1.0 · **创建时间**: 2026-05 · **状态**: 迭代中
+**版本**: v2.0 · **模块化重构** · **状态**: 迭代中
