@@ -116,6 +116,8 @@ def get_daily():
     if isinstance(date, dict) and "error" in date:
         return None
     df = cache_or_fetch(f"daily_{date}", lambda: fetch_daily_data(date), 60)
+    if isinstance(df, dict) and "error" in df:
+        return None
     return df
 
 def get_daily_basic():
@@ -123,6 +125,8 @@ def get_daily_basic():
     if isinstance(date, dict) and "error" in date:
         return None
     df = cache_or_fetch(f"daily_basic_{date}", lambda: fetch_daily_basic(date), 60)
+    if isinstance(df, dict) and "error" in df:
+        return None
     return df
 
 
