@@ -6,12 +6,14 @@ import pandas as pd
 import numpy as np
 from typing import Dict, List, Optional
 
-TUSHARE_TOKEN = "b5e768c112082f5a38f3400244859d3f0ef9d917296600068d6cbf49"
+import sys, os
+sys.path.insert(0, os.path.dirname(__file__))
+import config
 
 
 def get_ts():
     import tushare as ts
-    return ts.pro_api(TUSHARE_TOKEN)
+    return ts.pro_api(config.TUSHARE_TOKEN)
 
 
 def get_kline(code: str, days: int = 60):

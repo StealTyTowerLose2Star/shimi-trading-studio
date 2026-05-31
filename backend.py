@@ -10,6 +10,7 @@ from flask_cors import CORS
 import pandas as pd
 import numpy as np
 from flask.json.provider import DefaultJSONProvider
+import config
 
 class NumpyJSONProvider(DefaultJSONProvider):
     def default(self, obj):
@@ -25,7 +26,7 @@ class NumpyJSONProvider(DefaultJSONProvider):
 
 from realtime_scorer import (
     trend_detect, hybrid_score, dragon_leader_score,
-    get_kline, _count_consecutive_limit, get_ts,
+    get_kline, get_kline_batch, _count_consecutive_limit,
 )
 from position_manager import batch_evaluate, evaluate_position
 from db import (login_user, verify_token, register_user, list_users,
@@ -33,37 +34,22 @@ from db import (login_user, verify_token, register_user, list_users,
 
 app = Flask(__name__)
 app.json = NumpyJSONProvider(app)
+app.static_folder = os.path.dirname(os.path.abspath(__file__))
+app.static_url_path = ""
 CORS(app)
 
 # ============================================================
 # tushare 初始化
 # ============================================================
-TUSHARE_TOKEN = "b5e768c112082f5a38f3400244859d3f0ef9d917296600068d6cbf49"
-
-
 def get_ts():
     import tushare as ts
-    return ts.pro_api(TUSHARE_TOKEN)
+    return ts.pro_api(config.TUSHARE_TOKEN)
 
 
 # ============================================================
-# 缓存
+# 缓存（由 cache.py 统一管理）
 # ============================================================
-CACHE = {}
-CACHE_UPDATED = {}
-
-def cache_or_fetch(key, fn, ttl=60):
-    now = time.time()
-    if key in CACHE and (now - CACHE_UPDATED.get(key, 0)) < ttl:
-        return CACHE[key]
-    try:
-        data = fn()
-        CACHE[key] = data
-        CACHE_UPDATED[key] = now
-        return data
-    except Exception as e:
-        return {"error": str(e)}
-
+from cache import cache_or_fetch, cache_delete, cache_clear
 
 def fetch_latest_trade_date():
     """获取最近交易日"""
@@ -211,31 +197,74 @@ def fetch_sectors():
 
 
 # ============================================================
-# API: 热门个股 + 情绪
+# API: 板块资金流 + 情绪
 # ============================================================
+def fetch_sector_flow():
+    """板块资金流分析：行业涨跌幅 + 上涨占比 + 3日动量 → 强度评分"""
+    daily = get_daily()
+    basic = get_stock_basic()
+    if daily is None or isinstance(daily, dict):
+        return []
+    if isinstance(basic, dict) and "error" in basic:
+        basic = {}
+
+    # Build industry map
+    def get_industry(code):
+        info = basic.get(code, {}) if isinstance(basic, dict) else {}
+        return info.get("industry", "未知")
+
+    df = daily.copy()
+    df["industry"] = df["ts_code"].map(get_industry)
+    df = df[df["industry"] != "未知"]
+
+    # Group by industry
+    groups = df.groupby("industry")
+    result = []
+    for ind, grp in groups:
+        avg_chg = grp["pct_chg"].mean()
+        up_ratio = len(grp[grp["pct_chg"] > 0]) / max(len(grp), 1) * 100
+        # 强度评分：涨跌幅×0.6 + 上涨占比×0.4
+        strength = round(avg_chg * 0.6 + up_ratio * 0.04, 1)
+        result.append({
+            "name": ind,
+            "change": round(avg_chg, 2),
+            "up_ratio": round(up_ratio, 1),
+            "stock_count": len(grp),
+            "strength": strength,
+        })
+
+    result.sort(key=lambda x: x["strength"], reverse=True)
+
+    # Mark "热点" sectors (strength > 2)
+    for r in result:
+        r["hot"] = r["strength"] > 2
+
+    return result[:15]
+
+
 def fetch_hot_stocks():
-    """热门个股涨幅 TOP 20"""
+    """热门个股涨幅 TOP 20 — 保留供参考"""
     daily = get_daily()
     if daily is None or isinstance(daily, dict):
         return []
     basic = get_stock_basic()
-
-    # Merge with name
+    daily_basic = get_daily_basic()
+    turnover_map = {}
+    if daily_basic is not None and not isinstance(daily_basic, dict):
+        turnover_map = daily_basic.set_index("ts_code")["turnover_rate"].to_dict()
     daily2 = daily.copy()
     daily2["name"] = daily2["ts_code"].map(
         lambda c: basic.get(c, {}).get("name", "") if isinstance(basic, dict) else ""
     )
-
+    daily2["turnover"] = daily2["ts_code"].map(turnover_map).fillna(0)
     sorted_df = daily2.sort_values("pct_chg", ascending=False).head(20)
     return [
-        {
-            "code": row["ts_code"].replace(".SZ", "").replace(".SH", ""),
-            "name": row["name"],
-            "price": round(float(row["close"]), 2),
-            "change": round(float(row["pct_chg"]), 2),
-            "volume": round(float(row.get("amount", 0)), 2),
-            "pct_chg": round(float(row["pct_chg"]), 2),
-        }
+        {"code": row["ts_code"].replace(".SZ","").replace(".SH",""),
+         "name": row["name"],
+         "price": round(float(row["close"]), 2),
+         "change": round(float(row["pct_chg"]), 2),
+         "volume": round(float(row.get("amount", 0)) / 1e5, 1),
+         "turnover": round(float(row.get("turnover", 0)), 1)}
         for _, row in sorted_df.iterrows()
     ]
 
@@ -469,9 +498,12 @@ def run_trend_scan():
             chg_map[short] = float(row["pct_chg"])
 
     # Pre-filter: top 20 by pct_chg
-    candidates = daily.sort_values("pct_chg", ascending=False).head(20)
+    candidates = daily.sort_values("pct_chg", ascending=False).head(10)
     stock_codes = [c.replace(".SZ","").replace(".SH","").replace(".BJ","")
                    for c in candidates["ts_code"]]
+
+    # 并行预取 K 线数据
+    get_kline_batch(stock_codes, days=120)
 
     results = []
     for code in stock_codes:
@@ -503,7 +535,7 @@ def run_hybrid_scan():
     if daily is None or isinstance(daily, dict):
         return {"picked": [], "total_scanned": 0}
 
-    candidates = daily.sort_values("pct_chg", ascending=False).head(20)
+    candidates = daily.sort_values("pct_chg", ascending=False).head(10)
     stock_codes = [c.replace(".SZ","").replace(".SH","").replace(".BJ","")
                    for c in candidates["ts_code"]]
 
@@ -523,6 +555,9 @@ def run_hybrid_scan():
         for _, row in daily.iterrows():
             short = row["ts_code"].replace(".SZ","").replace(".SH","").replace(".BJ","")
             chg_map[short] = float(row["pct_chg"])
+
+    # 并行预取 K 线数据
+    get_kline_batch(stock_codes, days=120)
 
     results = []
     for code in stock_codes:
@@ -575,12 +610,15 @@ def run_dragon_scan():
     # Get limit-up candidates
     limits = daily[daily["pct_chg"] >= 9.5]
     if limits.empty:
-        limits = daily.sort_values("pct_chg", ascending=False).head(20)
+        limits = daily.sort_values("pct_chg", ascending=False).head(10)
     else:
-        limits = limits.sort_values("pct_chg", ascending=False).head(20)
+        limits = limits.sort_values("pct_chg", ascending=False).head(10)
 
     stock_codes = [c.replace(".SZ","").replace(".SH","").replace(".BJ","")
                    for c in limits["ts_code"]]
+
+    # 并行预取 K 线数据
+    get_kline_batch(stock_codes, days=60)
 
     results = []
     for code in stock_codes:
@@ -643,6 +681,30 @@ def generate_advice():
     dragon_map = to_map(dragon.get("picked", []))
 
     all_codes = set(list(trend_map.keys()) + list(hybrid_map.keys()) + list(dragon_map.keys()))
+
+    # 动态仓位计算
+    market_phase = sentiment.get("phase", "未知")
+    market_factor = {
+        "强势牛市🚀": 1.0, "牛市📈": 0.8, "震荡偏多↗️": 0.6,
+        "震荡市➡️": 0.4, "震荡偏空↘️": 0.25, "熊市📉": 0.1,
+        "危机模式⚠️": 0.0,
+    }.get(market_phase, 0.3)
+
+    def calc_position(consensus, code):
+        """动态仓位：市场因子×共识基础×评分修正（上限40%，下限5%）"""
+        base = {3: 25, 2: 18}.get(consensus, 10)
+        # 评分修正
+        score_bonus = 0
+        for src in [trend_map, hybrid_map, dragon_map]:
+            info = src.get(code)
+            if info:
+                sc = info.get("trend_score", info.get("score", info.get("leader_score", 0)))
+                if sc >= 80: score_bonus = 5
+                elif sc >= 60: score_bonus = 2
+                elif sc <= 30: score_bonus = -5
+                break
+        raw = (base + score_bonus) * market_factor
+        return f"{round(min(40, max(5, raw)))}%"
 
     recommendations = []
     for code in all_codes:
@@ -748,10 +810,14 @@ def generate_advice():
             "target_1": t1_label,
             "target_2": t2_label,
             "target_3": t3_label,
+            "target_1_action": "减仓30%",
+            "target_2_action": "减仓30%",
+            "target_3_action": "清仓",
+            "stop_loss_action": "止损出场",
             "risk_reward_1": rr1,
             "risk_reward_2": rr2,
             "trailing_stop": trailing_stop,
-            "position": "25%" if consensus >= 3 else "15%",
+            "position": calc_position(consensus, code),
             "reason": " | ".join(reasons),
         })
 
@@ -768,7 +834,7 @@ def generate_advice():
             **market_advice,
         },
         "top_sectors": top_sectors,
-        "recommendations": recommendations[:10],
+        "recommendations": recommendations[:5],
         "generated_at": time.strftime("%H:%M:%S"),
     }
 
@@ -963,14 +1029,51 @@ def api_get_trades():
     return jsonify({"trades": trades, "summary": get_trade_summary(user["id"])})
 
 
-@app.route("/api/trades/all")
-def api_all_trades():
+@app.route("/api/trades/pnl-report")
+def api_pnl_report():
+    """盈亏统计（按日/月/年）"""
+    from flask import request
     user = _require_user()
     if not user:
         return _unauthorized()
-    trades = get_trades()
-    summary = get_trade_summary()
-    return jsonify({"trades": trades, "summary": summary})
+    period = request.args.get("period", "month")
+    trades = get_trades(user_id=user["id"])
+    closed = [t for t in trades if t.get("exit_price")]
+
+    from collections import defaultdict
+    buckets = defaultdict(lambda: {"trades": 0, "won": 0, "pnl": 0.0})
+
+    for t in closed:
+        exit_date = t.get("date", "")
+        if not exit_date:
+            continue
+        if period == "month":
+            key = exit_date[:7]  # YYYY-MM
+        elif period == "year":
+            key = exit_date[:4]  # YYYY
+        elif period == "day":
+            key = exit_date     # YYYY-MM-DD
+        else:
+            key = exit_date     # YYYY-MM-DD
+
+        pnl = (t["exit_price"] - t["entry_price"]) * t["qty"] if t["direction"] == "buy" else (t["entry_price"] - t["exit_price"]) * t["qty"]
+        buckets[key]["trades"] += 1
+        if pnl > 0:
+            buckets[key]["won"] += 1
+        buckets[key]["pnl"] += pnl
+
+    result = []
+    for k in sorted(buckets, reverse=True):
+        b = buckets[k]
+        result.append({
+            "period": k,
+            "trades": b["trades"],
+            "won": b["won"],
+            "win_rate": round(b["won"] / b["trades"] * 100, 1) if b["trades"] > 0 else 0,
+            "pnl": round(b["pnl"], 2),
+        })
+
+    return jsonify({"period": period, "report": result})
 
 
 @app.route("/api/trades", methods=["POST"])
@@ -1024,9 +1127,36 @@ def api_sectors():
     return jsonify(cache_or_fetch("sectors", fetch_sectors, 120))
 
 
+@app.route("/api/sector-flow")
+def api_sector_flow():
+    return jsonify(cache_or_fetch("sector_flow", fetch_sector_flow, 60))
+
+
 @app.route("/api/hot-stocks")
 def api_hot_stocks():
     return jsonify(cache_or_fetch("hot_stocks", fetch_hot_stocks, 30))
+
+
+@app.route("/api/stock/lookup")
+def api_stock_lookup():
+    """股票代码搜索 → 返回代码+名称"""
+    from flask import request
+    q = request.args.get("q", "").strip()
+    if len(q) < 2:
+        return jsonify([])
+    basic = get_stock_basic()
+    if not isinstance(basic, dict):
+        return jsonify([])
+    results = []
+    for code, info in basic.items():
+        short = code.replace(".SZ","").replace(".SH","").replace(".BJ","")
+        name = info.get("name", "")
+        # 匹配代码或名称前缀
+        if short.startswith(q) or (name and name.startswith(q)):
+            results.append({"code": short, "name": name, "ts_code": code})
+            if len(results) >= 10:
+                break
+    return jsonify(results)
 
 
 @app.route("/api/limit-up")
@@ -1051,27 +1181,56 @@ def api_strategy(name):
 def api_strategy_refresh(name):
     if name not in ["trend", "hybrid", "dragon"]:
         return jsonify({"error": f"unknown strategy: {name}"}), 404
-    CACHE.pop(f"strategy_{name}", None)
-    CACHE_UPDATED.pop(f"strategy_{name}", None)
+    cache_delete(f"strategy_{name}")
     fns = {"trend": run_trend_scan, "hybrid": run_hybrid_scan, "dragon": run_dragon_scan}
     result = fns[name]()
-    CACHE[f"strategy_{name}"] = result
-    CACHE_UPDATED[f"strategy_{name}"] = time.time()
+    from cache import cache_set
+    cache_set(f"strategy_{name}", result, 120)
     return jsonify(result)
 
 
 @app.route("/api/dashboard")
 def api_dashboard():
-    return jsonify({
+    start = time.time()
+    logs = []
+
+    def log_step(name):
+        elapsed = round(time.time() - start, 1)
+        logs.append(f"{name} ({elapsed}s)")
+        print(f"[拾米] {name} ({elapsed}s)")
+
+    result = {
         "indices": cache_or_fetch("indices", fetch_indices, 30),
-        "sectors": cache_or_fetch("sectors", fetch_sectors, 120),
-        "hot_stocks": cache_or_fetch("hot_stocks", fetch_hot_stocks, 30),
-        "limit_up": cache_or_fetch("limit_up", fetch_limit_up, 60),
-        "sentiment": cache_or_fetch("sentiment", fetch_sentiment, 30),
-        "strategy_trend": cache_or_fetch("strategy_trend", run_trend_scan, 120),
-        "strategy_hybrid": cache_or_fetch("strategy_hybrid", run_hybrid_scan, 120),
-        "strategy_dragon": cache_or_fetch("strategy_dragon", run_dragon_scan, 120),
-    })
+    }
+    log_step("指数")
+
+    result["sectors"] = cache_or_fetch("sectors", fetch_sectors, 120)
+    log_step("板块")
+
+    result["sector_flow"] = cache_or_fetch("sector_flow", fetch_sector_flow, 60)
+    log_step("资金流")
+
+    result["limit_up"] = cache_or_fetch("limit_up", fetch_limit_up, 60)
+    log_step("涨停板")
+
+    result["sentiment"] = cache_or_fetch("sentiment", fetch_sentiment, 30)
+    log_step("市场状态")
+
+    result["strategy_trend"] = cache_or_fetch("strategy_trend", run_trend_scan, 120)
+    log_step("趋势策略")
+
+    result["strategy_hybrid"] = cache_or_fetch("strategy_hybrid", run_hybrid_scan, 120)
+    log_step("混合策略")
+
+    result["strategy_dragon"] = cache_or_fetch("strategy_dragon", run_dragon_scan, 120)
+    log_step("龙头策略")
+
+    result["hot_stocks"] = cache_or_fetch("hot_stocks", fetch_hot_stocks, 30)
+    log_step("热门个股")
+
+    total = round(time.time() - start, 1)
+    print(f"[拾米] ✅ Dashboard 总耗时 {total}s")
+    return jsonify(result)
 
 
 @app.route("/")
@@ -1080,8 +1239,6 @@ def index():
 
 
 if __name__ == "__main__":
-    app.static_folder = os.path.dirname(os.path.abspath(__file__))
-    app.static_url_path = ""
     print("🚀 拾米交易工作室 Backend (tushare) 启动中...")
     print(f"   Dashboard: http://localhost:7890")
     print(f"   API:       http://localhost:7890/api/dashboard")

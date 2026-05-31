@@ -1,0 +1,65 @@
+version: "3.8"
+
+services:
+  # ─── PostgreSQL ─────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: shimi
+      POSTGRES_USER: shimi
+      POSTGRES_PASSWORD: ${SHIMI_DB_PASS:-shimi_secret}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shimi -d shimi"]
+      interval: 5s
+      retries: 5
+    ports:
+      - "5432:5432"
+
+  # ─── Redis ─────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+    ports:
+      - "6379:6379"
+
+  # ─── Flask / Gunicorn ─────────────────────
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SHIMI_DB_TYPE: postgresql
+      SHIMI_DB_HOST: db
+      SHIMI_DB_NAME: shimi
+      SHIMI_DB_USER: shimi
+      SHIMI_DB_PASS: ${SHIMI_DB_PASS:-shimi_secret}
+      SHIMI_REDIS_HOST: redis
+      SHIMI_USE_REDIS: "true"
+      TUSHARE_TOKEN: ${TUSHARE_TOKEN:-}
+    expose:
+      - "7890"
+
+  # ─── Nginx ─────────────────────────────────
+  web:
+    image: nginx:1.24-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+
+volumes:
+  pgdata:

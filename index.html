@@ -223,11 +223,11 @@
     </div>
   </div>
 
-  <!-- 热门个股 -->
+  <!-- 板块资金流 -->
   <div class="row">
     <div class="card">
-      <div class="card-header"><span class="card-title">🔥 热门个股 Top15</span><span class="badge badge-gold" id="hotCount">加载中</span></div>
-      <table><thead><tr><th>代码</th><th>名称</th><th>最新价</th><th>涨跌幅</th><th>成交额</th><th>换手率</th></tr></thead><tbody id="hotStockBody"></tbody></table>
+      <div class="card-header"><span class="card-title">💰 板块资金流 · 强度排行</span><span class="badge badge-gold" id="sectorFlowCount">加载中</span></div>
+      <table><thead><tr><th>板块</th><th>强度</th><th>涨跌幅</th><th>上涨占比</th><th>成分股</th><th>标签</th></tr></thead><tbody id="sectorFlowBody"></tbody></table>
     </div>
   </div>
 
@@ -250,9 +250,9 @@
 
       <!-- 推荐标的 -->
       <table><thead>
-        <tr><th>代码</th><th>名称</th><th>信号</th><th>价格</th><th>入场区间</th><th>止损</th><th>目标1</th><th>目标2</th><th>目标3</th><th>仓位</th><th>记录</th></tr>
+        <tr><th>代码</th><th>名称</th><th>信号</th><th>价格</th><th>入场区间</th><th>止损</th><th>目标1</th><th>目标2</th><th>目标3</th><th>操作</th><th>仓位</th><th>记录</th></tr>
       </thead><tbody id="adviceBody">
-        <tr><td colspan="11" style="text-align:center;color:var(--text-muted)">分析中...</td></tr>
+        <tr><td colspan="12" style="text-align:center;color:var(--text-muted)">分析中...</td></tr>
       </tbody></table>
     </div>
   </div>
@@ -272,7 +272,9 @@
         <div><span style="color:var(--text-muted);font-size:12px">总盈亏</span><br><span id="tjPnl" style="font-size:18px;font-weight:700">¥0</span></div>
         <div><span style="color:var(--text-muted);font-size:12px">最大盈利</span><br><span id="tjBest" style="font-size:14px;color:var(--green)">--</span></div>
         <div><span style="color:var(--text-muted);font-size:12px">最大亏损</span><br><span id="tjWorst" style="font-size:14px;color:var(--red)">--</span></div>
-        <div><button onclick="showAddTradeForm()" style="padding:6px 16px;border:1px solid var(--green);border-radius:8px;background:rgba(34,197,94,.1);color:var(--green);cursor:pointer;font-size:12px;font-weight:600">+ 记录交易</button></div>
+        <button onclick="showAddTradeForm()" style="padding:6px 16px;border:1px solid var(--green);border-radius:8px;background:rgba(34,197,94,.1);color:var(--green);cursor:pointer;font-size:12px;font-weight:600">+ 记录交易</button>
+        <button onclick="showPnLReport()" style="padding:6px 16px;border:1px solid var(--gold);border-radius:8px;background:rgba(240,180,41,.1);color:var(--gold);cursor:pointer;font-size:12px;font-weight:600">📊 盈亏统计</button>
+        <button onclick="showPortfolioAdvice()" style="padding:6px 16px;border:1px solid var(--blue);border-radius:8px;background:rgba(59,130,246,.1);color:var(--blue);cursor:pointer;font-size:12px;font-weight:600">📋 持仓分析</button>
       </div>
 
       <!-- 交易记录表 -->
@@ -312,6 +314,63 @@
         <div id="regError" style="color:var(--red);font-size:12px;display:none"></div>
         <div style="text-align:center;font-size:12px;color:var(--text-muted);cursor:pointer" onclick="switchToLogin()">已有账号？返回登录 ←</div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- 盈亏统计弹窗 - 日历视图 -->
+<div id="pnlModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:28px;width:640px;max-width:90vw;max-height:85vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <span style="font-size:18px;font-weight:700">📊 盈亏统计 · 日历</span>
+      <div style="display:flex;gap:4px">
+        <button onclick="changeCalendarMonth(-1)" style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-secondary);cursor:pointer;font-size:13px">◀</button>
+        <span id="calMonthLabel" style="font-size:15px;font-weight:600;padding:0 8px;min-width:100px;text-align:center">--</span>
+        <button onclick="changeCalendarMonth(1)" style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-secondary);cursor:pointer;font-size:13px">▶</button>
+      </div>
+    </div>
+    <!-- 周日~六 header -->
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:8px;text-align:center">
+      <div style="font-size:11px;color:var(--text-muted);padding:4px">日</div>
+      <div style="font-size:11px;color:var(--text-muted);padding:4px">一</div>
+      <div style="font-size:11px;color:var(--text-muted);padding:4px">二</div>
+      <div style="font-size:11px;color:var(--text-muted);padding:4px">三</div>
+      <div style="font-size:11px;color:var(--text-muted);padding:4px">四</div>
+      <div style="font-size:11px;color:var(--text-muted);padding:4px">五</div>
+      <div style="font-size:11px;color:var(--text-muted);padding:4px">六</div>
+    </div>
+    <div id="calGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;min-height:240px">
+      <!-- dynamically filled -->
+    </div>
+    <div id="calSummary" style="margin-top:10px;display:flex;gap:16px;padding:8px 12px;background:rgba(255,255,255,.03);border-radius:8px;font-size:12px">
+      <span>本月交易: <strong id="calTradeCount">0</strong>笔</span>
+      <span>盈利: <strong id="calWinCount" style="color:var(--green)">0</strong>笔</span>
+      <span>亏损: <strong id="calLossCount" style="color:var(--red)">0</strong>笔</span>
+      <span>月盈亏: <strong id="calPnlTotal" style="font-weight:700">¥0</strong></span>
+    </div>
+    <div style="margin-top:12px;text-align:right">
+      <button onclick="closePnL()" style="padding:8px 20px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text-secondary);cursor:pointer">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 持仓分析弹窗 -->
+<div id="portfolioModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:28px;width:700px;max-width:90vw;max-height:80vh;overflow-y:auto">
+    <div style="font-size:18px;font-weight:700;margin-bottom:16px">📋 持仓分析 · 策略评分</div>
+    <div id="portfolioSummary" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;padding:12px;background:rgba(59,130,246,.05);border-radius:10px">
+      <div><span style="color:var(--text-muted);font-size:12px">持仓数量</span><br><span id="pfTotal" style="font-size:18px;font-weight:700">--</span></div>
+      <div><span style="color:var(--text-muted);font-size:12px">总投入</span><br><span id="pfInvested" style="font-size:18px;font-weight:700">--</span></div>
+      <div><span style="color:var(--text-muted);font-size:12px">总盈亏</span><br><span id="pfPnl" style="font-size:18px;font-weight:700">--</span></div>
+      <div><span style="color:var(--text-muted);font-size:12px">风险等级</span><br><span id="pfRisk" style="font-size:18px;font-weight:700">--</span></div>
+    </div>
+    <table style="font-size:12px"><thead>
+      <tr><th>代码</th><th>名称</th><th>入场</th><th>现价</th><th>数量</th><th>浮盈</th><th>建议</th><th>理由</th></tr>
+    </thead><tbody id="portfolioBody">
+      <tr><td colspan="8" style="text-align:center;color:var(--text-muted)">加载中...</td></tr>
+    </tbody></table>
+    <div style="margin-top:12px;text-align:right">
+      <button onclick="closePortfolio()" style="padding:8px 20px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text-secondary);cursor:pointer">关闭</button>
     </div>
   </div>
 </div>
@@ -382,7 +441,6 @@ function renderSentiment(data) {
     <span class="sent-vs-item">位置 <strong>${data.index_position_score||'?'}</strong></span>
     <span class="sent-vs-item">情绪 <strong>${data.sentiment_score||'?'}</strong></span>
     <span class="sent-vs-item">量能 <strong>${data.volume_score||'?'}</strong></span>
-    <span class="sent-vs-item" style="font-size:10px;color:var(--text-muted)">${data.source||''}</span>
     <span style="margin-left:8px;padding:2px 8px;border-radius:4px;background:rgba(240,180,41,.15);font-size:11px;color:var(--gold)">
       建议仓位 ${data.position_ratio||'?'}%
     </span>
@@ -458,10 +516,30 @@ function renderHotStocks(data) {
       <td style="font-weight:600">${s.name}</td>
       <td class="code-num">¥${fmt(s.price)}</td>
       <td class="${cls(s.change)} code-num" style="font-weight:600">${arrow(s.change)} ${Math.abs(s.change).toFixed(2)}%</td>
-      <td class="code-num" style="color:var(--text-secondary);font-size:12px">${s.volume ? (s.volume/1e8).toFixed(1)+'亿' : '--'}</td>
+      <td class="code-num" style="color:var(--text-secondary);font-size:12px">${s.volume ? s.volume.toFixed(1)+'亿' : '--'}</td>
       <td class="code-num" style="color:var(--text-secondary);font-size:12px">${s.turnover ? s.turnover.toFixed(1)+'%' : '--'}</td>
     </tr>
   `).join('');
+}
+
+function renderSectorFlow(data) {
+  const tbody = $('sectorFlowBody');
+  $('sectorFlowCount').textContent = `${data.length} 个板块`;
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">暂无数据</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.slice(0, 12).map(s => {
+    const hotBadge = s.hot ? '<span style="padding:1px 6px;border-radius:3px;background:rgba(240,180,41,.15);color:var(--gold);font-size:11px;font-weight:600">🔥 热点</span>' : '';
+    return `<tr>
+      <td style="font-weight:600">${s.name}</td>
+      <td style="font-weight:700;color:${s.strength > 0 ? 'var(--green)' : 'var(--red)'}">${s.strength > 0 ? '+' : ''}${s.strength}</td>
+      <td class="${s.change > 0 ? 'up' : 'down'}">${s.change > 0 ? '▲' : '▼'} ${Math.abs(s.change).toFixed(2)}%</td>
+      <td style="color:var(--text-secondary)">${s.up_ratio}%</td>
+      <td style="color:var(--text-muted);font-size:12px">${s.stock_count}</td>
+      <td>${hotBadge}</td>
+    </tr>`;
+  }).join('');
 }
 
 // ===== Main Load =====
@@ -479,7 +557,8 @@ async function loadDashboard() {
     renderTrend(d.strategy_trend || {});
     renderHybrid(d.strategy_hybrid || {});
     renderDragon(d.strategy_dragon || {});
-    renderHotStocks(d.hot_stocks || []);
+    // Hot stocks kept as raw data, rendered by sector flow below
+    renderSectorFlow(d.sector_flow || []);
 
     // Load advice after dashboard data is in cache
     loadAdvice();
@@ -537,10 +616,11 @@ try {
       <td style="color:${signalColor};font-weight:700">${r.signal}</td>
       <td class="code-num">¥${r.price.toFixed(2)}</td>
       <td class="code-num" style="color:var(--green);font-size:12px">${r.entry_zone}</td>
-      <td class="code-num" style="color:var(--red);font-size:12px">${r.stop_loss}</td>
-      <td class="code-num" style="color:var(--green);font-size:12px">${r.target_1}</td>
-      <td class="code-num" style="color:var(--gold);font-size:12px">${r.target_2}</td>
-      <td class="code-num" style="color:var(--purple);font-size:12px">${r.target_3 || ''}</td>
+      <td class="code-num" style="color:var(--red);font-size:12px" title="${r.stop_loss_action||''}">${r.stop_loss}</td>
+      <td class="code-num" style="color:var(--green);font-size:12px">${r.target_1}<br><span style="font-size:10px;color:var(--text-muted)">${r.target_1_action||''}</span></td>
+      <td class="code-num" style="color:var(--gold);font-size:12px">${r.target_2}<br><span style="font-size:10px;color:var(--text-muted)">${r.target_2_action||''}</span></td>
+      <td class="code-num" style="color:var(--purple);font-size:12px">${r.target_3 || ''}<br><span style="font-size:10px;color:var(--text-muted)">${r.target_3_action||''}</span></td>
+      <td style="font-size:10px;color:var(--text-muted);max-width:80px">${r.trailing_stop ? r.trailing_stop.substring(0,20)+'…' : ''}</td>
       <td style="color:${posColor};font-weight:700">${r.position}</td>
       <td><button onclick="quickLog('${r.code}','${r.name}',${r.price})" style="padding:3px 8px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-secondary);cursor:pointer;font-size:11px">记录</button></td>
     </tr>`;
@@ -607,8 +687,9 @@ function renderTradeJournal() {
       const t1 = isOpen ? (ev.targets?.[0]?.price ? '¥' + ev.targets[0].price : (t.target_1 || '--')) : '--';
       const t2 = isOpen ? (ev.targets?.[1]?.price ? '¥' + ev.targets[1].price : (t.target_2 || '--')) : '--';
       const t3 = isOpen ? (ev.targets?.[2]?.price ? '¥' + ev.targets[2].price : '--') : '--';
-      const trailLvl = isOpen ? (ev.trailing_level != null ? '第' + ev.trailing_level + '级' : '初始') : '--';
-      const pnl = isOpen ? (ev.unrealized_pnl || '--') : (() => {
+      const trailLabels = {0:'初始',1:'保本',2:'锁利',3:'高锁'};
+      const trailLvl = isOpen ? (ev.trailing_level != null ? trailLabels[ev.trailing_level] || ('T'+ev.trailing_level) : '初始') : '--';
+      const pnl = isOpen ? ((ev.unrealized_pnl || 0) * (t.qty || 1)) : (() => {
         if (!t.exit_price) return '--';
         return t.direction === 'buy' ? (t.exit_price - t.entry_price) * t.qty : (t.entry_price - t.exit_price) * t.qty;
       })();
@@ -717,9 +798,9 @@ function showAddTradeForm(code, name, price) {
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;gap:10px">
           <div style="flex:1"><label style="font-size:11px;color:var(--text-muted)">日期</label><input id="tfDate" value="${today}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary)"></div>
-          <div style="flex:1"><label style="font-size:11px;color:var(--text-muted)">代码</label><input id="tfCode" value="${code||''}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary)"></div>
+          <div style="flex:1"><label style="font-size:11px;color:var(--text-muted)">代码</label><input id="tfCode" value="${code||''}" placeholder="输入代码自动识别" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary)" onkeyup="var v=this.value.trim();if(v.length>=3)fetch('/api/stock/lookup?q='+v).then(r=>r.json()).then(d=>{var n=document.getElementById('tfName'),h=document.getElementById('tfNameHint');if(!n)return;var e=d.find(s=>s.code===v);if(e){n.value=e.name;if(h)h.textContent='✅'}else if(d.length>0&&h)h.textContent='❓'+d.map(s=>s.code).join(',');else if(h)h.textContent='❌'}).catch(()=>{})"></div>
         </div>
-        <div><label style="font-size:11px;color:var(--text-muted)">名称</label><input id="tfName" value="${name||''}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary)"></div>
+        <div><label style="font-size:11px;color:var(--text-muted)">名称 <span id="tfNameHint" style="color:var(--text-muted);font-weight:400"></span></label><input id="tfName" value="${name||''}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary)"></div>
         <div style="display:flex;gap:10px">
           <div style="flex:1"><label style="font-size:11px;color:var(--text-muted)">方向</label>
             <select id="tfDir" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary)">
@@ -742,6 +823,28 @@ function showAddTradeForm(code, name, price) {
     </div>`;
   document.body.appendChild(div);
   tradeDialog = div;
+  // 绑定代码输入自动识别名称
+  setTimeout(() => {
+    const ci = document.getElementById('tfCode');
+    if (ci) {
+      ci.addEventListener('keyup', function() {
+        const v = this.value.trim();
+        if (v.length >= 3) {
+          fetch('/api/stock/lookup?q=' + v)
+            .then(r => r.json())
+            .then(data => {
+              const nf = document.getElementById('tfName');
+              const hf = document.getElementById('tfNameHint');
+              if (!nf) return;
+              const exact = data.find(s => s.code === v);
+              if (exact) { nf.value = exact.name; if(hf) hf.textContent = '✅'; }
+              else if (data.length > 0 && hf) hf.textContent = '❓ ' + data.map(s=>s.code).join(',');
+              else if (hf) hf.textContent = '❌';
+            }).catch(() => {});
+        }
+      });
+    }
+  }, 50);
 }
 
 function closeDialog(btn) {
@@ -771,6 +874,8 @@ function submitTrade() {
   if (tradeDialog && tradeDialog.parentNode) tradeDialog.parentNode.removeChild(tradeDialog);
   tradeDialog = null;
 }
+
+// Initialize trade journal — handled by loadAuth() below
 
 // Initialize trade journal — handled by loadAuth() below
 
@@ -954,8 +1059,9 @@ function renderServerTrades() {
       const t1 = isOpen && ev.targets ? (ev.targets[0]?.price ? '¥' + ev.targets[0].price : '--') : '--';
       const t2 = isOpen && ev.targets ? (ev.targets[1]?.price ? '¥' + ev.targets[1].price : '--') : '--';
       const t3 = isOpen && ev.targets ? (ev.targets[2]?.price ? '¥' + ev.targets[2].price : '--') : '--';
-      const trailLvl = isOpen ? (ev.trailing_level != null ? 'T' + ev.trailing_level : '初始') : '--';
-      const pnl = isOpen ? (ev.unrealized_pnl ?? '--') : ((() => {
+      const trailLabels = {0:'初始',1:'保本',2:'锁利',3:'高锁'};
+      const trailLvl = isOpen ? (ev.trailing_level != null ? trailLabels[ev.trailing_level] || ('T'+ev.trailing_level) : '初始') : '--';
+      const pnl = isOpen ? ((ev.unrealized_pnl ?? 0) * (t.qty || 1)) : ((() => {
         if (!t.exit_price || !t.entry_price) return 0;
         return t.direction === 'buy' ? (t.exit_price - t.entry_price) * t.qty : (t.entry_price - t.exit_price) * t.qty;
       })());
@@ -972,7 +1078,6 @@ function renderServerTrades() {
         <td style="color:var(--text-muted);font-size:11px">${t.code || ''}</td>
         <td style="font-weight:600;font-size:12px">${t.name || ''}</td>
         <td><span style="padding:1px 6px;border-radius:3px;font-size:11px;font-weight:600;background:${t.direction==='buy'?'rgba(34,197,94,.15)':'rgba(239,68,68,.15)'};color:${t.direction==='buy'?'var(--green)':'var(--red)'}">${t.direction==='buy'?'做多':'做空'}</span></td>
-        <td style="color:var(--text-muted);font-size:11px">${t.operator || ''}</td>
         <td class="code-num">${t.entry_price || '--'}</td>
         <td class="code-num">${t.qty || 0}</td>
         <td class="code-num" style="font-weight:600;${isOpen ? 'color:var(--gold)' : ''}">${isOpen ? ('¥' + currentPrice) : '¥' + (t.exit_price||'--')}</td>
@@ -995,12 +1100,17 @@ function renderServerTrades() {
 
 function updateServerStats() {
   const s = serverSummary;
-  document.getElementById('tjTotal').textContent = s.closed_trades || 0;
+  document.getElementById('tjTotal').textContent = (s.total_trades || 0) + '笔';
+  document.getElementById('tradeJournalStats').textContent = (s.total_trades || 0) + '笔';
+  document.getElementById('tjWinRate').textContent = (s.win_rate || 0) + '%';
   const wr = s.win_rate || 0;
-  document.getElementById('tjWinRate').textContent = wr + '%';
   document.getElementById('tjWinRate').style.color = wr >= 50 ? 'var(--green)' : 'var(--red)';
-  document.getElementById('tjPnl').textContent = (s.total_pnl >= 0 ? '+' : '') + '¥' + (s.total_pnl || 0).toFixed(2);
-  document.getElementById('tjPnl').style.color = s.total_pnl >= 0 ? 'var(--green)' : 'var(--red)';
+  // 总盈亏 = 已实现 + 浮动
+  const totalPnl = s.total_pnl_with_unrealized ?? s.total_pnl ?? 0;
+  const hasUnrealized = (s.unrealized_pnl || 0) !== 0 && (s.open_trades || 0) > 0;
+  const pnlText = (totalPnl >= 0 ? '+' : '') + '¥' + totalPnl.toFixed(2);
+  document.getElementById('tjPnl').textContent = pnlText + (hasUnrealized ? ' (含浮动)' : '');
+  document.getElementById('tjPnl').style.color = totalPnl >= 0 ? 'var(--green)' : 'var(--red)';
   document.getElementById('tjBest').textContent = s.best_trade > 0 ? '¥' + s.best_trade.toFixed(2) : '--';
   document.getElementById('tjWorst').textContent = s.worst_trade < 0 ? '¥' + s.worst_trade.toFixed(2) : '--';
   document.getElementById('tradeJournalStats').textContent = (s.total_trades || 0) + '笔';
@@ -1076,6 +1186,172 @@ function renderTradeJournal() {
 // Auto-load auth on page load
 loadAuth();
 
+// ===== 盈亏统计 · 日历视图 =====
+let calYear = new Date().getFullYear();
+let calMonth = new Date().getMonth() + 1; // 1-based
+
+function showPnLReport() {
+  if (!currentUser) { showLoginModal(); return; }
+  const now = new Date();
+  calYear = now.getFullYear();
+  calMonth = now.getMonth() + 1;
+  document.getElementById('pnlModal').style.display = 'flex';
+  renderCalendar();
+}
+
+function closePnL() {
+  document.getElementById('pnlModal').style.display = 'none';
+}
+
+function changeCalendarMonth(delta) {
+  calMonth += delta;
+  if (calMonth < 1) { calMonth = 12; calYear--; }
+  if (calMonth > 12) { calMonth = 1; calYear++; }
+  renderCalendar();
+}
+
+async function renderCalendar() {
+  document.getElementById('calMonthLabel').textContent = calYear + '年' + String(calMonth).padStart(2,'0') + '月';
+  const grid = document.getElementById('calGrid');
+  grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:30px">加载中...</div>';
+
+  // Get day-level P&L data
+  let dayData = {};
+  try {
+    const r = await fetch('/api/trades/pnl-report?period=day', {headers: apiHeaders()});
+    const d = await r.json();
+    const items = d.report || [];
+    items.forEach(item => { dayData[item.period] = item; });
+  } catch(e) {
+    // continue with empty data
+  }
+
+  // Build calendar grid
+  const firstDay = new Date(calYear, calMonth - 1, 1);
+  const lastDay = new Date(calYear, calMonth, 0);
+  const startDow = firstDay.getDay(); // 0=Sun
+  const daysInMonth = lastDay.getDate();
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === calYear && today.getMonth() + 1 === calMonth;
+
+  let cells = '';
+  let totalTrades = 0, totalWon = 0, totalLoss = 0, totalPnl = 0;
+
+  // Empty cells before first day
+  for (let i = 0; i < startDow; i++) {
+    cells += '<div style="min-height:50px"></div>';
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = calYear + '-' + String(calMonth).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    const dayInfo = dayData[dateStr];
+    const hasTrade = !!dayInfo;
+    const pnl = dayInfo ? dayInfo.pnl : 0;
+    const isToday = isCurrentMonth && d === today.getDate();
+
+    if (hasTrade) {
+      totalTrades += dayInfo.trades;
+      if (dayInfo.won > 0) totalWon += dayInfo.won;
+      if (dayInfo.trades - dayInfo.won > 0) totalLoss += (dayInfo.trades - dayInfo.won);
+      totalPnl += pnl;
+    }
+
+    const bg = hasTrade ? (pnl > 0 ? 'rgba(34,197,94,.15)' : pnl < 0 ? 'rgba(239,68,68,.15)' : 'rgba(255,255,255,.03)') : 'transparent';
+    const border = isToday ? '1px solid var(--gold)' : '1px solid transparent';
+    const pnlText = hasTrade ? (pnl >= 0 ? '+' : '') + '¥' + pnl.toFixed(0) : '';
+    const pnlColor = hasTrade ? (pnl > 0 ? 'var(--green)' : pnl < 0 ? 'var(--red)' : 'var(--text-muted)') : '';
+
+    cells += `<div style="min-height:50px;background:${bg};border:${border};border-radius:6px;padding:3px;text-align:center;position:relative">
+      <div style="font-size:11px;font-weight:${isToday?'700':'400'};color:${isToday?'var(--gold)':'var(--text-secondary)'}">${d}</div>
+      ${hasTrade ? `<div style="font-size:9px;font-weight:600;color:${pnlColor};line-height:1.2">${pnlText}</div>` : ''}
+    </div>`;
+  }
+
+  grid.innerHTML = cells || '<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:20px">暂无数据</div>';
+
+  document.getElementById('calTradeCount').textContent = totalTrades;
+  document.getElementById('calWinCount').textContent = totalWon;
+  document.getElementById('calLossCount').textContent = totalLoss;
+  const el = document.getElementById('calPnlTotal');
+  el.textContent = (totalPnl >= 0 ? '+' : '') + '¥' + totalPnl.toFixed(2);
+  el.style.color = totalPnl >= 0 ? 'var(--green)' : 'var(--red)';
+}
+
+// ===== 持仓分析 =====
+function showPortfolioAdvice() {
+  if (!currentUser) { showLoginModal(); return; }
+  document.getElementById('portfolioModal').style.display = 'flex';
+  loadPortfolioAdvice();
+}
+
+function closePortfolio() {
+  document.getElementById('portfolioModal').style.display = 'none';
+}
+
+async function loadPortfolioAdvice() {
+  const tbody = document.getElementById('portfolioBody');
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">加载中...</td></tr>';
+  try {
+    const r = await fetch('/api/portfolio/advice', {headers: apiHeaders()});
+    const d = await r.json();
+    const s = d.summary || {};
+    document.getElementById('pfTotal').textContent = (s.total_positions || 0) + '笔';
+    document.getElementById('pfInvested').textContent = '¥' + (s.total_invested || 0).toFixed(2);
+    const tp = s.total_pnl || 0;
+    document.getElementById('pfPnl').textContent = (tp >= 0 ? '+' : '') + '¥' + tp.toFixed(2);
+    document.getElementById('pfPnl').style.color = tp >= 0 ? 'var(--green)' : 'var(--red)';
+    document.getElementById('pfRisk').textContent = s.risk || '--';
+    document.getElementById('pfRisk').style.color = s.risk === '高⚠️' ? 'var(--red)' : (s.risk === '中' ? 'var(--gold)' : 'var(--green)');
+
+    const items = d.positions || [];
+    if (items.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">暂无持仓</td></tr>';
+      return;
+    }
+    tbody.innerHTML = items.map(p => {
+      const pnlCls = p.pnl > 0 ? 'up' : (p.pnl < 0 ? 'down' : '');
+      const advCls = p.advice === '持有 ✅' ? 'up' : (p.advice === '减仓 ⚠️' ? 'down' : '');
+      return `<tr>
+        <td style="color:var(--text-muted);font-size:11px">${p.code}</td>
+        <td style="font-weight:600;font-size:12px">${p.name}</td>
+        <td class="code-num">${p.entry_price}</td>
+        <td class="code-num" style="color:var(--gold)">${p.current_price}</td>
+        <td class="code-num">${p.qty}</td>
+        <td class="code-num ${pnlCls}" style="font-weight:600">${p.pnl >= 0 ? '+' : ''}¥${p.pnl.toFixed(2)} (${p.pnl_pct >= 0 ? '+' : ''}${p.pnl_pct}%)</td>
+        <td class="${advCls}" style="font-weight:600">${p.advice}</td>
+        <td style="font-size:11px;color:var(--text-secondary)">${p.reason || ''}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="8" style="color:var(--red)">加载失败: ' + e.message + '</td></tr>';
+  }
+}
+
+async function loadPnLReport(period) {
+  const tbody = document.getElementById('pnlBody');
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">加载中...</td></tr>';
+  try {
+    const r = await fetch('/api/trades/pnl-report?period=' + period, {headers: apiHeaders()});
+    const d = await r.json();
+    const items = d.report || [];
+    if (items.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">暂无已平仓交易</td></tr>';
+      return;
+    }
+    tbody.innerHTML = items.map(item => {
+      const pnlCls = item.pnl > 0 ? 'up' : (item.pnl < 0 ? 'down' : '');
+      return `<tr>
+        <td style="font-weight:600">${item.period}</td>
+        <td>${item.trades}笔</td>
+        <td>${item.won}笔</td>
+        <td style="color:${item.win_rate >= 50 ? 'var(--green)' : 'var(--red)'}">${item.win_rate}%</td>
+        <td class="code-num ${pnlCls}" style="font-weight:700">${item.pnl >= 0 ? '+' : ''}¥${item.pnl.toFixed(2)}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--red)">加载失败</td></tr>';
+  }
+}
 // 当未登录时，点击"记录交易"按钮自动弹出登录
 const _addTradeBtn = document.querySelector('[onclick="showAddTradeForm()"]');
 if (_addTradeBtn) {
