@@ -113,70 +113,83 @@ def detect_cross_industry_clusters(trade_date=None):
 
     edges.sort(key=lambda x: -x[2])
 
-    # === 聚类: 只合并最强联动的行业 ===
-    parent = {ind: ind for ind in inds}
-
-    def find(x):
-        while parent[x] != x:
-            parent[x] = parent[parent[x]]
-            x = parent[x]
-        return x
-
-    def union(a, b):
-        ra, rb = find(a), find(b)
-        if ra != rb:
-            parent[ra] = rb
-
-    # 只取TOP 40%的强边缘做合并
-    threshold_idx = max(1, int(len(edges) * 0.4))
-    for ind_a, ind_b, strength in edges[:threshold_idx]:
-        union(ind_a, ind_b)
-
-    # 分组
-    clusters_raw = defaultdict(list)
-    for ind in inds:
-        root = find(ind)
-        clusters_raw[root].append(ind)
-
-    # 筛选: 至少2个超配行业 + 8只个股
+    # === 聚类: 用Top-K强边缘作为独立概念 ===
+    # 每个高联动行业对 = 一个潜在概念, 不强制合并
+    # 取前K个边缘(自然断点), 去重后形成独立概念
+    
+    if not edges:
+        return {"clusters": [], "stock_scores": {}}
+    
+    # 找自然断点, 但至少保留3条边缘
+    cutoff = len(edges)
+    for i in range(1, min(len(edges), 20)):
+        if edges[i-1][2] > 0 and (edges[i-1][2] - edges[i][2]) / edges[i-1][2] > 0.35:
+            cutoff = i
+            break
+    cutoff = max(cutoff, min(5, len(edges)))  # 至少5条, 或全部
+    top_edges = edges[:cutoff]
+    
+    # 每一条Top边缘作为一个独立概念
     clusters = []
-    for root, members in clusters_raw.items():
-        if len(members) < 2:
+    seen_inds = set()  # 避免同一行业重复出现
+    
+    for ind_a, ind_b, strength in top_edges:
+        # 跳过已充分覆盖的行业对
+        if ind_a in seen_inds and ind_b in seen_inds:
             continue
-        all_stocks = []
-        total_gain = 0
-        for ind in members:
-            ss = overrep[ind]["stocks"]
-            all_stocks.extend(ss)
-            total_gain += sum(s["pct_chg"] for s in ss)
-
-        if len(all_stocks) < 8:
+        
+        stocks_a = overrep[ind_a]["stocks"]
+        stocks_b = overrep[ind_b]["stocks"]
+        all_stocks = stocks_a + stocks_b
+        total_gain = sum(s["pct_chg"] for s in all_stocks)
+        
+        if len(all_stocks) < 6:
             continue
-
+        
         avg_gain = total_gain / len(all_stocks)
+        
+        # 关联行业: 与核心对都有强联动的其他行业
+        related = []
+        for rel_a, rel_b, rel_s in edges:
+            if rel_s < strength * 0.5:
+                break
+            if (rel_a in (ind_a, ind_b) and rel_b not in (ind_a, ind_b)):
+                if rel_b not in seen_inds:
+                    related.append(rel_b)
+                    seen_inds.add(rel_b)
+            elif (rel_b in (ind_a, ind_b) and rel_a not in (ind_a, ind_b)):
+                if rel_a not in seen_inds:
+                    related.append(rel_a)
+                    seen_inds.add(rel_a)
+        
+        seen_inds.add(ind_a)
+        seen_inds.add(ind_b)
+        
+        all_industries = [ind_a, ind_b] + related[:3]
+        
         clusters.append({
-            "industries": sorted(members),
-            "overrep_ratios": {ind: overrep[ind]["ratio"] for ind in members},
+            "core_pair": (ind_a, ind_b),
+            "industries": all_industries,
+            "overrep_ratios": {ind: overrep[ind]["ratio"] for ind in all_industries if ind in overrep},
             "stock_count": len(all_stocks),
             "avg_gain": round(avg_gain, 1),
-            "stocks": sorted(all_stocks, key=lambda x: -x["pct_chg"])[:25],
-            "auto_name": f"超配集群({'+'.join(members[:2])})",
+            "stocks": sorted(all_stocks, key=lambda x: -x["pct_chg"])[:20],
+            "auto_name": f"{ind_a}+{ind_b}",
         })
-
-    clusters.sort(key=lambda x: -x["stock_count"])
 
     # 生成个股C6得分
     stock_scores = {}
     for cluster in clusters:
-        # D7: 行业数×超配均值 → 8-14分
-        ratio_sum = sum(cluster["overrep_ratios"].values())
-        d7 = min(8 + ratio_sum / 3, 14)
+        # D7: 核心对强度归一化 → 8-14分
+        ratio_vals = list(cluster["overrep_ratios"].values())
+        ratio_avg = sum(ratio_vals) / max(len(ratio_vals), 1)
+        d7 = min(8 + ratio_avg / 2, 14)
         for s in cluster["stocks"]:
             if s["code"] not in stock_scores:
                 stock_scores[s["code"]] = {
                     "d7": round(d7, 1),
                     "concept": cluster["auto_name"],
-                    "industries": cluster["industries"],
+                    "core_pair": list(cluster["core_pair"]),
                     "stock_count": cluster["stock_count"],
                 }
 

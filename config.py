@@ -35,6 +35,9 @@ TOKEN_EXPIRY_HOURS = int(os.getenv("SHIMI_TOKEN_HOURS", "72"))
 # 缓存默认 TTL（秒）
 CACHE_TTL_DEFAULT = 60
 
+# 消息推送 Webhook
+WEBHOOK_URL = os.getenv("SHIMI_WEBHOOK_URL", "")
+
 # 项目根目录
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
