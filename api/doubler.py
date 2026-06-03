@@ -67,3 +67,41 @@ def api_doubler_plan_10k():
         plan = position_plan_10k(recommend["elite_picks"])
         return jsonify({"recommend_time": recommend.get("scan_time"), **plan})
     return jsonify({"error": "recommend data unavailable"})
+
+
+# ═══════════════════════════════════════════════════════════════
+# 闭环跟踪 (月内跟踪 + 月末验证)
+# ═══════════════════════════════════════════════════════════════
+@bp.route("/track/start")
+def api_track_start():
+    """月初启动跟踪: 保存当前推荐到跟踪表"""
+    from services.doubler_tracker import start_tracking
+    return jsonify(start_tracking())
+
+
+@bp.route("/track/status")
+def api_track_status():
+    """查看本月跟踪进度"""
+    from services.doubler_tracker import get_tracking_status
+    return jsonify(get_tracking_status())
+
+
+@bp.route("/track/update")
+def api_track_update():
+    """手动更新当日价格"""
+    from services.doubler_tracker import update_progress
+    return jsonify(update_progress())
+
+
+@bp.route("/track/verify")
+def api_track_verify():
+    """月末验证: 计算实际涨跌幅"""
+    from services.doubler_tracker import verify_month
+    return jsonify(verify_month())
+
+
+@bp.route("/track/effectiveness")
+def api_track_effectiveness():
+    """查看各催化剂类型历史命中率"""
+    from services.doubler_tracker import get_catalyst_effectiveness
+    return jsonify(get_catalyst_effectiveness())

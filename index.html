@@ -423,6 +423,7 @@
         <button onclick="showPnLReport()" style="padding:6px 16px;border:1px solid var(--gold);border-radius:8px;background:rgba(240,180,41,.1);color:var(--gold);cursor:pointer;font-size:12px;font-weight:600">📊 盈亏统计</button>
         <button onclick="showPortfolioAdvice()" style="padding:6px 16px;border:1px solid var(--blue);border-radius:8px;background:rgba(59,130,246,.1);color:var(--blue);cursor:pointer;font-size:12px;font-weight:600">📋 持仓分析</button>
         <button onclick="showReviewModal()" style="padding:6px 16px;border:1px solid var(--purple);border-radius:8px;background:rgba(139,92,246,.1);color:var(--purple);cursor:pointer;font-size:12px;font-weight:600">📋 复盘</button>
+        <button onclick="showMarginRank()" style="padding:6px 16px;border:1px solid var(--cyan);border-radius:8px;background:rgba(6,182,212,.1);color:var(--cyan);cursor:pointer;font-size:12px;font-weight:600">💰 融资融券</button>
         <button onclick="loadTradesFromServer()" style="padding:6px 16px;border:1px solid var(--text-muted);border-radius:8px;background:rgba(255,255,255,.03);color:var(--text-muted);cursor:pointer;font-size:12px;font-weight:600">🔄 刷新</button>
       </div>
 
@@ -543,6 +544,24 @@
     <div id="reviewContent" style="min-height:100px;color:var(--text-muted);font-size:13px;text-align:center;padding:30px">正在加载...</div>
     <div style="margin-top:12px;text-align:right">
       <button onclick="closeReview()" style="padding:8px 20px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text-secondary);cursor:pointer">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 融资融券弹窗 -->
+<div id="marginModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:24px;width:600px;max-width:90vw;max-height:85vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <span style="font-size:18px;font-weight:700">💰 融资融券排行</span>
+      <button onclick="loadMarginData()" style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-secondary);cursor:pointer;font-size:11px">🔄 刷新</button>
+    </div>
+    <table style="font-size:12px;width:100%"><thead>
+      <tr><th>代码</th><th>名称</th><th>融资余额</th><th>融资买入</th><th>融券余量</th></tr>
+    </thead><tbody id="marginBody">
+      <tr><td colspan="5" style="text-align:center;color:var(--text-muted)">加载中...</td></tr>
+    </tbody></table>
+    <div style="margin-top:12px;text-align:right">
+      <button onclick="document.getElementById('marginModal').style.display='none'" style="padding:8px 20px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text-secondary);cursor:pointer">关闭</button>
     </div>
   </div>
 </div>
@@ -1933,6 +1952,38 @@ function renderReviewContent(report) {
   }).join('');
 
   return header + summaryHtml + list;
+}
+
+// ===== 融资融券 =====
+function showMarginRank() {
+  document.getElementById('marginModal').style.display = 'flex';
+  loadMarginData();
+}
+
+async function loadMarginData() {
+  const tbody = document.getElementById('marginBody');
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">加载中...</td></tr>';
+  try {
+    const d = await fetchJSON('/api/margin');
+    const items = d.data || d || [];
+    if (!Array.isArray(items) || items.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">暂无数据</td></tr>';
+      return;
+    }
+    function fmt(n) { return '¥' + Number(n).toFixed(1) + '亿'; }
+    tbody.innerHTML = items.slice(0, 20).map(item => {
+      const code = (item.ts_code || item.code || '').replace('.SZ','').replace('.SH','').replace('.BJ','');
+      return '<tr>' +
+        '<td style="color:var(--text-muted);font-size:11px">' + code + '</td>' +
+        '<td style="font-weight:600;font-size:12px">' + (item.name || '') + '</td>' +
+        '<td style="color:var(--gold);font-weight:600">' + fmt(item.rzye) + '</td>' +
+        '<td>' + fmt(item.rzmre || 0) + '</td>' +
+        '<td style="color:var(--text-secondary)">' + (item.rqyl || 0) + ' 股</td>' +
+      '</tr>';
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--red)">加载失败</td></tr>';
+  }
 }
 
 // 当未登录时，点击"记录交易"按钮自动弹出登录

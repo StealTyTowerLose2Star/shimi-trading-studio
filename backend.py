@@ -1581,6 +1581,33 @@ def api_doubler_plan_10k():
     return jsonify({"error": "recommend data unavailable"})
 
 
+# ═══════════════ 闭环跟踪 ═══════════════
+@app.route("/api/doubler/track/start")
+def api_track_start():
+    from services.doubler_tracker import start_tracking
+    return jsonify(start_tracking())
+
+@app.route("/api/doubler/track/status")
+def api_track_status():
+    from services.doubler_tracker import get_tracking_status
+    return jsonify(get_tracking_status())
+
+@app.route("/api/doubler/track/update")
+def api_track_update():
+    from services.doubler_tracker import update_progress
+    return jsonify(update_progress())
+
+@app.route("/api/doubler/track/verify")
+def api_track_verify():
+    from services.doubler_tracker import verify_month
+    return jsonify(verify_month())
+
+@app.route("/api/doubler/track/effectiveness")
+def api_track_effectiveness():
+    from services.doubler_tracker import get_catalyst_effectiveness
+    return jsonify(get_catalyst_effectiveness())
+
+
 if __name__ == "__main__":
     print("🚀 拾米交易工作室 Backend (tushare) 启动中...")
     print(f"   Dashboard: http://localhost:7890")

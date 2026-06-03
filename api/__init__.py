@@ -13,6 +13,7 @@ def register_blueprints(app: Flask):
     from .monitor import bp as monitor_bp
     from .doubler import bp as doubler_bp
     from .review import bp as review_bp
+    from .margin import bp as margin_bp
 
     app.register_blueprint(market_bp)
     app.register_blueprint(strategy_bp)
@@ -21,3 +22,4 @@ def register_blueprints(app: Flask):
     app.register_blueprint(monitor_bp)
     app.register_blueprint(doubler_bp)
     app.register_blueprint(review_bp)
+    app.register_blueprint(margin_bp)

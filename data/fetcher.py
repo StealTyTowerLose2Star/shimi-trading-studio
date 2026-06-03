@@ -512,3 +512,99 @@ def fetch_limit_up():
             "board_count": 1,  # simplified — full data would come from limit_list
         })
     return result[:20]
+
+
+# ============================================================
+# 融资融券数据
+# ============================================================
+
+def fetch_margin_detail(trade_date: Optional[str] = None) -> list:
+    """获取融资融券明细数据
+
+    Args:
+        trade_date: str, 格式 YYYYMMDD，默认最近交易日
+
+    Returns:
+        list[dict]: 按 rzye(融资余额亿) 降序排列
+            每项含: ts_code, name, rzye, rzmre, rzche, rqyl
+    """
+    try:
+        pro = get_ts()
+        if not trade_date:
+            trade_date = get_latest_date()
+            if isinstance(trade_date, dict):
+                trade_date = (date.today() - timedelta(days=1)).strftime("%Y%m%d")
+
+        df = pro.margin_detail(
+            trade_date=trade_date,
+            fields="ts_code,rzye,rzmre,rzche,rqyl"
+        )
+        if df.empty:
+            # 尝试回退前一个交易日
+            for fallback_days in range(1, 5):
+                fd = (datetime.now() - timedelta(days=fallback_days)).strftime("%Y%m%d")
+                df = pro.margin_detail(trade_date=fd, fields="ts_code,rzye,rzmre,rzche,rqyl")
+                if not df.empty:
+                    trade_date = fd
+                    break
+        if df.empty:
+            return []
+
+        # 补充股票名称
+        basic = get_stock_basic()
+        if isinstance(basic, dict) and "error" in basic:
+            basic = {}
+
+        result = []
+        for _, row in df.iterrows():
+            ts_code = row["ts_code"]
+            name = ""
+            if isinstance(basic, dict):
+                info = basic.get(ts_code, {})
+                if isinstance(info, dict):
+                    name = info.get("name", "")
+
+            item = {
+                "ts_code": ts_code,
+                "name": name,
+                "rzye": round(float(row.get("rzye", 0)) / 1e8, 2),   # 融资余额(亿)
+                "rzmre": round(float(row.get("rzmre", 0)) / 1e8, 2),  # 融资买入额(亿)
+                "rzche": round(float(row.get("rzche", 0)), 2),         # 融资偿还额
+                "rqyl": round(float(row.get("rqyl", 0)), 2),           # 融券余量
+            }
+            result.append(item)
+
+        result.sort(key=lambda x: x["rzye"], reverse=True)
+        return result
+
+    except Exception as e:
+        return {"error": f"融资融券数据获取失败: {e}"}
+
+
+def get_margin_detail(trade_date: Optional[str] = None, ttl: int = 300) -> list:
+    """获取融资融券详情（带缓存）
+
+    Args:
+        trade_date: 交易日 YYYYMMDD
+        ttl: 缓存 TTL 秒数，默认 300s
+
+    Returns:
+        list[dict] | dict: 数据列表，失败时返回 {"error": ...}
+    """
+    if not trade_date:
+        trade_date = get_latest_date()
+        if isinstance(trade_date, dict):
+            trade_date = date.today().strftime("%Y%m%d")
+    key = f"margin_detail_{trade_date}"
+    cached = cache_or_fetch(key, lambda: fetch_margin_detail(trade_date), ttl)
+    if cached and len(cached) > 0:
+        return cached
+    # 缓存为空，尝试回退日期
+    for fallback in range(1, 5):
+        fd = (datetime.now() - timedelta(days=fallback)).strftime("%Y%m%d")
+        data = fetch_margin_detail(fd)
+        if data and len(data) > 0:
+            from cache import cache_set
+            cache_set(key, data, ttl)
+            return data
+    return cached or []
