@@ -142,6 +142,34 @@ CREATE TABLE IF NOT EXISTS trade_log (
     detail TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS recommendations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT NOT NULL,
+    name TEXT,
+    price REAL,
+    signal TEXT,
+    consensus INTEGER DEFAULT 0,
+    stop_loss REAL,
+    target_1 REAL,
+    target_2 REAL,
+    target_3 REAL,
+    position TEXT,
+    strategies TEXT,
+    reason TEXT,
+    market_phase TEXT,
+    generated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS review_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    review_type TEXT NOT NULL CHECK(review_type IN ('daily', 'weekly')),
+    generated_at TEXT NOT NULL,
+    period_start TEXT,
+    period_end TEXT,
+    content TEXT NOT NULL,
+    summary TEXT
+);
 """
 
 SCHEMA_PG = """
@@ -186,6 +214,34 @@ CREATE TABLE IF NOT EXISTS trade_log (
     action VARCHAR(50),
     detail TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS recommendations (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(20) NOT NULL,
+    name VARCHAR(100),
+    price DOUBLE PRECISION,
+    signal VARCHAR(20),
+    consensus INTEGER DEFAULT 0,
+    stop_loss DOUBLE PRECISION,
+    target_1 DOUBLE PRECISION,
+    target_2 DOUBLE PRECISION,
+    target_3 DOUBLE PRECISION,
+    position VARCHAR(20),
+    strategies VARCHAR(100),
+    reason TEXT,
+    market_phase VARCHAR(50),
+    generated_at VARCHAR(20) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS review_reports (
+    id SERIAL PRIMARY KEY,
+    review_type VARCHAR(10) NOT NULL CHECK(review_type IN ('daily', 'weekly')),
+    generated_at VARCHAR(20) NOT NULL,
+    period_start VARCHAR(20),
+    period_end VARCHAR(20),
+    content TEXT NOT NULL,
+    summary TEXT
 );
 
 -- Indexes
@@ -377,15 +433,23 @@ def update_trade(trade_id: int, user_id: int, data: dict) -> dict:
                 values
             )
 
-            # 如果是平仓，记录日志
+            # 如果是平仓
             if "exit_price" in data and data["exit_price"] is not None:
-                pnl = (data["exit_price"] - trade_dict["entry_price"]) * trade_dict["qty"] \
-                    if trade_dict["direction"] == "buy" \
-                    else (trade_dict["entry_price"] - data["exit_price"]) * trade_dict["qty"]
-                conn.execute(
-                    f"INSERT INTO trade_log (trade_id, user_id, action, detail) VALUES ({_ph()}, {_ph()}, 'close', {_ph()})",
-                    (trade_id, user_id, f"平仓 @¥{data['exit_price']} 盈亏:¥{pnl:.2f}")
-                )
+                exit_qty = data.get("exit_qty", trade_dict["qty"])
+                is_partial = exit_qty < trade_dict["qty"]
+                
+                if is_partial:
+                    # 部分平仓：减少持仓数量，清除之前可能已设置的 exit_price
+                    remaining = trade_dict["qty"] - exit_qty
+                    conn.execute(f"UPDATE trades SET qty={_ph()}, exit_price=NULL, updated_at=CURRENT_TIMESTAMP WHERE id={_ph()}", (remaining, trade_id))
+                    pnl = (data["exit_price"] - trade_dict["entry_price"]) * exit_qty if trade_dict["direction"] == "buy" else (trade_dict["entry_price"] - data["exit_price"]) * exit_qty
+                    conn.execute(f"INSERT INTO trade_log (trade_id, user_id, action, detail) VALUES ({_ph()}, {_ph()}, 'partial_close', {_ph()})",
+                        (trade_id, user_id, f"部分平仓 {exit_qty}股 @¥{data['exit_price']} 盈亏:¥{pnl:.2f} 剩余{remaining}股"))
+                else:
+                    # 全部平仓
+                    pnl = (data["exit_price"] - trade_dict["entry_price"]) * trade_dict["qty"] if trade_dict["direction"] == "buy" else (trade_dict["entry_price"] - data["exit_price"]) * trade_dict["qty"]
+                    conn.execute(f"INSERT INTO trade_log (trade_id, user_id, action, detail) VALUES ({_ph()}, {_ph()}, 'close', {_ph()})",
+                        (trade_id, user_id, f"平仓 @¥{data['exit_price']} 盈亏:¥{pnl:.2f}"))
 
         conn.commit()
         return {"id": trade_id, **trade_dict, **data}
@@ -603,6 +667,118 @@ def migrate_from_sqlite():
     finally:
         sq.close()
         pg_conn.close()
+
+
+# ─── 推荐记录 ────────────────────────────────────────
+
+def save_recommendations(recommendations: list, market_phase: str, generated_at: str):
+    """保存操作建议生成的推荐股票记录"""
+    conn = get_db()
+    try:
+        for rec in recommendations:
+            conn.execute(
+                f"INSERT INTO recommendations (code, name, price, signal, consensus, "
+                f"stop_loss, target_1, target_2, target_3, position, strategies, reason, "
+                f"market_phase, generated_at) "
+                f"VALUES ({_ph()},{_ph()},{_ph()},{_ph()},{_ph()},"
+                f"{_ph()},{_ph()},{_ph()},{_ph()},{_ph()},"
+                f"{_ph()},{_ph()},{_ph()},{_ph()})",
+                (
+                    rec.get("code"), rec.get("name"), rec.get("price"),
+                    rec.get("signal"), rec.get("consensus", 0),
+                    rec.get("stop_loss"), rec.get("target_1"),
+                    rec.get("target_2"), rec.get("target_3"),
+                    rec.get("position"),
+                    ",".join(rec.get("strategies", [])),
+                    rec.get("reason"), market_phase, generated_at,
+                )
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_recommendations(days_ago: int = 3, limit: int = 50) -> list:
+    """获取 N 天前的推荐记录"""
+    conn = get_db()
+    try:
+        from datetime import datetime, timedelta
+        target_date = (datetime.now() - timedelta(days=days_ago)).strftime("%Y-%m-%d")
+        cur = conn.execute(
+            f"SELECT * FROM recommendations WHERE generated_at LIKE {_ph()} ORDER BY generated_at DESC LIMIT {_ph()}",
+            (f"{target_date}%", limit)
+        )
+        return _rows_to_list(cur.fetchall())
+    finally:
+        conn.close()
+
+
+def get_all_recommendations(limit: int = 100) -> list:
+    """获取所有推荐记录"""
+    conn = get_db()
+    try:
+        cur = conn.execute(
+            f"SELECT * FROM recommendations ORDER BY id DESC LIMIT {_ph()}",
+            (limit,)
+        )
+        return _rows_to_list(cur.fetchall())
+    finally:
+        conn.close()
+
+
+# ─── 复盘报告 ────────────────────────────────────────
+
+def save_review_report(review_type: str, content: dict, period_start: str = None,
+                       period_end: str = None, summary: str = None):
+    """保存复盘报告"""
+    conn = get_db()
+    try:
+        import json
+        cur = conn.execute(
+            f"INSERT INTO review_reports (review_type, generated_at, period_start, period_end, content, summary) "
+            f"VALUES ({_ph()}, {_ph()}, {_ph()}, {_ph()}, {_ph()}, {_ph()}){_last_id_suffix()}",
+            (review_type, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+             period_start, period_end, json.dumps(content, ensure_ascii=False, default=str), summary)
+        )
+        conn.commit()
+        if config.DB_TYPE == "postgresql":
+            return cur.fetchone()[0]
+        return cur.lastrowid
+    finally:
+        conn.close()
+
+
+def get_latest_review(review_type: str) -> dict:
+    """获取最新一份复盘报告"""
+    conn = get_db()
+    try:
+        cur = conn.execute(
+            f"SELECT * FROM review_reports WHERE review_type={_ph()} ORDER BY id DESC LIMIT 1",
+            (review_type,)
+        )
+        row = cur.fetchone()
+        if row:
+            d = _row_to_dict(row)
+            import json
+            d["content"] = json.loads(d["content"]) if isinstance(d["content"], str) else d["content"]
+            return d
+        return None
+    finally:
+        conn.close()
+
+
+def get_review_history(review_type: str, limit: int = 10) -> list:
+    """获取复盘历史"""
+    conn = get_db()
+    try:
+        cur = conn.execute(
+            f"SELECT id, review_type, generated_at, period_start, period_end, summary "
+            f"FROM review_reports WHERE review_type={_ph()} ORDER BY id DESC LIMIT {_ph()}",
+            (review_type, limit)
+        )
+        return _rows_to_list(cur.fetchall())
+    finally:
+        conn.close()
 
 
 # ─── 初始化 ──────────────────────────────────────────

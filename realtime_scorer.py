@@ -16,15 +16,24 @@ def get_ts():
     return ts.pro_api(config.TUSHARE_TOKEN)
 
 
-# 进程级 K 线缓存
+# 进程级 K 线缓存：{code_days: (DataFrame, timestamp)}
 _kline_cache = {}
+_KLINE_TTL = 1800  # 缓存 1800 秒（30 分钟）
 
 
-def get_kline(code: str, days: int = 120):
-    """获取个股 K 线 (tushare)，带进程级缓存"""
+def get_kline(code: str, days: int = 120, force: bool = False):
+    """获取个股 K 线 (tushare)，带进程级缓存（1800 秒 TTL）
+    Args:
+        code: 股票代码
+        days: 获取天数
+        force: 是否强制刷新（跳过缓存）
+    """
+    import time
     cache_key = f"{code}_{days}"
-    if cache_key in _kline_cache:
-        return _kline_cache[cache_key]
+    if not force and cache_key in _kline_cache:
+        df, ts = _kline_cache[cache_key]
+        if time.time() - ts < _KLINE_TTL:
+            return df
     try:
         pro = get_ts()
         ts_code = code if code.endswith((".SZ", ".SH", ".BJ")) else (
@@ -38,17 +47,17 @@ def get_kline(code: str, days: int = 120):
         df = pro.daily(ts_code=ts_code, start_date=start, end_date=end,
                        fields="trade_date,open,high,low,close,vol,amount")
         if df.empty or len(df) < max(days * 0.4, 10):
-            _kline_cache[cache_key] = None
+            _kline_cache[cache_key] = (None, time.time())
             return None
         df = df.sort_values("trade_date").reset_index(drop=True)
         df = df.rename(columns={"trade_date": "date", "vol": "volume"})
         df["date"] = pd.to_datetime(df["date"])
         if "pct_chg" not in df.columns:
             df["pct_chg"] = df["close"].pct_change() * 100
-        _kline_cache[cache_key] = df
+        _kline_cache[cache_key] = (df, time.time())
         return df
     except:
-        _kline_cache[cache_key] = None
+        _kline_cache[cache_key] = (None, time.time())
         return None
 
 

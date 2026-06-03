@@ -1,0 +1,1166 @@
+{
+  "scan_time": "2026-06-02T23:16:03.153026",
+  "total_doublers": 113,
+  "doublers": [
+    {
+      "month": "202502",
+      "code": "920002",
+      "ts_code": "920002.BJ",
+      "name": "万达轴承",
+      "industry": "工程机械",
+      "first_close": 71.7,
+      "last_close": 230.0,
+      "return_pct": 220.8
+    },
+    {
+      "month": "202502",
+      "code": "920810",
+      "ts_code": "920810.BJ",
+      "name": "春光智能",
+      "industry": "专用机械",
+      "first_close": 8.18,
+      "last_close": 19.82,
+      "return_pct": 142.3
+    },
+    {
+      "month": "202502",
+      "code": "300153",
+      "ts_code": "300153.SZ",
+      "name": "科泰电源",
+      "industry": "电气设备",
+      "first_close": 14.46,
+      "last_close": 33.7,
+      "return_pct": 133.1
+    },
+    {
+      "month": "202502",
+      "code": "600126",
+      "ts_code": "600126.SH",
+      "name": "杭钢股份",
+      "industry": "普钢",
+      "first_close": 5.72,
+      "last_close": 13.25,
+      "return_pct": 131.6
+    },
+    {
+      "month": "202502",
+      "code": "920284",
+      "ts_code": "920284.BJ",
+      "name": "灵鸽科技",
+      "industry": "专用机械",
+      "first_close": 12.6,
+      "last_close": 27.92,
+      "return_pct": 121.6
+    },
+    {
+      "month": "202502",
+      "code": "920493",
+      "ts_code": "920493.BJ",
+      "name": "并行科技",
+      "industry": "软件服务",
+      "first_close": 98.16,
+      "last_close": 212.51,
+      "return_pct": 116.5
+    },
+    {
+      "month": "202502",
+      "code": "688158",
+      "ts_code": "688158.SH",
+      "name": "优刻得-W",
+      "industry": "软件服务",
+      "first_close": 16.6,
+      "last_close": 35.3,
+      "return_pct": 112.7
+    },
+    {
+      "month": "202502",
+      "code": "300846",
+      "ts_code": "300846.SZ",
+      "name": "首都在线",
+      "industry": "软件服务",
+      "first_close": 14.88,
+      "last_close": 31.12,
+      "return_pct": 109.1
+    },
+    {
+      "month": "202502",
+      "code": "300251",
+      "ts_code": "300251.SZ",
+      "name": "光线传媒",
+      "industry": "影视音像",
+      "first_close": 11.44,
+      "last_close": 23.91,
+      "return_pct": 109.0
+    },
+    {
+      "month": "202502",
+      "code": "300031",
+      "ts_code": "300031.SZ",
+      "name": "宝通科技",
+      "industry": "互联网",
+      "first_close": 18.72,
+      "last_close": 38.78,
+      "return_pct": 107.2
+    },
+    {
+      "month": "202503",
+      "code": "600610",
+      "ts_code": "600610.SH",
+      "name": "中毅达",
+      "industry": "化工原料",
+      "first_close": 4.06,
+      "last_close": 9.44,
+      "return_pct": 132.5
+    },
+    {
+      "month": "202503",
+      "code": "300611",
+      "ts_code": "300611.SZ",
+      "name": "美力科技",
+      "industry": "汽车配件",
+      "first_close": 16.66,
+      "last_close": 34.0,
+      "return_pct": 104.1
+    },
+    {
+      "month": "202503",
+      "code": "300871",
+      "ts_code": "300871.SZ",
+      "name": "回盛生物",
+      "industry": "农业综合",
+      "first_close": 11.16,
+      "last_close": 22.5,
+      "return_pct": 101.6
+    },
+    {
+      "month": "202503",
+      "code": "603949",
+      "ts_code": "603949.SH",
+      "name": "雪龙集团",
+      "industry": "汽车配件",
+      "first_close": 14.33,
+      "last_close": 28.89,
+      "return_pct": 101.6
+    },
+    {
+      "month": "202504",
+      "code": "301209",
+      "ts_code": "301209.SZ",
+      "name": "联合化学",
+      "industry": "染料涂料",
+      "first_close": 36.9,
+      "last_close": 94.36,
+      "return_pct": 155.7
+    },
+    {
+      "month": "202504",
+      "code": "601086",
+      "ts_code": "601086.SH",
+      "name": "国芳集团",
+      "industry": "百货",
+      "first_close": 4.73,
+      "last_close": 10.03,
+      "return_pct": 112.1
+    },
+    {
+      "month": "202505",
+      "code": "300204",
+      "ts_code": "300204.SZ",
+      "name": "舒泰神",
+      "industry": "生物制药",
+      "first_close": 10.55,
+      "last_close": 26.5,
+      "return_pct": 151.2
+    },
+    {
+      "month": "202505",
+      "code": "688648",
+      "ts_code": "688648.SH",
+      "name": "中邮科技",
+      "industry": "机床制造",
+      "first_close": 26.75,
+      "last_close": 67.15,
+      "return_pct": 151.0
+    },
+    {
+      "month": "202505",
+      "code": "688336",
+      "ts_code": "688336.SH",
+      "name": "三生国健",
+      "industry": "生物制药",
+      "first_close": 28.74,
+      "last_close": 58.0,
+      "return_pct": 101.8
+    },
+    {
+      "month": "202506",
+      "code": "002940",
+      "ts_code": "002940.SZ",
+      "name": "昂利康",
+      "industry": "化学制药",
+      "first_close": 16.57,
+      "last_close": 37.11,
+      "return_pct": 124.0
+    },
+    {
+      "month": "202506",
+      "code": "300340",
+      "ts_code": "300340.SZ",
+      "name": "科恒股份",
+      "industry": "电气设备",
+      "first_close": 9.79,
+      "last_close": 21.8,
+      "return_pct": 122.7
+    },
+    {
+      "month": "202506",
+      "code": "600110",
+      "ts_code": "600110.SH",
+      "name": "诺德股份",
+      "industry": "电气设备",
+      "first_close": 3.26,
+      "last_close": 6.99,
+      "return_pct": 114.4
+    },
+    {
+      "month": "202506",
+      "code": "601606",
+      "ts_code": "601606.SH",
+      "name": "长城军工",
+      "industry": "专用机械",
+      "first_close": 13.57,
+      "last_close": 29.05,
+      "return_pct": 114.1
+    },
+    {
+      "month": "202506",
+      "code": "002104",
+      "ts_code": "002104.SZ",
+      "name": "恒宝股份",
+      "industry": "通信设备",
+      "first_close": 9.8,
+      "last_close": 19.91,
+      "return_pct": 103.2
+    },
+    {
+      "month": "202507",
+      "code": "300436",
+      "ts_code": "300436.SZ",
+      "name": "广生堂",
+      "industry": "化学制药",
+      "first_close": 36.64,
+      "last_close": 114.5,
+      "return_pct": 212.5
+    },
+    {
+      "month": "202507",
+      "code": "920942",
+      "ts_code": "920942.BJ",
+      "name": "恒立钻具",
+      "industry": "机械基件",
+      "first_close": 20.08,
+      "last_close": 57.9,
+      "return_pct": 188.3
+    },
+    {
+      "month": "202507",
+      "code": "600749",
+      "ts_code": "600749.SH",
+      "name": "西藏旅游",
+      "industry": "旅游景点",
+      "first_close": 11.9,
+      "last_close": 28.2,
+      "return_pct": 137.0
+    },
+    {
+      "month": "202507",
+      "code": "600326",
+      "ts_code": "600326.SH",
+      "name": "西藏天路",
+      "industry": "水泥",
+      "first_close": 8.48,
+      "last_close": 19.15,
+      "return_pct": 125.8
+    },
+    {
+      "month": "202507",
+      "code": "300528",
+      "ts_code": "300528.SZ",
+      "name": "幸福蓝海",
+      "industry": "影视音像",
+      "first_close": 10.36,
+      "last_close": 23.22,
+      "return_pct": 124.1
+    },
+    {
+      "month": "202507",
+      "code": "688189",
+      "ts_code": "688189.SH",
+      "name": "南新制药",
+      "industry": "化学制药",
+      "first_close": 7.67,
+      "last_close": 17.14,
+      "return_pct": 123.5
+    },
+    {
+      "month": "202507",
+      "code": "603280",
+      "ts_code": "603280.SH",
+      "name": "南方路机",
+      "industry": "工程机械",
+      "first_close": 25.24,
+      "last_close": 54.86,
+      "return_pct": 117.4
+    },
+    {
+      "month": "202507",
+      "code": "300683",
+      "ts_code": "300683.SZ",
+      "name": "海特生物",
+      "industry": "生物制药",
+      "first_close": 26.36,
+      "last_close": 56.33,
+      "return_pct": 113.7
+    },
+    {
+      "month": "202507",
+      "code": "688110",
+      "ts_code": "688110.SH",
+      "name": "东芯股份",
+      "industry": "半导体",
+      "first_close": 30.61,
+      "last_close": 64.76,
+      "return_pct": 111.6
+    },
+    {
+      "month": "202507",
+      "code": "603367",
+      "ts_code": "603367.SH",
+      "name": "辰欣药业",
+      "industry": "化学制药",
+      "first_close": 14.24,
+      "last_close": 30.01,
+      "return_pct": 110.7
+    },
+    {
+      "month": "202507",
+      "code": "301217",
+      "ts_code": "301217.SZ",
+      "name": "铜冠铜箔",
+      "industry": "元器件",
+      "first_close": 12.54,
+      "last_close": 26.02,
+      "return_pct": 107.5
+    },
+    {
+      "month": "202507",
+      "code": "300539",
+      "ts_code": "300539.SZ",
+      "name": "横河精密",
+      "industry": "塑料",
+      "first_close": 13.56,
+      "last_close": 27.94,
+      "return_pct": 106.0
+    },
+    {
+      "month": "202508",
+      "code": "688228",
+      "ts_code": "688228.SH",
+      "name": "开普云",
+      "industry": "软件服务",
+      "first_close": 64.1,
+      "last_close": 153.8,
+      "return_pct": 139.9
+    },
+    {
+      "month": "202508",
+      "code": "601929",
+      "ts_code": "601929.SH",
+      "name": "吉视传媒",
+      "industry": "影视音像",
+      "first_close": 1.93,
+      "last_close": 4.55,
+      "return_pct": 135.8
+    },
+    {
+      "month": "202508",
+      "code": "920438",
+      "ts_code": "920438.BJ",
+      "name": "戈碧迦",
+      "industry": "元器件",
+      "first_close": 22.23,
+      "last_close": 52.3,
+      "return_pct": 135.3
+    },
+    {
+      "month": "202508",
+      "code": "688577",
+      "ts_code": "688577.SH",
+      "name": "浙海德曼",
+      "industry": "机床制造",
+      "first_close": 50.91,
+      "last_close": 119.7,
+      "return_pct": 135.1
+    },
+    {
+      "month": "202508",
+      "code": "688108",
+      "ts_code": "688108.SH",
+      "name": "赛诺医疗",
+      "industry": "医疗保健",
+      "first_close": 14.65,
+      "last_close": 33.19,
+      "return_pct": 126.6
+    },
+    {
+      "month": "202508",
+      "code": "600410",
+      "ts_code": "600410.SH",
+      "name": "华胜天成",
+      "industry": "软件服务",
+      "first_close": 10.76,
+      "last_close": 23.49,
+      "return_pct": 118.3
+    },
+    {
+      "month": "202508",
+      "code": "688256",
+      "ts_code": "688256.SH",
+      "name": "寒武纪",
+      "industry": "半导体",
+      "first_close": 689.1,
+      "last_close": 1492.49,
+      "return_pct": 116.6
+    },
+    {
+      "month": "202508",
+      "code": "300870",
+      "ts_code": "300870.SZ",
+      "name": "欧陆通",
+      "industry": "电气设备",
+      "first_close": 128.66,
+      "last_close": 267.08,
+      "return_pct": 107.6
+    },
+    {
+      "month": "202508",
+      "code": "603757",
+      "ts_code": "603757.SH",
+      "name": "大元泵业",
+      "industry": "机械基件",
+      "first_close": 26.4,
+      "last_close": 54.56,
+      "return_pct": 106.7
+    },
+    {
+      "month": "202508",
+      "code": "600113",
+      "ts_code": "600113.SH",
+      "name": "浙江东日",
+      "industry": "区域地产",
+      "first_close": 28.77,
+      "last_close": 59.13,
+      "return_pct": 105.5
+    },
+    {
+      "month": "202508",
+      "code": "300843",
+      "ts_code": "300843.SZ",
+      "name": "胜蓝股份",
+      "industry": "元器件",
+      "first_close": 31.09,
+      "last_close": 63.59,
+      "return_pct": 104.5
+    },
+    {
+      "month": "202508",
+      "code": "605298",
+      "ts_code": "605298.SH",
+      "name": "必得科技",
+      "industry": "运输设备",
+      "first_close": 15.27,
+      "last_close": 30.65,
+      "return_pct": 100.7
+    },
+    {
+      "month": "202508",
+      "code": "920223",
+      "ts_code": "920223.BJ",
+      "name": "荣亿精密",
+      "industry": "机械基件",
+      "first_close": 10.89,
+      "last_close": 21.78,
+      "return_pct": 100.0
+    },
+    {
+      "month": "202509",
+      "code": "600376",
+      "ts_code": "600376.SH",
+      "name": "首开股份",
+      "industry": "区域地产",
+      "first_close": 2.67,
+      "last_close": 7.48,
+      "return_pct": 180.1
+    },
+    {
+      "month": "202509",
+      "code": "688411",
+      "ts_code": "688411.SH",
+      "name": "海博思创",
+      "industry": "电气设备",
+      "first_close": 125.25,
+      "last_close": 323.92,
+      "return_pct": 158.6
+    },
+    {
+      "month": "202509",
+      "code": "688109",
+      "ts_code": "688109.SH",
+      "name": "XD品茗科",
+      "industry": "软件服务",
+      "first_close": 41.85,
+      "last_close": 100.6,
+      "return_pct": 140.4
+    },
+    {
+      "month": "202509",
+      "code": "300959",
+      "ts_code": "300959.SZ",
+      "name": "线上线下",
+      "industry": "电信运营",
+      "first_close": 45.66,
+      "last_close": 96.82,
+      "return_pct": 112.0
+    },
+    {
+      "month": "202509",
+      "code": "001309",
+      "ts_code": "001309.SZ",
+      "name": "德明利",
+      "industry": "半导体",
+      "first_close": 101.97,
+      "last_close": 204.69,
+      "return_pct": 100.7
+    },
+    {
+      "month": "202509",
+      "code": "603843",
+      "ts_code": "603843.SH",
+      "name": "*ST正平",
+      "industry": "建筑工程",
+      "first_close": 2.71,
+      "last_close": 5.43,
+      "return_pct": 100.4
+    },
+    {
+      "month": "202509",
+      "code": "002513",
+      "ts_code": "002513.SZ",
+      "name": "蓝丰生化",
+      "industry": "新型电力",
+      "first_close": 5.2,
+      "last_close": 10.4,
+      "return_pct": 100.0
+    },
+    {
+      "month": "202510",
+      "code": "300300",
+      "ts_code": "300300.SZ",
+      "name": "海峡创新",
+      "industry": "软件服务",
+      "first_close": 4.79,
+      "last_close": 10.25,
+      "return_pct": 114.0
+    },
+    {
+      "month": "202510",
+      "code": "000592",
+      "ts_code": "000592.SZ",
+      "name": "平潭发展",
+      "industry": "林业",
+      "first_close": 3.49,
+      "last_close": 7.08,
+      "return_pct": 102.9
+    },
+    {
+      "month": "202510",
+      "code": "600403",
+      "ts_code": "600403.SH",
+      "name": "大有能源",
+      "industry": "煤炭开采",
+      "first_close": 3.92,
+      "last_close": 7.91,
+      "return_pct": 101.8
+    },
+    {
+      "month": "202511",
+      "code": "301292",
+      "ts_code": "301292.SZ",
+      "name": "海科新源",
+      "industry": "化工原料",
+      "first_close": 31.23,
+      "last_close": 80.62,
+      "return_pct": 158.1
+    },
+    {
+      "month": "202511",
+      "code": "688353",
+      "ts_code": "688353.SH",
+      "name": "华盛锂电",
+      "industry": "化工原料",
+      "first_close": 47.18,
+      "last_close": 111.8,
+      "return_pct": 137.0
+    },
+    {
+      "month": "202511",
+      "code": "603778",
+      "ts_code": "603778.SH",
+      "name": "国晟科技",
+      "industry": "电气设备",
+      "first_close": 4.98,
+      "last_close": 11.59,
+      "return_pct": 132.7
+    },
+    {
+      "month": "202511",
+      "code": "603122",
+      "ts_code": "603122.SH",
+      "name": "合富中国",
+      "industry": "医药商业",
+      "first_close": 10.77,
+      "last_close": 23.82,
+      "return_pct": 121.2
+    },
+    {
+      "month": "202511",
+      "code": "688227",
+      "ts_code": "688227.SH",
+      "name": "品高股份",
+      "industry": "软件服务",
+      "first_close": 37.08,
+      "last_close": 81.83,
+      "return_pct": 120.7
+    },
+    {
+      "month": "202511",
+      "code": "300437",
+      "ts_code": "300437.SZ",
+      "name": "清水源",
+      "industry": "化工原料",
+      "first_close": 9.94,
+      "last_close": 20.3,
+      "return_pct": 104.2
+    },
+    {
+      "month": "202512",
+      "code": "002969",
+      "ts_code": "002969.SZ",
+      "name": "嘉美包装",
+      "industry": "广告包装",
+      "first_close": 3.86,
+      "last_close": 12.66,
+      "return_pct": 228.0
+    },
+    {
+      "month": "202512",
+      "code": "301232",
+      "ts_code": "301232.SZ",
+      "name": "飞沃科技",
+      "industry": "机械基件",
+      "first_close": 57.16,
+      "last_close": 168.37,
+      "return_pct": 194.6
+    },
+    {
+      "month": "202512",
+      "code": "301005",
+      "ts_code": "301005.SZ",
+      "name": "超捷股份",
+      "industry": "汽车配件",
+      "first_close": 61.6,
+      "last_close": 155.27,
+      "return_pct": 152.1
+    },
+    {
+      "month": "202512",
+      "code": "002149",
+      "ts_code": "002149.SZ",
+      "name": "西部材料",
+      "industry": "小金属",
+      "first_close": 18.17,
+      "last_close": 45.51,
+      "return_pct": 150.5
+    },
+    {
+      "month": "202512",
+      "code": "920576",
+      "ts_code": "920576.BJ",
+      "name": "天力复合",
+      "industry": "小金属",
+      "first_close": 28.4,
+      "last_close": 70.62,
+      "return_pct": 148.7
+    },
+    {
+      "month": "202512",
+      "code": "603601",
+      "ts_code": "603601.SH",
+      "name": "再升科技",
+      "industry": "玻璃",
+      "first_close": 5.23,
+      "last_close": 12.47,
+      "return_pct": 138.4
+    },
+    {
+      "month": "202512",
+      "code": "002361",
+      "ts_code": "002361.SZ",
+      "name": "神剑股份",
+      "industry": "化工原料",
+      "first_close": 6.41,
+      "last_close": 14.34,
+      "return_pct": 123.7
+    },
+    {
+      "month": "202512",
+      "code": "000547",
+      "ts_code": "000547.SZ",
+      "name": "航天发展",
+      "industry": "通信设备",
+      "first_close": 14.86,
+      "last_close": 33.01,
+      "return_pct": 122.1
+    },
+    {
+      "month": "202512",
+      "code": "002788",
+      "ts_code": "002788.SZ",
+      "name": "鹭燕医药",
+      "industry": "医药商业",
+      "first_close": 9.68,
+      "last_close": 21.18,
+      "return_pct": 118.8
+    },
+    {
+      "month": "202512",
+      "code": "600118",
+      "ts_code": "600118.SH",
+      "name": "中国卫星",
+      "industry": "航空",
+      "first_close": 43.42,
+      "last_close": 94.95,
+      "return_pct": 118.7
+    },
+    {
+      "month": "202512",
+      "code": "600343",
+      "ts_code": "600343.SH",
+      "name": "航天动力",
+      "industry": "机械基件",
+      "first_close": 23.05,
+      "last_close": 48.97,
+      "return_pct": 112.5
+    },
+    {
+      "month": "202512",
+      "code": "300503",
+      "ts_code": "300503.SZ",
+      "name": "昊志机电",
+      "industry": "机械基件",
+      "first_close": 30.68,
+      "last_close": 63.72,
+      "return_pct": 107.7
+    },
+    {
+      "month": "202512",
+      "code": "002565",
+      "ts_code": "002565.SZ",
+      "name": "顺灏股份",
+      "industry": "造纸",
+      "first_close": 8.83,
+      "last_close": 18.33,
+      "return_pct": 107.6
+    },
+    {
+      "month": "202512",
+      "code": "300900",
+      "ts_code": "300900.SZ",
+      "name": "广联航空",
+      "industry": "航空",
+      "first_close": 18.96,
+      "last_close": 39.07,
+      "return_pct": 106.1
+    },
+    {
+      "month": "202512",
+      "code": "001208",
+      "ts_code": "001208.SZ",
+      "name": "华菱线缆",
+      "industry": "电气设备",
+      "first_close": 11.69,
+      "last_close": 24.04,
+      "return_pct": 105.6
+    },
+    {
+      "month": "202512",
+      "code": "603698",
+      "ts_code": "603698.SH",
+      "name": "航天工程",
+      "industry": "专用机械",
+      "first_close": 18.9,
+      "last_close": 38.75,
+      "return_pct": 105.0
+    },
+    {
+      "month": "202601",
+      "code": "300986",
+      "ts_code": "300986.SZ",
+      "name": "志特新材",
+      "industry": "建筑工程",
+      "first_close": 13.42,
+      "last_close": 37.35,
+      "return_pct": 178.3
+    },
+    {
+      "month": "202601",
+      "code": "002716",
+      "ts_code": "002716.SZ",
+      "name": "湖南白银",
+      "industry": "小金属",
+      "first_close": 7.61,
+      "last_close": 19.04,
+      "return_pct": 150.2
+    },
+    {
+      "month": "202601",
+      "code": "001337",
+      "ts_code": "001337.SZ",
+      "name": "四川黄金",
+      "industry": "黄金",
+      "first_close": 28.8,
+      "last_close": 66.18,
+      "return_pct": 129.8
+    },
+    {
+      "month": "202601",
+      "code": "920368",
+      "ts_code": "920368.BJ",
+      "name": "连城数控",
+      "industry": "专用机械",
+      "first_close": 25.29,
+      "last_close": 57.41,
+      "return_pct": 127.0
+    },
+    {
+      "month": "202601",
+      "code": "601212",
+      "ts_code": "601212.SH",
+      "name": "白银有色",
+      "industry": "铜",
+      "first_close": 6.15,
+      "last_close": 13.67,
+      "return_pct": 122.3
+    },
+    {
+      "month": "202601",
+      "code": "300164",
+      "ts_code": "300164.SZ",
+      "name": "通源石油",
+      "industry": "石油开采",
+      "first_close": 5.87,
+      "last_close": 12.88,
+      "return_pct": 119.4
+    },
+    {
+      "month": "202601",
+      "code": "300139",
+      "ts_code": "300139.SZ",
+      "name": "晓程科技",
+      "industry": "黄金",
+      "first_close": 31.82,
+      "last_close": 67.5,
+      "return_pct": 112.1
+    },
+    {
+      "month": "202601",
+      "code": "688679",
+      "ts_code": "688679.SH",
+      "name": "通源环境",
+      "industry": "环境保护",
+      "first_close": 25.94,
+      "last_close": 53.59,
+      "return_pct": 106.6
+    },
+    {
+      "month": "202601",
+      "code": "688766",
+      "ts_code": "688766.SH",
+      "name": "普冉股份",
+      "industry": "半导体",
+      "first_close": 152.65,
+      "last_close": 306.0,
+      "return_pct": 100.5
+    },
+    {
+      "month": "202602",
+      "code": "001896",
+      "ts_code": "001896.SZ",
+      "name": "豫能控股",
+      "industry": "火力发电",
+      "first_close": 6.13,
+      "last_close": 13.34,
+      "return_pct": 117.6
+    },
+    {
+      "month": "202602",
+      "code": "600397",
+      "ts_code": "600397.SH",
+      "name": "江钨装备",
+      "industry": "专用机械",
+      "first_close": 10.24,
+      "last_close": 21.53,
+      "return_pct": 110.3
+    },
+    {
+      "month": "202602",
+      "code": "688480",
+      "ts_code": "688480.SH",
+      "name": "赛恩斯",
+      "industry": "环境保护",
+      "first_close": 72.4,
+      "last_close": 148.0,
+      "return_pct": 104.4
+    },
+    {
+      "month": "202603",
+      "code": "600396",
+      "ts_code": "600396.SH",
+      "name": "华电辽能",
+      "industry": "火力发电",
+      "first_close": 3.29,
+      "last_close": 8.35,
+      "return_pct": 153.8
+    },
+    {
+      "month": "202603",
+      "code": "600726",
+      "ts_code": "600726.SH",
+      "name": "华电能源",
+      "industry": "火力发电",
+      "first_close": 2.71,
+      "last_close": 6.41,
+      "return_pct": 136.5
+    },
+    {
+      "month": "202604",
+      "code": "688227",
+      "ts_code": "688227.SH",
+      "name": "品高股份",
+      "industry": "软件服务",
+      "first_close": 63.04,
+      "last_close": 143.55,
+      "return_pct": 127.7
+    },
+    {
+      "month": "202604",
+      "code": "002297",
+      "ts_code": "002297.SZ",
+      "name": "博云新材",
+      "industry": "航空",
+      "first_close": 11.0,
+      "last_close": 24.5,
+      "return_pct": 122.7
+    },
+    {
+      "month": "202604",
+      "code": "688485",
+      "ts_code": "688485.SH",
+      "name": "九州一轨",
+      "industry": "运输设备",
+      "first_close": 24.82,
+      "last_close": 55.2,
+      "return_pct": 122.4
+    },
+    {
+      "month": "202604",
+      "code": "688628",
+      "ts_code": "688628.SH",
+      "name": "优利德",
+      "industry": "电器仪表",
+      "first_close": 43.98,
+      "last_close": 97.0,
+      "return_pct": 120.6
+    },
+    {
+      "month": "202604",
+      "code": "603629",
+      "ts_code": "603629.SH",
+      "name": "利通电子",
+      "industry": "元器件",
+      "first_close": 65.87,
+      "last_close": 144.41,
+      "return_pct": 119.2
+    },
+    {
+      "month": "202604",
+      "code": "300905",
+      "ts_code": "300905.SZ",
+      "name": "宝丽迪",
+      "industry": "染料涂料",
+      "first_close": 31.39,
+      "last_close": 68.12,
+      "return_pct": 117.0
+    },
+    {
+      "month": "202604",
+      "code": "688268",
+      "ts_code": "688268.SH",
+      "name": "华特气体",
+      "industry": "化工原料",
+      "first_close": 89.0,
+      "last_close": 188.3,
+      "return_pct": 111.6
+    },
+    {
+      "month": "202604",
+      "code": "603773",
+      "ts_code": "603773.SH",
+      "name": "沃格光电",
+      "industry": "元器件",
+      "first_close": 34.13,
+      "last_close": 69.35,
+      "return_pct": 103.2
+    },
+    {
+      "month": "202604",
+      "code": "301217",
+      "ts_code": "301217.SZ",
+      "name": "铜冠铜箔",
+      "industry": "元器件",
+      "first_close": 38.6,
+      "last_close": 78.34,
+      "return_pct": 103.0
+    },
+    {
+      "month": "202605",
+      "code": "002552",
+      "ts_code": "002552.SZ",
+      "name": "宝鼎科技",
+      "industry": "元器件",
+      "first_close": 22.85,
+      "last_close": 57.7,
+      "return_pct": 152.5
+    },
+    {
+      "month": "202605",
+      "code": "688143",
+      "ts_code": "688143.SH",
+      "name": "长盈通",
+      "industry": "通信设备",
+      "first_close": 67.6,
+      "last_close": 169.0,
+      "return_pct": 150.0
+    },
+    {
+      "month": "202605",
+      "code": "688260",
+      "ts_code": "688260.SH",
+      "name": "昀冢科技",
+      "industry": "元器件",
+      "first_close": 37.06,
+      "last_close": 89.49,
+      "return_pct": 141.5
+    },
+    {
+      "month": "202605",
+      "code": "001259",
+      "ts_code": "001259.SZ",
+      "name": "利仁科技",
+      "industry": "家用电器",
+      "first_close": 36.3,
+      "last_close": 82.88,
+      "return_pct": 128.3
+    },
+    {
+      "month": "202605",
+      "code": "688146",
+      "ts_code": "688146.SH",
+      "name": "中船特气",
+      "industry": "半导体",
+      "first_close": 77.25,
+      "last_close": 174.66,
+      "return_pct": 126.1
+    },
+    {
+      "month": "202605",
+      "code": "300959",
+      "ts_code": "300959.SZ",
+      "name": "线上线下",
+      "industry": "电信运营",
+      "first_close": 94.57,
+      "last_close": 207.9,
+      "return_pct": 119.8
+    },
+    {
+      "month": "202605",
+      "code": "000636",
+      "ts_code": "000636.SZ",
+      "name": "风华高科",
+      "industry": "元器件",
+      "first_close": 24.81,
+      "last_close": 53.03,
+      "return_pct": 113.7
+    },
+    {
+      "month": "202605",
+      "code": "003036",
+      "ts_code": "003036.SZ",
+      "name": "泰坦股份",
+      "industry": "纺织机械",
+      "first_close": 35.4,
+      "last_close": 71.0,
+      "return_pct": 100.6
+    },
+    {
+      "month": "202605",
+      "code": "301666",
+      "ts_code": "301666.SZ",
+      "name": "大普微-UW",
+      "industry": "IT设备",
+      "first_close": 379.0,
+      "last_close": 758.0,
+      "return_pct": 100.0
+    }
+  ],
+  "by_month": {
+    "202502": 10,
+    "202503": 4,
+    "202504": 2,
+    "202505": 3,
+    "202506": 5,
+    "202507": 12,
+    "202508": 13,
+    "202509": 7,
+    "202510": 3,
+    "202511": 6,
+    "202512": 16,
+    "202601": 9,
+    "202602": 3,
+    "202603": 2,
+    "202604": 9,
+    "202605": 9
+  },
+  "by_industry": {
+    "软件服务": 9,
+    "元器件": 9,
+    "电气设备": 7,
+    "专用机械": 6,
+    "化工原料": 6,
+    "机械基件": 6,
+    "半导体": 5,
+    "化学制药": 4,
+    "影视音像": 3,
+    "汽车配件": 3
+  }
+}

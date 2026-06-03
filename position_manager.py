@@ -16,7 +16,7 @@ def get_ts():
     return ts.pro_api(config.TUSHARE_TOKEN)
 
 
-def get_kline(code: str, days: int = 60):
+def get_kline(code: str, days: int = 60, force: bool = False):
     """获取个股 K 线"""
     try:
         pro = get_ts()
@@ -64,7 +64,7 @@ def evaluate_position(code: str, entry_price: float, direction: str = "buy",
     Returns:
         dict: 含当前价、ATR、动态止损/目标、浮动止盈进度
     """
-    df = get_kline(code, days=60)
+    df = get_kline(code, days=60, force=True)
     if df is None or len(df) < 15:
         return {"error": "数据不足", "code": code}
 

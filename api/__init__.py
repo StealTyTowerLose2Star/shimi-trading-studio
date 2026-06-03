@@ -11,9 +11,13 @@ def register_blueprints(app: Flask):
     from .advice import bp as advice_bp
     from .trade import bp as trade_bp
     from .monitor import bp as monitor_bp
+    from .doubler import bp as doubler_bp
+    from .review import bp as review_bp
 
     app.register_blueprint(market_bp)
     app.register_blueprint(strategy_bp)
     app.register_blueprint(advice_bp)
     app.register_blueprint(trade_bp)
     app.register_blueprint(monitor_bp)
+    app.register_blueprint(doubler_bp)
+    app.register_blueprint(review_bp)

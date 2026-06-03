@@ -51,8 +51,45 @@ def get_ts():
 # ============================================================
 from cache import cache_or_fetch, cache_delete, cache_clear
 
+def is_trading_time():
+    """判断是否在 A 股交易时段（周一至周五 9:30-15:00）"""
+    from datetime import datetime
+    now = datetime.now()
+    if now.weekday() >= 5:
+        return False
+    mins = now.hour * 60 + now.minute
+    return 570 <= mins < 900  # 9:30 = 570min, 15:00 = 900min
+
+
+def fetch_daily_data_realtime():
+    """盘中实时行情 — 东方财富推拉流直连"""
+    from curl_cffi import requests
+    import pandas as pd
+    rows = []
+    seen = set()
+    # 只取深市和沪市 A 股，每页 500 只，取前几页
+    for market, pn in [("0",1), ("0",2), ("1",1), ("1",2), ("80",1)]:
+        try:
+            url = f"http://80.push2.eastmoney.com/api/qt/clist/get?pn={pn}&pz=500&po=1&np=1&fields=f2,f3,f12,f14&fs=m:{market}+t:6"
+            r = requests.get(url, impersonate="chrome110", timeout=8)
+            items = r.json().get("data", {}).get("diff", [])
+            for item in items:
+                c = item.get("f12", "")
+                if c and c not in seen:
+                    seen.add(c)
+                    ts = f"{c}.SZ" if c.startswith(("0","3")) else f"{c}.SH"
+                    rows.append({"ts_code": ts, "close": item.get("f2",0)/100,
+                                 "pct_chg": item.get("f3",0)/100})
+        except:
+            pass
+    return pd.DataFrame(rows) if rows else None
+
+
 def fetch_latest_trade_date():
-    """获取最近交易日"""
+    """获取最近交易日（交易时段返回当天日期）"""
+    if is_trading_time():
+        from datetime import date
+        return date.today().strftime("%Y%m%d")
     try:
         pro = get_ts()
         df = pro.daily(trade_date="", limit=1)
@@ -112,20 +149,38 @@ def get_stock_basic():
     return cache_or_fetch("stock_basic", fetch_all_stocks_basic, 3600)
 
 def get_daily():
+    """获取全市场行情（优先实时接口，盘后回退 tushare）"""
+    if is_trading_time():
+        try:
+            df = fetch_daily_data_realtime()
+            if df is not None and len(df) > 0:
+                return df
+        except:
+            pass
     date = get_latest_date()
     if isinstance(date, dict) and "error" in date:
         return None
-    df = cache_or_fetch(f"daily_{date}", lambda: fetch_daily_data(date), 60)
-    if isinstance(df, dict) and "error" in df:
-        return None
-    return df
+    # 尝试最新交易日，如果没数据则往前推一天
+    for attempt in range(3):
+        df = cache_or_fetch(f"daily_{date}", lambda: fetch_daily_data(date), 300)
+        if df is not None and not isinstance(df, str) and not (isinstance(df, dict) and "error" in df):
+            # 检查是否有实际数据行
+            if hasattr(df, 'shape') and df.shape[0] > 0:
+                return df
+        # 没数据 → 删除缓存，往前推一天
+        cache_delete(f"daily_{date}")
+        from datetime import datetime, timedelta
+        d = datetime.strptime(date, "%Y%m%d") - timedelta(days=1)
+        date = d.strftime("%Y%m%d")
+    return None
 
 def get_daily_basic():
     date = get_latest_date()
     if isinstance(date, dict) and "error" in date:
         return None
-    df = cache_or_fetch(f"daily_basic_{date}", lambda: fetch_daily_basic(date), 60)
-    if isinstance(df, dict) and "error" in df:
+    df = cache_or_fetch(f"daily_basic_{date}", lambda: fetch_daily_basic(date), 300)
+    if df is None or isinstance(df, str) or (isinstance(df, dict) and "error" in df):
+        cache_delete(f"daily_basic_{date}")
         return None
     return df
 
@@ -602,10 +657,12 @@ def run_dragon_scan():
     # Build maps
     name_map = {}
     chg_map = {}
+    sector_map = {}
     if isinstance(basic, dict):
         for c, info in basic.items():
             short = c.replace(".SZ","").replace(".SH","").replace(".BJ","")
             name_map[short] = info.get("name", "")
+            sector_map[short] = info.get("industry", "")
     if isinstance(daily, pd.DataFrame):
         for _, row in daily.iterrows():
             short = row["ts_code"].replace(".SZ","").replace(".SH","").replace(".BJ","")
@@ -633,6 +690,7 @@ def run_dragon_scan():
                 results.append({
                     "code": code,
                     "name": name_map.get(code, ""),
+                    "sector": sector_map.get(code, ""),
                     "price": r["price"],
                     "change": chg_map.get(code, r["pct_chg"]),
                     "leader_score": r["leader_score"],
@@ -719,6 +777,18 @@ def generate_advice():
 
         consensus = len(strategies)
         if consensus < 2:
+            continue
+
+        # 过滤鱼尾期（鱼尾期股价高波动，风险收益比差）
+        if code in trend_map:
+            ts = trend_map[code]
+            if ts.get("stage", "") in ("鱼尾期",):
+                continue
+
+        # 过滤 *ST 股票（风险过大）
+        src = trend_map.get(code) or hybrid_map.get(code) or dragon_map.get(code)
+        name = (src or {}).get("name", "")
+        if name.startswith("*ST") or name.startswith("ST"):
             continue
 
         # Get name & price from whichever source has it
@@ -845,7 +915,7 @@ def generate_advice():
 
 @app.route("/api/advice")
 def api_advice():
-    return jsonify(cache_or_fetch("advice", generate_advice, 120))
+    return jsonify(cache_or_fetch("advice", generate_advice, 600))
 
 
 @app.route("/api/positions/evaluate", methods=["POST"])
@@ -858,6 +928,55 @@ def api_evaluate_positions():
         return jsonify({"error": "no positions", "results": []})
     results = batch_evaluate(positions)
     return jsonify({"results": results, "timestamp": time.strftime("%H:%M:%S")})
+
+
+def _get_margin_info(code):
+    """获取个股融资融券数据"""
+    try:
+        from realtime_scorer import get_ts
+        pro = get_ts()
+        ts_code = code + (".SZ" if code.startswith(("0","3")) else ".SH")
+        df = pro.margin_detail(ts_code=ts_code, limit=2)
+        if df is not None and not df.empty:
+            row = df.iloc[-1]
+            return {"rzye": float(row.get("rzye",0))/1e8, "rqye": float(row.get("rqye",0))/1e8,
+                    "date": str(row.get("trade_date",""))}
+    except:
+        pass
+    return None
+
+
+@app.route("/api/positions/realtime", methods=["POST"])
+def api_positions_realtime():
+    """获取持仓实时行情（东方财富盘中数据）"""
+    from flask import request
+    data = request.get_json(force=True, silent=True) or {}
+    codes = data.get("codes", [])
+    if not codes:
+        return jsonify({"error": "no codes", "prices": {}})
+    
+    from curl_cffi import requests
+    # 东方财富实时报价：一次查询多只股票
+    secids = []
+    for code in codes:
+        c = code.strip()
+        if c.startswith(("0","3")): secids.append(f"0.{c}")
+        elif c.startswith("6"): secids.append(f"1.{c}")
+    
+    if not secids:
+        return jsonify({"prices": {}})
+    
+    url = "http://80.push2.eastmoney.com/api/qt/ulist.np/get?fields=f2,f3,f12,f14&secids=" + ",".join(secids)
+    try:
+        r = requests.get(url, impersonate="chrome110", timeout=10)
+        items = r.json().get("data",{}).get("diff",[])
+        prices = {}
+        for item in items:
+            code = item.get("f12","")
+            prices[code] = {"price": round(item.get("f2",0)/100,2), "change": round(item.get("f3",0)/100,2)}
+        return jsonify({"prices": prices})
+    except Exception as e:
+        return jsonify({"error": str(e), "prices": {}})
 
 
 @app.route("/api/portfolio/advice")
@@ -897,6 +1016,37 @@ def api_portfolio_advice():
         pnl_pct = (current_price - entry) / entry * 100 if t["direction"] == "buy" else (entry - current_price) / entry * 100
         total_pnl += pnl
 
+        # 短期动量检测：最近 3 个交易日的涨跌趋势
+        recent_trend = "平稳"
+        recent_alert = ""
+        if kline is not None and len(kline) >= 5:
+            closes = kline["close"].tolist()[-5:]
+            pcts = kline["pct_chg"].tolist()[-5:]
+            latest_pct = float(pcts[-1]) if pcts[-1] is not None else 0
+            # 最近一日跌幅
+            if latest_pct < -5:
+                recent_trend = "大跌⚠️"
+                recent_alert = "日跌幅超5%"
+            elif latest_pct < -3:
+                recent_trend = "下跌📉"
+                recent_alert = "日跌幅超3%"
+            elif latest_pct < -1:
+                recent_trend = "微跌"
+            elif latest_pct > 5:
+                recent_trend = "大涨📈"
+                recent_alert = "强势上涨"
+            # 连续下跌检测（3日中2日下跌）
+            down_days = sum(1 for p in pcts[-3:] if (p or 0) < -1)
+            if down_days >= 2 and latest_pct < 0:
+                recent_trend = "连续下跌⚠️"
+                recent_alert = (recent_alert or "") + " 连续3日2次下跌"
+            # 放量下跌（成交量 > 前3日均量 2.5 倍）
+            vols = kline["volume"].tolist()[-5:]
+            if len(vols) >= 3 and latest_pct < -3:
+                avg_vol = sum(vols[-4:-1]) / 3
+                if vols[-1] > avg_vol * 2.5:
+                    recent_alert += " 放量下跌⚠️"
+
         trend = None
         try: trend = trend_detect(code)
         except: pass
@@ -913,20 +1063,53 @@ def api_portfolio_advice():
         sc = sum([tb, hb, db])
         safe = pnl_pct > 0
 
-        if sc >= 2 and safe:
+        # 中期趋势阶段（120天数据判断鱼头/鱼身/鱼尾）
+        trend_stage = trend["stage"] if trend else "未知"
+        
+        # 动态建议：阶段优先 → 短期动量 → 策略评分 → 浮盈
+        if trend_stage == "鱼尾期":
+            advice = "减仓 ⚠️"
+            action = "减仓至30%以下，设好止损"
+            parts = ["鱼尾期，风险收益比差"]
+            if "大跌" in recent_trend: parts.append(recent_alert)
+            if not safe: parts.append(f"浮亏{round(abs(pnl_pct),1)}%")
+            reason = " | ".join(parts)
+        elif trend_stage == "鱼身末期":
+            if recent_trend in ("大跌⚠️", "连续下跌⚠️"):
+                advice = "减仓 ⚠️"
+                action = "减仓至50%，锁定利润"
+                reason = f"鱼身末期+{recent_alert}"
+            elif safe and sc >= 2:
+                advice = "谨慎持有 ⏳"
+                action = "持有观望，止损上移至成本"
+                reason = f"鱼身末期，浮盈保护中"
+            else:
+                advice = "观察 ⏳"
+                action = "暂不加仓，观察2-3天"
+                reason = f"鱼身末期，建议轻仓"
+        elif recent_trend in ("大跌⚠️", "连续下跌⚠️"):
+            advice = "减仓 ⚠️"
+            action = "减仓至30%，控制风险"
+            parts = [recent_alert]
+            if not safe: parts.append(f"浮亏{round(abs(pnl_pct),1)}%")
+            if trend_stage == "鱼头期": parts.append("鱼头期波动大")
+            reason = " | ".join(parts)
+        elif not safe and sc <= 1:
+            advice = "减仓 ⚠️"
+            action = "减仓至50%以下"
+            reason = f"策略偏弱+浮亏{round(abs(pnl_pct),1)}%"
+        elif sc >= 2 and safe:
             advice = "持有 ✅"
-            parts = []
-            if tb and trend: parts.append(f"趋势{trend['total_score']}分 {trend['stage']}")
+            action = "继续持有，止损上移保护利润"
+            parts = [f"趋势{trend['total_score']}分 {trend_stage}"]
             if hb and hybrid: parts.append(f"混合{hybrid['score']}分 {hybrid['grade']}")
-            if safe: parts.append(f"浮盈+{round(pnl_pct,1)}%")
+            parts.append(f"浮盈+{round(pnl_pct,1)}%")
             reason = " ".join(parts)
             bullish_count += 1
-        elif sc >= 1 or safe:
-            advice = "观望 ⏳"
-            reason = f"信号偏弱，浮盈{round(pnl_pct,1)}%"
         else:
-            advice = "减仓 ⚠️"
-            reason = f"策略看空，浮盈{round(pnl_pct,1)}%"
+            advice = "观望 ⏳"
+            action = "等待明确信号再操作"
+            reason = f"信号偏弱"
 
         sl_label = "--"
         try:
@@ -964,13 +1147,14 @@ def api_portfolio_advice():
             "qty": qty, "invested": round(invested, 2),
             "pnl": round(pnl, 2), "pnl_pct": round(pnl_pct, 1),
             "stop_loss": sl_label, "distance_to_sl": distance_to_sl,
-            "advice": advice, "reason": reason, "scenario": scenario,
+            "advice": advice, "action": action, "reason": reason, "scenario": scenario,
             "trend_score": trend["total_score"] if trend else None,
             "trend_stage": trend["stage"] if trend else None,
             "hybrid_score": hybrid["score"] if hybrid else None,
             "hybrid_grade": hybrid["grade"] if hybrid else None,
             "dragon_score": dragon["leader_score"] if dragon else None,
             "dragon_grade": dragon["grade"] if dragon else None,
+            "margin": _get_margin_info(code),
         })
 
     risk = "低"
@@ -1091,29 +1275,81 @@ def api_pnl_report():
             buckets[key]["won"] += 1
         buckets[key]["pnl"] += pnl
 
-    # Include open positions' unrealized P&L in their entry date bucket
+    # Include open positions' unrealized P&L across all trading days
+    open_position_daily_pnl = {}  # {date: {code: pnl}} for month/year dedup
     for t in open_positions:
-        entry_date = t.get("date", "")
-        if not entry_date:
-            continue
-        if period == "month":
-            key = entry_date[:7]
-        elif period == "year":
-            key = entry_date[:4]
-        else:
-            key = entry_date
         try:
             from realtime_scorer import get_kline
-            kline = get_kline(t["code"], days=5)
+            kline = get_kline(t["code"], days=60)
             if kline is not None and len(kline) > 0:
-                cur = float(kline["close"].iloc[-1])
-                pnl = (cur - t["entry_price"]) * t["qty"] if t["direction"] == "buy" else (t["entry_price"] - cur) * t["qty"]
-                buckets[key]["trades"] += 1
-                buckets[key]["pnl"] += pnl
-                buckets[key]["open_pnl"] += pnl
+                for idx in range(len(kline)):
+                    row = kline.iloc[idx]
+                    ds = str(row["date"])[:10].replace("-", "")
+                    close_price = float(row["close"])
+                    # 只计算买入日期之后的数据
+                    trade_date = t.get("date", "").replace("-", "")
+                    if trade_date and ds < trade_date:
+                        continue
+                    pnl = (close_price - t["entry_price"]) * t["qty"] if t["direction"] == "buy" else (t["entry_price"] - close_price) * t["qty"]
+                    if period == "day":
+                        key = ds
+                        if key not in buckets:
+                            buckets[key] = {"trades": 0, "won": 0, "pnl": 0.0, "open_pnl": 0.0}
+                        buckets[key]["trades"] += 1
+                        buckets[key]["pnl"] += pnl
+                        buckets[key]["open_pnl"] += pnl
+                    else:
+                        # 按月/年：只取当月最后一天的值
+                        month_key = ds[:6]
+                        if month_key not in open_position_daily_pnl:
+                            open_position_daily_pnl[month_key] = {}
+                        open_position_daily_pnl[month_key][f"{t['id']}_{idx}"] = (ds, pnl)
         except:
             pass
+    
+    # 按月/年：每个持仓只取该月最后交易日的浮盈
+    if period != "day":
+        for month_key, items in open_position_daily_pnl.items():
+            # 按日期排序，取最后一天
+            by_date = {}
+            for item_id, (ds, pnl) in items.items():
+                if ds not in by_date:
+                    by_date[ds] = 0.0
+                by_date[ds] += pnl
+            last_date = max(by_date.keys())
+            last_pnl = by_date[last_date]
+            if month_key not in buckets:
+                buckets[month_key] = {"trades": 0, "won": 0, "pnl": 0.0, "open_pnl": 0.0}
+            buckets[month_key]["trades"] += 1
+            buckets[month_key]["pnl"] += last_pnl
+            buckets[month_key]["open_pnl"] += last_pnl
 
+    # 今日总浮盈（兜底：当期无数据时用当前价格计算）
+    from datetime import date
+    d = date.today()
+    today_key = d.strftime("%Y%m%d") if period == "day" else (d.strftime("%Y%m") if period == "month" else d.strftime("%Y"))
+    
+    # 如果当期还没有数据，用当前价格补上
+    already_has = today_key in buckets and round(buckets[today_key].get("pnl", 0), 2) != 0
+    if not already_has:
+        current_total = 0.0
+        for t in open_positions:
+            try:
+                from realtime_scorer import get_kline
+                kl = get_kline(t["code"], days=5)
+                if kl is not None and len(kl) > 0:
+                    cur = float(kl["close"].iloc[-1])
+                    pnl = (cur - t["entry_price"]) * t["qty"] if t["direction"] == "buy" else (t["entry_price"] - cur) * t["qty"]
+                    current_total += pnl
+            except:
+                pass
+        if round(current_total, 2) != 0:
+            if today_key not in buckets:
+                buckets[today_key] = {"trades": 0, "won": 0, "pnl": 0.0, "open_pnl": 0.0}
+            buckets[today_key]["trades"] += 1
+            buckets[today_key]["pnl"] += current_total
+            buckets[today_key]["open_pnl"] += current_total
+    
     result = []
     for k in sorted(buckets, reverse=True):
         b = buckets[k]
@@ -1297,6 +1533,52 @@ def api_monitor():
     """服务器资源监控"""
     from monitor import get_monitor_status
     return jsonify(get_monitor_status())
+
+
+# ═══════════════════════════════════════════════
+# 翻倍股扫描 API (services/doubler_scanner)
+# ═══════════════════════════════════════════════
+@app.route("/api/doubler/history")
+def api_doubler_history():
+    import json as _json
+    fpath = os.path.join(os.path.dirname(__file__), "monthly_doublers.json")
+    if os.path.exists(fpath):
+        with open(fpath) as f:
+            return jsonify(_json.load(f))
+    return jsonify({"error": "no data, call /api/doubler/history/refresh first"})
+
+
+@app.route("/api/doubler/history/refresh")
+def api_doubler_history_refresh():
+    from services.doubler_scanner import scan_monthly_doublers
+    cache_delete("doubler_history")
+    result = scan_monthly_doublers()
+    return jsonify(result)
+
+
+@app.route("/api/doubler/recommend")
+def api_doubler_recommend():
+    from services.doubler_scanner import recommend_current_month
+    return jsonify(cache_or_fetch("doubler_recommend", recommend_current_month, 300))
+
+
+@app.route("/api/doubler/recommend/refresh")
+def api_doubler_recommend_refresh():
+    from services.doubler_scanner import recommend_current_month
+    cache_delete("doubler_recommend")
+    result = recommend_current_month()
+    cache_set("doubler_recommend", result, 300)
+    return jsonify(result)
+
+
+@app.route("/api/doubler/plan/10k")
+def api_doubler_plan_10k():
+    from services.doubler_scanner import recommend_current_month, position_plan_10k
+    recommend = cache_or_fetch("doubler_recommend", recommend_current_month, 300)
+    if isinstance(recommend, dict) and "elite_picks" in recommend:
+        plan = position_plan_10k(recommend["elite_picks"])
+        return jsonify({"recommend_time": recommend.get("scan_time"), **plan})
+    return jsonify({"error": "recommend data unavailable"})
 
 
 if __name__ == "__main__":

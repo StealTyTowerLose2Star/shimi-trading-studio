@@ -236,3 +236,9 @@ def generate_advice():
         "recommendations": recommendations[:5],
         "generated_at": time.strftime("%H:%M:%S"),
     }
+    try:
+        from db import save_recommendations
+        save_recommendations(recommendations[:5], market_phase, time.strftime("%Y-%m-%d %H:%M:%S"))
+    except:
+        pass
+    return result

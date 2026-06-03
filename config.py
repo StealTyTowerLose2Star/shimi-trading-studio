@@ -22,7 +22,7 @@ DB_PASS = os.getenv("SHIMI_DB_PASS", "shimi_secret")
 REDIS_HOST = os.getenv("SHIMI_REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("SHIMI_REDIS_PORT", "6379"))
 REDIS_DB = int(os.getenv("SHIMI_REDIS_DB", "0"))
-USE_REDIS = os.getenv("SHIMI_USE_REDIS", "true").lower() == "true"
+USE_REDIS = os.getenv("SHIMI_USE_REDIS", "false").lower() == "true"
 
 # 服务
 SERVER_HOST = os.getenv("SHIMI_HOST", "0.0.0.0")
