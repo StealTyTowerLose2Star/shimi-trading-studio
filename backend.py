@@ -153,7 +153,7 @@ def get_daily():
     if is_trading_time():
         try:
             df = fetch_daily_data_realtime()
-            if df is not None and len(df) > 0:
+            if df is not None and hasattr(df, 'shape') and len(df) > 0:
                 return df
         except:
             pass
