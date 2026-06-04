@@ -355,7 +355,7 @@
         10维评分(量化6维+催化剂4维) · C1政策/C2商品/C3合同/C5重组/C7业绩
       </div>
       <!-- 排行表格 -->
-      <table><thead><tr><th>#</th><th>代码</th><th>名称</th><th>现价</th><th>行业</th><th>市值</th><th>换手</th><th>评分</th><th>催化剂</th></tr></thead><tbody id="doublerBody"></tbody></table>
+      <table><thead><tr><th>#</th><th>代码</th><th>名称</th><th>现价</th><th>行业</th><th>市值</th><th>本月涨</th><th>翻倍潜力</th><th>催化剂</th></tr></thead><tbody id="doublerBody"></tbody></table>
       <!-- 仓位方案卡片 -->
       <div id="doublerPlanArea" style="margin-top:14px;padding:12px;background:rgba(34,197,94,.04);border:1px solid rgba(34,197,94,.12);border-radius:8px;display:none">
         <div style="font-size:13px;font-weight:700;margin-bottom:8px">💰 买入方案 <span id="doublerPlanCapital" style="font-weight:400;font-size:12px;color:var(--text-secondary)"></span></div>
@@ -364,6 +364,16 @@
         <div style="font-size:11px;color:var(--text-muted);margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,107,53,.1)">
           🛡️ 止损: 单只-8% | 总回撤-15% | 3日不涨反跌>5%止损 | 涨停次日低开>3%无条件止损 | 禁止补仓亏损股
         </div>
+      </div>
+      <!-- 闭环跟踪 -->
+      <div id="doublerTrackArea" style="margin-top:14px;padding:12px;background:rgba(59,130,246,.04);border:1px solid rgba(59,130,246,.12);border-radius:8px;display:none">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+          <span style="font-size:13px;font-weight:700">📈 本月跟踪</span>
+          <span style="font-size:12px;color:var(--text-secondary)" id="doublerTrackSummary"></span>
+          <button onclick="startTracking()" style="margin-left:auto;padding:3px 10px;font-size:11px;cursor:pointer;border:1px solid #3b82f6;border-radius:4px;background:rgba(59,130,246,.1);color:#3b82f6">▶ 启动跟踪</button>
+          <button onclick="updateTracking()" style="padding:3px 10px;font-size:11px;cursor:pointer;border:1px solid var(--border);border-radius:4px;background:var(--bg-secondary);color:var(--text-secondary)">🔄 刷新</button>
+        </div>
+        <div id="doublerTrackBody" style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px"></div>
       </div>
     </div>
   </div>
@@ -914,15 +924,15 @@ async function loadDoublerPanel() {
 
     counter.textContent = picks.length + '只精选';
 
-    // 成交额亿 → 标注
     const fmtMv = (mv) => mv < 20 ? `<span style="color:#22c55e">${mv}亿</span>` : `${mv}亿`;
-    const scoreClr = (s) => s >= 90 ? '#ff6b35' : s >= 85 ? '#f0b429' : '#94a3b8';
+    const potClr = (p) => p >= 15 ? '#ff6b35' : p >= 10 ? '#f0b429' : '#3b82f6';
 
     tbody.innerHTML = picks.map((p, i) => {
-      const cat = p.catalyst || {};
-      const catLabel = cat.d7 > 0
-        ? `<span style="font-size:10px;padding:1px 4px;border-radius:3px;background:rgba(255,107,53,.12);color:#ff6b35">${cat.cat_type || '催化'}+${cat.d7}</span>`
+      const catType = p.catalyst_type || '';
+      const catLabel = catType
+        ? `<span style="font-size:10px;padding:1px 4px;border-radius:3px;background:rgba(255,107,53,.12);color:#ff6b35">${catType}+${p.catalyst_d7||0}</span>`
         : '<span style="color:var(--text-muted)">—</span>';
+      const mtmClr = p.mtm_gain >= 20 ? '#ff6b35' : p.mtm_gain >= 0 ? '#22c55e' : '#ef4444';
       return `<tr>
         <td>${i+1}</td>
         <td><b>${p.code}</b></td>
@@ -930,8 +940,8 @@ async function loadDoublerPanel() {
         <td>¥${p.close}</td>
         <td style="font-size:11px;color:var(--text-muted)">${p.industry}</td>
         <td>${fmtMv(p.circ_mv_yi)}</td>
-        <td>${p.turnover}%</td>
-        <td style="color:${scoreClr(p.score)};font-weight:700">${p.score}</td>
+        <td style="color:${mtmClr}">${p.mtm_gain > 0 ? '+' : ''}${p.mtm_gain}%</td>
+        <td style="color:${potClr(p.potential)};font-weight:700">${p.potential}</td>
         <td>${catLabel}</td>
       </tr>`;
     }).join('');
@@ -964,6 +974,66 @@ setInterval(loadDashboard, 60000);
 // 翻倍掘金面板 (5分钟刷新)
 loadDoublerPanel();
 setInterval(loadDoublerPanel, 300000);
+
+// ═══════════════ 闭环跟踪 ═══════════════
+async function startTracking() {
+  try {
+    const r = await fetchJSON('/api/doubler/track/start');
+    if (r.status === 'ok') {
+      alert(`✅ 已启动本月跟踪: ${r.saved}只股票`);
+      loadTracking();
+    } else {
+      alert('启动失败: ' + (r.error || '请稍后重试'));
+    }
+  } catch(e) { alert('启动异常: ' + e.message); }
+}
+
+async function updateTracking() {
+  const r = await fetchJSON('/api/doubler/track/update');
+  if (r.updated > 0) loadTracking();
+}
+
+async function loadTracking() {
+  const area = $('doublerTrackArea');
+  const body = $('doublerTrackBody');
+  const summaryEl = $('doublerTrackSummary');
+  if (!area || !body) return;
+
+  try {
+    const d = await fetchJSON('/api/doubler/track/status');
+    if (!d || !d.tracking) { area.style.display = 'none'; return; }
+
+    area.style.display = 'block';
+    const n = d.stock_count;
+    const doubled = d.doubled_count;
+    summaryEl.textContent = `${n}只 | 均${d.avg_gain}% | 翻倍${doubled}只`;
+
+    body.innerHTML = d.stocks.map(s => {
+      const barW = Math.min(Math.abs(s.gain_pct) * 3, 100);
+      const barClr = s.gain_pct >= 20 ? '#22c55e' : s.gain_pct >= 0 ? '#3b82f6' : '#ef4444';
+      const peakNote = s.peak_pct > s.gain_pct + 1
+        ? `<span style="color:var(--text-muted);font-size:10px">峰值${s.peak_pct}%</span>`
+        : '';
+      return `<div style="flex:1;min-width:150px;padding:8px 10px;background:var(--bg-card);border-radius:6px;border:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:600">${s.code}</span>
+          <span style="font-size:11px;color:var(--text-muted)">${s.catalyst || '-'}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted)">${s.name} | ¥${s.entry_price}→¥${s.current_price}</div>
+        <div style="margin-top:4px;height:4px;background:var(--bg-secondary);border-radius:2px">
+          <div style="height:100%;width:${barW}%;background:${barClr};border-radius:2px"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:2px">
+          <span style="color:${barClr};font-weight:600">${s.on_track} ${s.gain_pct > 0 ? '+' : ''}${s.gain_pct}%</span>
+          ${peakNote}
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { console.error('Track error:', e); }
+}
+
+// 加载跟踪面板
+loadTracking();
 
 // ===== 操作建议 =====
 async function loadAdvice() {

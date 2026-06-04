@@ -42,8 +42,9 @@ def api_doubler_history_refresh():
 # ═══════════════════════════════════════════════════════════════
 @bp.route("/recommend")
 def api_doubler_recommend():
-    """获取当月翻倍潜力股推荐（缓存 ~5分钟）"""
-    result = cache_or_fetch("doubler_recommend", recommend_current_month, 300)
+    """获取当月翻倍潜力股 (翻倍预测引擎)"""
+    from services.doubler_predictor import predict_monthly_doublers
+    result = cache_or_fetch("doubler_recommend", predict_monthly_doublers, 300)
     return jsonify(result)
 
 

@@ -21,14 +21,31 @@ def read_file(path):
 
 def send_msg(title, content):
     full = f"*{title}*\n{content}"
-    try:
-        r = subprocess.run(
-            ["hermes", "send", "--to", "weixin:o9cq802sGt2rNSJN4X99q9e1lV5M@im.wechat"],
-            input=full, capture_output=True, text=True, timeout=30
-        )
-        return r.returncode == 0, r.stderr or r.stdout
-    except Exception as e:
-        return False, str(e)
+    # 日志
+    log_path = os.path.join(BASE, "reflect.log")
+    with open(log_path, "a") as f:
+        f.write(f"\n{'='*60}\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] {title}\n{'='*60}\n")
+        f.write(content)
+        f.write(f"\n{'='*60}\n\n")
+    for attempt in range(3):
+        try:
+            r = subprocess.run(
+                ["hermes", "send", "--to", "weixin:o9cq802sGt2rNSJN4X99q9e1lV5M@im.wechat"],
+                input=full, capture_output=True, text=True, timeout=30
+            )
+            if r.returncode == 0:
+                return True, ""
+            err = r.stderr or r.stdout
+            if "rate limited" in err.lower():
+                time.sleep(5 * (attempt + 1))
+                continue
+            return False, err
+        except Exception as e:
+            if attempt < 2:
+                time.sleep(3)
+                continue
+            return False, str(e)
+    return False, "重试3次均失败，内容已写入日志"
 
 
 def build_report():

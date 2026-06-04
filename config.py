@@ -7,7 +7,7 @@ import os
 # ─── 环境变量（生产时通过 .env 或 Docker 注入）───
 
 # Tushare Pro Token
-TUSHARE_TOKEN = os.getenv("TUSHARE_TOKEN", "b5e768c112082f5a38f3400244859d3f0ef9d917296600068d6cbf49")
+TUSHARE_TOKEN = os.getenv("TUSHARE_TOKEN", "")
 
 # 数据库
 DB_TYPE = os.getenv("SHIMI_DB_TYPE", "sqlite")  # sqlite | postgresql

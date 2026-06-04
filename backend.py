@@ -1558,8 +1558,8 @@ def api_doubler_history_refresh():
 
 @app.route("/api/doubler/recommend")
 def api_doubler_recommend():
-    from services.doubler_scanner import recommend_current_month
-    return jsonify(cache_or_fetch("doubler_recommend", recommend_current_month, 300))
+    from services.doubler_predictor import predict_monthly_doublers
+    return jsonify(cache_or_fetch("doubler_recommend", predict_monthly_doublers, 300))
 
 
 @app.route("/api/doubler/recommend/refresh")
