@@ -4,7 +4,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 from db import get_db
 import tushare as ts
 
-TOKEN = open("/tmp/git_token_raw").read().strip()
+with open("/tmp/git_token_raw") as f:
+    TOKEN = f.read().strip()
 pro = ts.pro_api(TOKEN)
 
 conn = get_db()

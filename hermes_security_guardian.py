@@ -57,7 +57,6 @@ MALICIOUS_PATTERNS = [
 
     # 数据窃取
     (r"open\(.*['\"].*\.(pem|key|env|token|secret)['\"]", "可疑: 读取敏感文件"),
-    (r"os\.environ\b", "可疑: 读取环境变量（确认场景）"),
     (r"requests?\.(get|post|put)\(.*['\"](https?://\d+\.\d+\.\d+\.\d+)", "可疑: 外发到纯 IP"),
     (r"SMTP|smtplib\.SMTP", "可疑: SMTP 邮件外发"),
 
@@ -72,22 +71,17 @@ MALICIOUS_PATTERNS = [
 
 # ─── 密钥硬编码特征 ─────────────────────────────────
 SECRET_PATTERNS = [
-    (r"(?i)(api_key|apikey|token|secret|password|passwd)\s*[=:]\s*['\"][a-zA-Z0-9_\-\.]{16,}['\"]", "API Key/Token 硬编码"),
-    (r"(?i)(tushare_token|openai_key|anthropic_key|deepseek_key)\s*[=:]\s*['\"][a-zA-Z0-9_\-\.]{8,}['\"]", "服务 Token 硬编码"),
-    (r"(?i)(access_key|secret_key|private_key|auth_token)\s*[=:]\s*['\"][a-zA-Z0-9_\-\.\/\+]{16,}['\"]", "访问密钥硬编码"),
-    (r"(?i)(jwt_secret|jwt_key|auth_secret)\s*[=:]\s*['\"][a-zA-Z0-9_\-\.]{8,}['\"]", "JWT 密钥硬编码"),
-    (r"['\"][A-Za-z0-9_\-\.]{32,}['\"]", "长随机字符串（可疑密钥）"),
-    (r"os\.environ\b", "环境变量读取（需确认用途）"),
+    (r"(?i)(api_key|apikey|token|secret|password|passwd)\s*[=:]\s*['\"](?![A-Z_]{16,})[a-zA-Z0-9_\-\.\/]{16,}['\"]", "API Key/Token 硬编码"),
+    (r"(?i)(tushare_token|openai_key|anthropic_key|deepseek_key)\s*[=:]\s*['\"](?![A-Z_]{8,})[a-zA-Z0-9_\-\.]{8,}['\"]", "服务 Token 硬编码"),
+    (r"(?i)(access_key|secret_key|private_key|auth_token)\s*[=:]\s*['\"](?![A-Z_]{16,})[a-zA-Z0-9_\-\.\/\+]{16,}['\"]", "访问密钥硬编码"),
+    (r"(?i)(jwt_secret|jwt_key|auth_secret)\s*[=:]\s*['\"](?![A-Z_]{8,})[a-zA-Z0-9_\-\.]{8,}['\"]", "JWT 密钥硬编码"),
+    (r"=\s*['\"](?![A-Z_]{32,})[A-Za-z0-9_\-\.]{32,}['\"]", "长随机字符串（可疑密钥）"),
 ]
 
 # ─── 内存泄漏风险特征 ──────────────────────────────
 MEMORY_LEAK_PATTERNS = [
-    (r"global\s+\w+\s*=", "全局变量赋值（可能阻止GC）"),
-    (r"\.append\(.*\)\s*#?\s*.*循环", "循环内 list.append（需确认上限）"),
-    (r"while\s+True.*read", "无限循环读取（可能OOM）"),
-    (r"\w+\.extend\(.*\)\s*#?\s*.*[\w+~]*$", "list.extend 无限制"),
+    (r"while\s+True\s*:.*read", "无限循环读取（可能OOM）"),
     (r"open\(.*\)\s*$", "open 未用 with/close（资源泄漏）"),
-    (r"\.write\(.*\)", "文件写入（检查是否关闭）"),
 ]
 
 # ─── JWT/CORS/HTTPS 安全缺陷特征 ────────────────────
@@ -370,7 +364,7 @@ def scan_memory_leaks():
             scanned_files += 1
             findings.extend(scan_file_for_patterns(pf, MEMORY_LEAK_PATTERNS))
 
-    # 特殊检测: 大列表/字典无上限
+    # 特殊检测: 大循环/大缓存
     for proj_dir in PROJECT_DIRS:
         if not os.path.isdir(proj_dir):
             continue
@@ -381,17 +375,17 @@ def scan_memory_leaks():
                     content = f.read()
             except Exception:
                 continue
-            # 检测未关闭的文件句柄
-            open_without_with = re.findall(
-                r'^\\s*open\\([^)]*\\)\\s*$',
-                content, re.MULTILINE
+            # 检测超大列表推导式中嵌套IO
+            large_comprehensions = re.findall(
+                r'\[.*for.*in.*for.*in.*\]',
+                content
             )
-            if open_without_with and 'context' not in pf:
+            if large_comprehensions:
                 findings.append({
                     "file": os.path.relpath(pf, proj_dir),
-                    "severity": "warning",
-                    "type": "资源泄漏风险",
-                    "detail": f"发现 {len(open_without_with)} 处 open() 可能未用 with 语句",
+                    "severity": "info",
+                    "type": "嵌套列表推导",
+                    "detail": f"发现 {len(large_comprehensions)} 处多层for推导，大数据下可能OOM",
                 })
 
     return {

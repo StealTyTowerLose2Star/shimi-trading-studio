@@ -14,6 +14,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy app code
 COPY . .
 
+# ─── 安全：以非 root 用户运行 ─────────────
+RUN adduser --disabled-password --gecos '' appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 # Expose port (gunicorn)
 EXPOSE 7890
 

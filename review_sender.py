@@ -9,45 +9,21 @@ import time
 import subprocess
 
 
-def send(title: str, content: str) -> bool:
-    """通过 Hermes send 发送到微信，失败时写入日志（带重试）"""
-    target = "weixin:o9cq802sGt2rNSJN4X99q9e1lV5M@im.wechat"
-    full_msg = f"*{title}*\n{content}"
+from message_queue import enqueue
 
-    # 写入日志（无论发送成功与否）
+
+def send(title: str, content: str) -> bool:
+    """将消息加入待发送队列（由 Agent 代发到微信）"""
+    # 写入日志
     log_path = os.path.join(os.path.dirname(__file__), "review_sender.log")
     with open(log_path, "a") as f:
         f.write(f"\n{'='*60}\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] {title}\n{'='*60}\n")
         f.write(content)
         f.write(f"\n{'='*60}\n\n")
-
-    # 尝试发送（带重试，应对频率限制）
-    for attempt in range(3):
-        try:
-            result = subprocess.run(
-                ["hermes", "send", "--to", target],
-                input=full_msg, capture_output=True, text=True, timeout=30,
-            )
-            if result.returncode == 0:
-                print(f"[sender] ✅ 微信发送成功: {title}")
-                return True
-            err = result.stderr or result.stdout
-            if "rate limited" in err.lower():
-                wait = 5 * (attempt + 1)
-                print(f"[sender] ⚠️ 频率限制，{wait}s后重试 ({attempt+1}/3)")
-                time.sleep(wait)
-                continue
-            print(f"[sender] ❌ 发送失败: {err}")
-            return False
-        except Exception as e:
-            if attempt < 2:
-                time.sleep(3)
-                continue
-            print(f"[sender] ⚠️ 发送异常: {e}")
-            return False
-
-    print(f"[sender] ❌ 重试3次均失败，内容已写入 {log_path}")
-    return False
+    # 入队
+    enqueue(title, content)
+    print(f"[sender] ✅ 消息已入队，待 Agent 发送: {title}")
+    return True
 
 
 def send_daily_review():

@@ -1495,7 +1495,7 @@ function renderServerTrades() {
       body: JSON.stringify({positions: openCodes})
     }).then(r => r.json()).then(data => {
       const evalMap = {};
-      if (data.results) data.results.forEach(e => { evalMap[e.code] = e; });
+      if (data.results) data.results.forEach(e => { evalMap[e.code + '_' + e.entry_price] = e; });
       renderTable(evalMap);
     }).catch(() => renderTable({}));
   } else {
@@ -1505,7 +1505,7 @@ function renderServerTrades() {
   function renderTable(evalMap) {
     tbody.innerHTML = trades.map(t => {
       const isOpen = !t.exit_price;
-      const ev = evalMap[t.code] || {};
+      const ev = evalMap[t.code + '_' + t.entry_price] || {};
       const currentPrice = isOpen ? (ev.current_price || '--') : t.exit_price;
       const slLabel = isOpen ? (ev.stop_loss_label || '--') : '--';
       const t1 = isOpen && ev.targets ? (ev.targets[0]?.price ? '¥' + ev.targets[0].price : '--') : '--';
