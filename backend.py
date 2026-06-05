@@ -38,6 +38,14 @@ app.static_folder = os.path.dirname(os.path.abspath(__file__))
 app.static_url_path = ""
 CORS(app)
 
+# 注册海淘美股蓝图
+try:
+    from haitao.api import bp as haitao_bp
+    app.register_blueprint(haitao_bp)
+    print("✅ 海淘美股模块已加载")
+except Exception as e:
+    print(f"⚠️ 海淘模块加载失败: {e}")
+
 # ============================================================
 # tushare 初始化
 # ============================================================
@@ -1558,15 +1566,27 @@ def api_doubler_history_refresh():
 
 @app.route("/api/doubler/recommend")
 def api_doubler_recommend():
-    from services.doubler_predictor import predict_monthly_doublers
-    return jsonify(cache_or_fetch("doubler_recommend", predict_monthly_doublers, 300))
+    import json as _json, os as _os
+    fpath = _os.path.join(_os.path.dirname(__file__), "doubler_prediction_cache.json")
+    if _os.path.exists(fpath):
+        with open(fpath) as f:
+            return jsonify(_json.load(f))
+    # fallback
+    from services.doubler_scanner import recommend_current_month
+    return jsonify(recommend_current_month())
 
 
 @app.route("/api/doubler/recommend/refresh")
 def api_doubler_recommend_refresh():
-    from services.doubler_scanner import recommend_current_month
     cache_delete("doubler_recommend")
-    result = recommend_current_month()
+    try:
+        from services.doubler_predictor import predict_monthly_doublers
+        result = predict_monthly_doublers()
+    except Exception as e:
+        print(f"[doubler] predict failed, fallback: {e}")
+        from services.doubler_scanner import recommend_current_month
+        result = recommend_current_month()
+        result["model"] = "fallback (tushare unavailable)"
     cache_set("doubler_recommend", result, 300)
     return jsonify(result)
 

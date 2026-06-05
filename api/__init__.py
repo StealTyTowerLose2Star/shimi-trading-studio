@@ -23,3 +23,10 @@ def register_blueprints(app: Flask):
     app.register_blueprint(doubler_bp)
     app.register_blueprint(review_bp)
     app.register_blueprint(margin_bp)
+
+    # 海淘美股模块
+    try:
+        from haitao.api import bp as haitao_bp
+        app.register_blueprint(haitao_bp)
+    except Exception as e:
+        print(f"⚠️ 海淘模块注册失败: {e}")

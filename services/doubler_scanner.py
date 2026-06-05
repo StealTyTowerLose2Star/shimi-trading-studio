@@ -423,6 +423,7 @@ def position_plan_10k(elite_picks):
         shares = int(alloc / c["close"] / 100) * 100
         actual = shares * c["close"]
         total_cost += actual
+        cat_type = c.get('catalyst', {}).get('cat_type', c.get('catalyst_type', '?'))
         plan.append({
             "rank": i + 1,
             "code": c["code"],
@@ -431,10 +432,9 @@ def position_plan_10k(elite_picks):
             "shares": shares,
             "cost": round(actual, 2),
             "pct": f"{actual/capital*100:.1f}%",
-            "reason": (f"行业{c['industry']}({c['score_breakdown']['industry']}分) "
-                      f"+ 流通{c['circ_mv_yi']:.1f}亿 "
-                      f"+ 量比{int(c['vol_ratio'])}倍 "
-                      f"+ 评分{c['score']}"),
+            "reason": (f"评分{c.get('score', c.get('potential', 0))}分"
+                       f" | 流通{c.get('circ_mv_yi',0):.1f}亿"
+                       f" | 催化{cat_type}"),
         })
 
     return {

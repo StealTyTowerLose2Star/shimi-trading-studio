@@ -14,19 +14,20 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 def _get_month_start_prices(pro):
     """批量获取本月首日全市场收盘价 → {ts_code: close}"""
     now = datetime.now()
-    # 找到本月第一个交易日
-    cal = pro.trade_cal(start_date=now.strftime("%Y%m") + "01",
-                        end_date=now.strftime("%Y%m%d"), is_open="1")
-    if cal is None or len(cal) == 0:
+    try:
+        cal = pro.trade_cal(start_date=now.strftime("%Y%m") + "01",
+                            end_date=now.strftime("%Y%m%d"), is_open="1")
+        if cal is None or len(cal) == 0:
+            return {}
+        cal = cal.sort_values("cal_date")
+        first_day = cal.iloc[0]["cal_date"]
+        df = pro.daily(trade_date=first_day, fields="ts_code,close")
+        if df is None or len(df) == 0:
+            return {}
+        return {r["ts_code"]: float(r["close"]) for _, r in df.iterrows()}
+    except Exception as e:
+        print(f"[predictor] month_start_prices failed (will use mtm=0): {e}")
         return {}
-    cal = cal.sort_values("cal_date")
-    first_day = cal.iloc[0]["cal_date"]
-    
-    # 一次性获取全市场收盘价
-    df = pro.daily(trade_date=first_day, fields="ts_code,close")
-    if df is None or len(df) == 0:
-        return {}
-    return {r["ts_code"]: float(r["close"]) for _, r in df.iterrows()}
 
 
 def predict_monthly_doublers():

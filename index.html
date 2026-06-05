@@ -252,6 +252,7 @@
     <div class="topbar-status"><span class="status-dot"></span> 已连接</div>
     <div class="topbar-time" id="clock">--:--:--</div>
     <span id="dataSourceLabel" style="font-size:11px;color:var(--text-muted)">A 股 · 加载中</span>
+    <button id="marketSwitch" onclick="switchMarket()" style="margin-left:8px;padding:2px 10px;border-radius:12px;border:1px solid rgba(240,180,41,.3);background:rgba(240,180,41,.08);color:var(--gold);cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap">🌊 海淘</button>
   </div>
   <div>
     <span id="userDisplay" style="font-size:13px;color:var(--text-secondary);margin-right:8px;display:none"></span>
@@ -301,6 +302,8 @@
 </div>
 
 <div class="dashboard">
+
+<div id="ashareSection"><!-- A股面板 -->
 
   <!-- 指数 -->
   <div class="row indices" id="indicesRow">
@@ -534,7 +537,70 @@
       <button onclick="closePortfolio()" style="padding:8px 20px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text-secondary);cursor:pointer">关闭</button>
     </div>
   </div>
-</div>
+</div></div><!-- /ashareSection -->
+
+<!-- ===== 海淘美股面板 ===== -->
+<div id="haitaoSection" style="display:none">
+
+  <!-- 美股指数 -->
+  <div class="row indices" id="usIndicesRow">
+    <div class="idx-card"><div class="idx-label">S&amp;P 500</div><div class="idx-price">--</div><div class="idx-change">--</div></div>
+    <div class="idx-card"><div class="idx-label">纳斯达克</div><div class="idx-price">--</div><div class="idx-change">--</div></div>
+    <div class="idx-card"><div class="idx-label">道琼斯</div><div class="idx-price">--</div><div class="idx-change">--</div></div>
+    <div class="idx-card"><div class="idx-label">费城半导体</div><div class="idx-price">--</div><div class="idx-change">--</div></div>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🔥 热门美股</span>
+        <span class="badge badge-gold" id="usHotCount">加载中</span>
+        <button onclick="refreshHaitao()" style="margin-left:auto;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-muted);cursor:pointer;font-size:11px">🔄</button>
+      </div>
+      <table><thead><tr><th>代码</th><th>名称</th><th>现价</th><th>涨跌幅</th></tr></thead><tbody id="usHotBody"></tbody></table>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🇨🇳 中概股</span>
+        <span class="badge badge-green" id="usAdrCount">加载中</span>
+        <button onclick="refreshHaitao()" style="margin-left:auto;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-muted);cursor:pointer;font-size:11px">🔄</button>
+      </div>
+      <table><thead><tr><th>代码</th><th>名称</th><th>现价</th><th>涨跌幅</th></tr></thead><tbody id="usAdrBody"></tbody></table>
+    </div>
+  </div>
+
+  <div class="row two-col">
+    <div class="card">
+      <div class="card-header"><span class="card-title">📈 异动排行</span><span class="badge badge-blue">涨跌幅</span></div>
+      <table><thead><tr><th>代码</th><th>名称</th><th>现价</th><th>涨跌幅</th></tr></thead><tbody id="usMoversBody"></tbody></table>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">⛏️ 海淘掘金</span><span class="badge badge-gold" id="usGoldCount">--</span></div>
+      <div style="display:flex;gap:6px;margin:8px 0">
+        <button id="scanHotBtn" class="gold-pan-btn" onclick="goldPan('hot')" style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:rgba(240,180,41,.1);color:var(--gold);cursor:pointer;font-size:11px">🥇 热门淘金</button>
+        <button class="gold-pan-btn" onclick="goldPan('adr')" style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-secondary);cursor:pointer;font-size:11px">🇨🇳 中概淘金</button>
+        <button class="gold-pan-btn" onclick="goldPan('gainers')" style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-secondary);cursor:pointer;font-size:11px">📈 涨幅淘金</button>
+      </div>
+      <table><thead><tr><th>代码</th><th>黄金分</th><th>评级</th><th>阶段</th><th>信号</th><th>现价</th></tr></thead><tbody id="usGoldBody"></tbody></table>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <div class="card-header"><span class="card-title">🔎 行情查询</span></div>
+      <div style="padding:12px;display:flex;gap:8px">
+        <input id="usTickerInput" placeholder="输入代码(如 AAPL,MSFT,NVDA)" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary);font-size:13px">
+        <button onclick="lookupUS()" style="padding:8px 16px;border:1px solid var(--gold);border-radius:6px;background:rgba(240,180,41,.1);color:var(--gold);cursor:pointer;font-weight:600">查询</button>
+      </div>
+      <div id="usQuoteResult" style="padding:0 12px 12px;display:none"></div>
+    </div>
+  </div>
+
+</div><!-- /haitaoSection -->
+
+</div><!-- /dashboard -->
+
+<!-- 复盘弹窗 -->
 
 <!-- 复盘弹窗 -->
 <div id="reviewModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center">
@@ -2064,6 +2130,272 @@ if (_addTradeBtn) {
     else { showAddTradeForm(); }
   };
 }
+
+// ===== 海淘美股 =====
+let currentMarket = 'ashare';
+
+function switchMarket() {
+  const btn = document.getElementById('marketSwitch');
+  const ashare = document.getElementById('ashareSection');
+  const haitao = document.getElementById('haitaoSection');
+  if (!ashare || !haitao) return;
+  
+  if (currentMarket === 'ashare') {
+    ashare.style.display = 'none';
+    haitao.style.display = '';
+    currentMarket = 'us';
+    btn.textContent = '📊 A股';
+    btn.style.border = '1px solid rgba(59,130,246,.3)';
+    btn.style.background = 'rgba(59,130,246,.08)';
+    btn.style.color = 'var(--blue, #60a5fa)';
+    document.getElementById('dataSourceLabel').textContent = '🌊 海淘 · 美股';
+    loadHaitaoDashboard();
+  } else {
+    ashare.style.display = '';
+    haitao.style.display = 'none';
+    currentMarket = 'ashare';
+    btn.textContent = '🌊 海淘';
+    btn.style.border = '1px solid rgba(240,180,41,.3)';
+    btn.style.background = 'rgba(240,180,41,.08)';
+    btn.style.color = 'var(--gold)';
+    document.getElementById('dataSourceLabel').textContent = 'A股 · ' + new Date().toLocaleTimeString('zh-CN');
+  }
+}
+
+// ─── 海淘面板数据加载 ──────────────────────────
+
+async function loadHaitaoDashboard() {
+  try {
+    const dash = await fetchJSON('/api/us/dashboard');
+    
+    renderUSIndices(Array.isArray(dash.indices) ? dash.indices : []);
+    renderUSHots(Array.isArray(dash.hot_stocks) ? dash.hot_stocks : []);
+    renderUSAdr(Array.isArray(dash.chinese_adr) ? dash.chinese_adr : []);
+    
+    const pp = dash.pre_post || {};
+    renderUSMovers(Array.isArray(pp.top_movers) ? pp.top_movers : []);
+    
+  } catch(err) {
+    console.error('Haitao load error:', err);
+  }
+}
+
+function renderUSIndices(data) {
+  const cards = document.getElementById('usIndicesRow').querySelectorAll('.idx-card');
+  const labels = ['S&P 500', '纳斯达克', '道琼斯', '费城半导体'];
+  const tickers = ['^GSPC', '^IXIC', '^DJI', 'SOXX'];
+  
+  data.forEach(idx => {
+    const ti = tickers.indexOf(idx.ticker);
+    if (ti >= 0 && ti < cards.length) {
+      const card = cards[ti];
+      const p = idx.price || 0;
+      const chg = idx.change_pct || 0;
+      card.innerHTML = '<div class="idx-label">' + labels[ti] + '</div>' +
+        '<div class="idx-price">' + (p ? '$' + fmt(p,2) : '--') + '</div>' +
+        '<div class="idx-change ' + cls(chg) + '">' + arrow(chg) + ' ' + (chg ? Math.abs(chg).toFixed(2) : '--') + '%</div>';
+    }
+  });
+}
+
+function renderUSHots(data) {
+  const tbody = document.getElementById('usHotBody');
+  const count = document.getElementById('usHotCount');
+  count.textContent = data.length + '只';
+  if (!Array.isArray(data) || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">暂无数据</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.slice(0, 15).map(s => {
+    const chg = s.change_pct || 0;
+    return '<tr>' +
+      '<td style="color:var(--text-muted);font-size:11px;font-weight:600">' + s.ticker + '</td>' +
+      '<td style="font-size:12px;font-weight:600">' + (s.name || '').substring(0, 25) + '</td>' +
+      '<td class="code-num">$' + fmt(s.price, 2) + '</td>' +
+      '<td class="code-num ' + cls(chg) + '">' + arrow(chg) + ' ' + Math.abs(chg).toFixed(2) + '%</td>' +
+      '</tr>';
+  }).join('');
+}
+
+function renderUSAdr(data) {
+  const tbody = document.getElementById('usAdrBody');
+  const count = document.getElementById('usAdrCount');
+  count.textContent = data.length + '只';
+  if (!Array.isArray(data) || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">暂无数据</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(s => {
+    const chg = s.change_pct || 0;
+    return '<tr>' +
+      '<td style="color:var(--text-muted);font-size:11px;font-weight:600">' + s.ticker + '</td>' +
+      '<td style="font-size:12px">' + (s.name || '').substring(0, 20) + '</td>' +
+      '<td class="code-num">$' + fmt(s.price, 2) + '</td>' +
+      '<td class="code-num ' + cls(chg) + '">' + arrow(chg) + ' ' + Math.abs(chg).toFixed(2) + '%</td>' +
+      '</tr>';
+  }).join('');
+}
+
+function renderUSMovers(data) {
+  const tbody = document.getElementById('usMoversBody');
+  if (!Array.isArray(data) || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">暂无数据</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.slice(0, 12).map(s => {
+    const chg = s.change_pct || 0;
+    return '<tr>' +
+      '<td style="color:var(--text-muted);font-size:11px;font-weight:600">' + s.ticker + '</td>' +
+      '<td style="font-size:12px">' + (s.name || '').substring(0, 20) + '</td>' +
+      '<td class="code-num">$' + fmt(s.price || 0, 2) + '</td>' +
+      '<td class="code-num ' + cls(chg) + '">' + arrow(chg) + ' ' + Math.abs(chg).toFixed(2) + '%</td>' +
+      '</tr>';
+  }).join('');
+}
+
+// ─── 海淘扫描 ─────────────────────────────
+
+async function scanUS(mode) {
+  const btns = document.querySelectorAll('#haitaoSection .two-col .card:last-child button');
+  btns.forEach(b => {
+    b.style.background = 'transparent';
+    b.style.color = 'var(--text-secondary)';
+  });
+  event.target.style.background = 'rgba(240,180,41,.1)';
+  event.target.style.color = 'var(--gold)';
+  
+  const tbody = document.getElementById('usScanBody');
+  const count = document.getElementById('usScanCount');
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">扫描中...</td></tr>';
+  count.textContent = '扫描中';
+  
+  try {
+    const r = await fetchJSON('/api/us/scan?mode=' + mode);
+    const items = r.results || [];
+    count.textContent = items.length + '只';
+    if (items.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">暂无结果</td></tr>';
+      return;
+    }
+    tbody.innerHTML = items.map(s => {
+      const sc = s.score || 0;
+      const scolor = sc >= 65 ? 'var(--green)' : (sc >= 50 ? 'var(--gold)' : 'var(--text-muted)');
+      return '<tr>' +
+        '<td style="color:var(--text-muted);font-size:11px;font-weight:600">' + s.ticker + '</td>' +
+        '<td style="font-size:11px">' + (s.phase || '--') + '</td>' +
+        '<td style="color:' + scolor + ';font-weight:600;font-size:12px">' + sc + '</td>' +
+        '<td style="font-size:11px;color:var(--text-secondary)">' + (s.phase || '--') + '</td>' +
+        '<td style="font-size:11px">' + (s.rating || '--') + '</td>' +
+        '</tr>';
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--red)">加载失败</td></tr>';
+  }
+}
+
+// ─── 行情查询 ─────────────────────────────
+
+async function lookupUS() {
+  const input = document.getElementById('usTickerInput');
+  const result = document.getElementById('usQuoteResult');
+  const tickers = input.value.trim().toUpperCase();
+  if (!tickers) return;
+  
+  result.style.display = 'none';
+  result.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:10px">查询中...</div>';
+  result.style.display = '';
+  
+  try {
+    const r = await fetchJSON('/api/us/quotes?tickers=' + tickers);
+    const items = Array.isArray(r) ? r : [];
+    if (items.length === 0 || !items[0].price) {
+      result.innerHTML = '<div style="padding:10px;text-align:center;color:var(--text-muted)">未找到数据</div>';
+      return;
+    }
+    result.innerHTML = items.map(q => {
+      const chg = q.change_pct || 0;
+      const p = q.price || 0;
+      return '<div style="padding:10px;margin-bottom:6px;background:rgba(255,255,255,.03);border-radius:8px;border-left:3px solid ' + (chg > 0 ? 'var(--green)' : chg < 0 ? 'var(--red)' : 'var(--text-muted)') + '">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+          '<div><strong>' + q.ticker + '</strong> <span style="font-size:12px;color:var(--text-secondary)">' + (q.name || '') + '</span></div>' +
+          '<div><span style="font-size:18px;font-weight:700">$' + fmt(p, 2) + '</span> ' +
+          '<span style="font-size:13px;color:' + (chg > 0 ? 'var(--green)' : 'var(--red)') + ';font-weight:600">' + arrow(chg) + ' ' + Math.abs(chg).toFixed(2) + '%</span></div>' +
+        '</div></div>';
+    }).join('');
+  } catch(e) {
+    result.innerHTML = '<div style="padding:10px;text-align:center;color:var(--red)">查询失败: ' + e.message + '</div>';
+  }
+}
+
+// ─── 刷新 ─────────────────────────────
+
+async function refreshHaitao() {
+  await loadHaitaoDashboard();
+}
+
+
+// ===== 海淘掘金 — 黄金挖掘机 =====
+let currentGoldMode = 'hot';
+
+async function goldPan(mode) {
+  currentGoldMode = mode;
+  const btns = document.querySelectorAll('#haitaoSection .gold-pan-btn');
+  btns.forEach(b => { b.style.background = 'transparent'; b.style.color = 'var(--text-secondary)'; });
+  event.target.style.background = 'rgba(240,180,41,.1)';
+  event.target.style.color = 'var(--gold)';
+  
+  const tbody = document.getElementById('usGoldBody');
+  const count = document.getElementById('usGoldCount');
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">⛏️ 淘金中...</td></tr>';
+  count.textContent = '⛏️';
+  
+  try {
+    const r = await fetchJSON('/api/us/gold/pan?mode=' + mode);
+    const items = r.results || [];
+    const golds = items.filter(x => x.score >= 60);
+    const silvers = items.filter(x => x.score >= 45 && x.score < 60);
+    count.textContent = golds.length + '金/' + silvers.length + '银';
+    
+    if (items.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">当前无金矿标的</td></tr>';
+      return;
+    }
+    
+    tbody.innerHTML = items.map(s => {
+      const sc = s.score || 0;
+      const rating = s.rating || '--';
+      const phase = s.phase || '--';
+      const signals = (s.gold_signals || []).slice(0, 2).join(' / ');
+      const price = s.current_price || 0;
+      
+      // Color by rating
+      let bg = 'rgba(255,255,255,.02)';
+      let border = 'var(--text-muted)';
+      if (sc >= 75) { bg = 'rgba(240,180,41,.08)'; border = 'var(--gold)'; }
+      else if (sc >= 60) { bg = 'rgba(192,192,192,.06)'; border = '#c0c0c0'; }
+      else if (sc >= 45) { bg = 'rgba(205,127,50,.04)'; border = '#cd7f32'; }
+      
+      const scColor = sc >= 75 ? 'var(--gold)' : (sc >= 60 ? '#c0c0c0' : (sc >= 45 ? '#cd7f32' : 'var(--text-muted)'));
+      
+      return '<tr style="background:' + bg + ';border-left:3px solid ' + border + '">' +
+        '<td style="font-weight:600;font-size:12px">' + s.ticker + '</td>' +
+        '<td style="color:' + scColor + ';font-weight:700;font-size:14px">' + sc + '</td>' +
+        '<td style="font-size:11px;font-weight:600;color:' + scColor + '">' + rating + '</td>' +
+        '<td style="font-size:11px;color:var(--text-secondary)">' + phase + '</td>' +
+        '<td style="font-size:11px">' + signals + '</td>' +
+        '<td class="code-num" style="font-size:12px">$' + fmt(price, 2) + '</td>' +
+        '</tr>';
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--red)">淘金失败: ' + e.message + '</td></tr>';
+  }
+}
+
+// Override the old scanUS to use gold panning
+async function scanUS(mode) {
+  goldPan(mode);
+}
+
 </script>
 </body>
 </html>

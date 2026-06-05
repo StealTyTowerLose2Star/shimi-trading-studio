@@ -51,8 +51,9 @@ def api_doubler_recommend():
 @bp.route("/recommend/refresh")
 def api_doubler_recommend_refresh():
     """强制刷新当月推荐"""
+    from services.doubler_predictor import predict_monthly_doublers
     cache_delete("doubler_recommend")
-    result = recommend_current_month()
+    result = predict_monthly_doublers()
     cache_set("doubler_recommend", result, 300)
     return jsonify(result)
 

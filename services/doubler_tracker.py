@@ -14,7 +14,7 @@ from collections import defaultdict
 from cache import cache_or_fetch, cache_delete
 
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "shimi.db")
+DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "shimi.db")
 
 
 def _get_conn():
@@ -80,9 +80,9 @@ def start_tracking(month=None):
 
     如果已有本月记录, 覆盖更新(允许月初重新推荐)
     """
-    from services.doubler_scanner import recommend_current_month
+    from services.doubler_predictor import predict_monthly_doublers
 
-    result = recommend_current_month()
+    result = predict_monthly_doublers()
     picks = result.get("elite_picks", [])
     if not picks:
         return {"error": "no picks available", "status": "fail"}
@@ -93,12 +93,10 @@ def start_tracking(month=None):
     today = datetime.now().strftime("%Y-%m-%d")
 
     conn = _get_conn()
-    # 删除本月旧记录(重新推荐场景)
     conn.execute("DELETE FROM doubler_tracking WHERE month=?", (month,))
 
     saved = 0
     for p in picks:
-        cat = p.get("catalyst", {})
         conn.execute("""
             INSERT OR REPLACE INTO doubler_tracking
             (month, recommend_date, code, name, industry, entry_price,
@@ -108,12 +106,11 @@ def start_tracking(month=None):
             month, today,
             p["code"], p["name"], p.get("industry", ""),
             p["close"],
-            p.get("base_score", p.get("score", 0)),
-            p.get("score", 0),
-            cat.get("cat_type", ""),
-            cat.get("d7", 0),
-            cat.get("d8", 0),
-            cat.get("d9", 0),
+            p.get("potential", 0),
+            p.get("potential", 0),
+            p.get("catalyst_type", ""),
+            p.get("catalyst_d7", 0),
+            0, 0,  # d8/d9 not in prediction model
         ))
         saved += 1
 
