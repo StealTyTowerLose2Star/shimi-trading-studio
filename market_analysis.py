@@ -3,7 +3,7 @@ import pandas as pd
 import time
 from datetime import datetime, timedelta
 from cache import cache_or_fetch
-from data_fetcher import get_daily, get_stock_basic, get_latest_date, get_ts, get_daily_basic
+from data.fetcher import get_daily, get_stock_basic, get_latest_date, get_ts, get_daily_basic
 
 
 # ═══════════════════════════════════════════

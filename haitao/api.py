@@ -262,3 +262,71 @@ def api_us_search():
 def api_us_clear_cache():
     clear_cache()
     return jsonify({"status": "ok", "message": "海淘缓存已清除"})
+
+
+# ─── 全市场扫描 API ──────────────────────────
+
+from haitao.us_screener import (
+    full_scan, get_all_stocks, get_latest_results
+)
+
+@bp.route("/screener/stats")
+def api_screener_stats():
+    """全市场统计"""
+    stocks = get_all_stocks()
+    latest = get_latest_results()
+    return jsonify({
+        "total_stocks": len(stocks),
+        "latest_scan": latest.get("timestamp") if latest else None,
+        "scan_progress": latest.get("progress", 0) if latest else 0,
+        "total_picks": len(latest.get("results", [])) if latest else 0,
+    })
+
+@bp.route("/screener/run")
+def api_screener_run():
+    """执行一次扫描（300只/批）"""
+    result = full_scan(max_batches=1)
+    if result:
+        picks = len(result.get("results", []))
+        golds = len(result.get("gold_picks", []))
+        return jsonify({"status": "ok", "total_picks": picks, "gold_picks": golds})
+    return jsonify({"error": "Scan failed"}), 500
+
+@bp.route("/screener/results")
+def api_screener_results():
+    """获取最新扫描结果"""
+    latest = get_latest_results()
+    if latest:
+        return jsonify(latest)
+    return jsonify({"error": "No scan results yet"}), 404
+
+@bp.route("/screener/top")
+def api_screener_top():
+    """获取Top金矿推荐"""
+    latest = get_latest_results()
+    if not latest:
+        return jsonify({"error": "No scan results"}), 404
+    
+    return jsonify({
+        "timestamp": latest.get("timestamp"),
+        "golds": latest.get("gold_picks", [])[:10],
+        "silvers": latest.get("silver_picks", [])[:15],
+        "total_scanned": latest.get("total_scanned", 0),
+    })
+
+
+# ─── 深度分析 API ──────────────────────────
+
+from haitao.gold_analyzer import analyze_gold_pick, analyze_top_picks, generate_report
+
+@bp.route("/analyze/report")
+def api_analyze_report():
+    """生成完整投资报告（评分细分 + 止盈止损 + 仓位建议）"""
+    report = generate_report()
+    return jsonify(report)
+
+@bp.route("/analyze/<symbol>")
+def api_analyze_symbol(symbol):
+    """单只股票深度分析"""
+    result = analyze_gold_pick(symbol.strip().upper())
+    return jsonify(result)

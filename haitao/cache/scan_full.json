@@ -1,0 +1,1803 @@
+[
+ {
+  "_progress": 300
+ },
+ {
+  "symbol": "KPET",
+  "name": "KPET ULTRA PACELINE COR-CL A",
+  "price": 10.13,
+  "change_pct": 1.3,
+  "volume": 0,
+  "day_range_pct": 0.4,
+  "score": 70,
+  "signals": [
+   "温和上涨",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "AFYA",
+  "name": "AFYA LTD-CLASS A",
+  "price": 14.5,
+  "change_pct": 1.26,
+  "volume": 0,
+  "day_range_pct": 2.3,
+  "score": 70,
+  "signals": [
+   "温和上涨",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "SLDE",
+  "name": "SLIDE INSURANCE HOLDINGS INC",
+  "price": 16.73,
+  "change_pct": 4.37,
+  "volume": 0,
+  "day_range_pct": 2.6,
+  "score": 70,
+  "signals": [
+   "温和上涨",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "HTLD",
+  "name": "HEARTLAND EXPRESS INC",
+  "price": 15.93,
+  "change_pct": 1.14,
+  "volume": 0,
+  "day_range_pct": 2.4,
+  "score": 70,
+  "signals": [
+   "温和上涨",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "RLGT",
+  "name": "RADIANT LOGISTICS INC",
+  "price": 8.7,
+  "change_pct": 1.52,
+  "volume": 0,
+  "day_range_pct": 1.6,
+  "score": 70,
+  "signals": [
+   "温和上涨",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XASE"
+ },
+ {
+  "symbol": "WERN",
+  "name": "WERNER ENTERPRISES INC",
+  "price": 43.79,
+  "change_pct": 1.3,
+  "volume": 0,
+  "day_range_pct": 1.4,
+  "score": 65,
+  "signals": [
+   "温和上涨",
+   "小盘成长",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "NI",
+  "name": "NISOURCE INC",
+  "price": 46.5,
+  "change_pct": 1.42,
+  "volume": 0,
+  "day_range_pct": 1.2,
+  "score": 65,
+  "signals": [
+   "温和上涨",
+   "小盘成长",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "TRMD",
+  "name": "TORM PLC-A",
+  "price": 28.75,
+  "change_pct": 2.31,
+  "volume": 0,
+  "day_range_pct": 2.8,
+  "score": 65,
+  "signals": [
+   "温和上涨",
+   "小盘成长",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "UPWK",
+  "name": "UPWORK INC",
+  "price": 8.93,
+  "change_pct": 2.17,
+  "volume": 0,
+  "day_range_pct": 3.0,
+  "score": 65,
+  "signals": [
+   "温和上涨",
+   "低价小盘"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "DOCS",
+  "name": "DOXIMITY INC-CLASS A",
+  "price": 20.91,
+  "change_pct": 1.01,
+  "volume": 0,
+  "day_range_pct": 2.6,
+  "score": 65,
+  "signals": [
+   "温和上涨",
+   "小盘成长",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "REPL",
+  "name": "REPLIMUNE GROUP INC",
+  "price": 9.97,
+  "change_pct": 1.01,
+  "volume": 0,
+  "day_range_pct": 5.1,
+  "score": 65,
+  "signals": [
+   "温和上涨",
+   "低价小盘"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "CELH",
+  "name": "CELSIUS HOLDINGS INC",
+  "price": 28.5,
+  "change_pct": 2.7,
+  "volume": 0,
+  "day_range_pct": 3.6,
+  "score": 60,
+  "signals": [
+   "温和上涨",
+   "小盘成长"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "GSRF",
+  "name": "GSR IV ACQUISITION CORP-CL A",
+  "price": 10.16,
+  "change_pct": 0.3,
+  "volume": 0,
+  "day_range_pct": 0.1,
+  "score": 60,
+  "signals": [
+   "平稳",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "TAC",
+  "name": "TRANSALTA CORP",
+  "price": 13.06,
+  "change_pct": 0.77,
+  "volume": 0,
+  "day_range_pct": 2.8,
+  "score": 60,
+  "signals": [
+   "平稳",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "MBBC",
+  "name": "MARATHON BANCORP INC",
+  "price": 14.18,
+  "change_pct": 0.07,
+  "volume": 0,
+  "day_range_pct": 0.1,
+  "score": 60,
+  "signals": [
+   "平稳",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "POLE",
+  "name": "ANDRETTI ACQUISITION CORP -A",
+  "price": 10.75,
+  "change_pct": 0.09,
+  "volume": 0,
+  "day_range_pct": 0.1,
+  "score": 60,
+  "signals": [
+   "平稳",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "BWB",
+  "name": "BRIDGEWATER BANCSHARES INC",
+  "price": 19.15,
+  "change_pct": 0.37,
+  "volume": 0,
+  "day_range_pct": 2.0,
+  "score": 60,
+  "signals": [
+   "平稳",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "FNRN",
+  "name": "FIRST NORTHERN COMMUNITY BAN",
+  "price": 17.16,
+  "change_pct": 0.35,
+  "volume": 0,
+  "day_range_pct": 0.4,
+  "score": 60,
+  "signals": [
+   "平稳",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "RAC",
+  "name": "RITHM ACQUISITION CORP-A",
+  "price": 10.43,
+  "change_pct": 0.1,
+  "volume": 0,
+  "day_range_pct": 0.2,
+  "score": 60,
+  "signals": [
+   "平稳",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "PG",
+  "name": "PROCTER & GAMBLE CO/THE",
+  "price": 144.24,
+  "change_pct": 2.46,
+  "volume": 0,
+  "day_range_pct": 1.8,
+  "score": 60,
+  "signals": [
+   "温和上涨",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "LEGO",
+  "name": "LEGATO MERGER CORP IV",
+  "price": 9.94,
+  "change_pct": 0.1,
+  "volume": 0,
+  "day_range_pct": 0.2,
+  "score": 60,
+  "signals": [
+   "平稳",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XASE"
+ },
+ {
+  "symbol": "HOFT",
+  "name": "HOOKER FURNISHINGS CORP",
+  "price": 12.92,
+  "change_pct": 1.17,
+  "volume": 0,
+  "day_range_pct": 6.2,
+  "score": 60,
+  "signals": [
+   "温和上涨",
+   "低价小盘"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "SHC",
+  "name": "SOTERA HEALTH CO",
+  "price": 15.7,
+  "change_pct": 0.83,
+  "volume": 0,
+  "day_range_pct": 2.0,
+  "score": 60,
+  "signals": [
+   "平稳",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "ABT",
+  "name": "ABBOTT LABORATORIES",
+  "price": 91.98,
+  "change_pct": 1.32,
+  "volume": 0,
+  "day_range_pct": 1.5,
+  "score": 60,
+  "signals": [
+   "温和上涨",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "VLTO",
+  "name": "VERALTO CORP",
+  "price": 86.46,
+  "change_pct": 2.03,
+  "volume": 0,
+  "day_range_pct": 1.3,
+  "score": 60,
+  "signals": [
+   "温和上涨",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "CBK",
+  "name": "COMMERCIAL BANCGROUP INC",
+  "price": 29.74,
+  "change_pct": 1.92,
+  "volume": 0,
+  "day_range_pct": 3.5,
+  "score": 60,
+  "signals": [
+   "温和上涨",
+   "小盘成长"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "DXCM",
+  "name": "DEXCOM INC",
+  "price": 74.08,
+  "change_pct": 2.05,
+  "volume": 0,
+  "day_range_pct": 3.0,
+  "score": 60,
+  "signals": [
+   "温和上涨",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "CRAN",
+  "name": "CRANE HARBOR ACQUISITIO-CL A",
+  "price": 10.08,
+  "change_pct": 0.1,
+  "volume": 0,
+  "day_range_pct": 0.1,
+  "score": 60,
+  "signals": [
+   "平稳",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "GTERA",
+  "name": "GLOBA TERRA ACQUISITION CO-A",
+  "price": 10.31,
+  "change_pct": 0.1,
+  "volume": 0,
+  "day_range_pct": 0.1,
+  "score": 60,
+  "signals": [
+   "平稳",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "CNMD",
+  "name": "CONMED CORP",
+  "price": 35.45,
+  "change_pct": 0.91,
+  "volume": 0,
+  "day_range_pct": 1.6,
+  "score": 55,
+  "signals": [
+   "平稳",
+   "小盘成长",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "OLLI",
+  "name": "OLLIE'S BARGAIN OUTLET HOLDI",
+  "price": 77.2,
+  "change_pct": 3.67,
+  "volume": 0,
+  "day_range_pct": 3.7,
+  "score": 55,
+  "signals": [
+   "温和上涨",
+   "中盘稳健"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "NVGS",
+  "name": "NAVIGATOR HOLDINGS LTD",
+  "price": 21.91,
+  "change_pct": 0.78,
+  "volume": 0,
+  "day_range_pct": 2.1,
+  "score": 55,
+  "signals": [
+   "平稳",
+   "小盘成长",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "ORKA",
+  "name": "ORUKA THERAPEUTICS INC",
+  "price": 63.48,
+  "change_pct": 1.93,
+  "volume": 0,
+  "day_range_pct": 3.0,
+  "score": 55,
+  "signals": [
+   "温和上涨",
+   "中盘稳健"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "ROL",
+  "name": "ROLLINS INC",
+  "price": 46.78,
+  "change_pct": 0.6,
+  "volume": 0,
+  "day_range_pct": 2.0,
+  "score": 55,
+  "signals": [
+   "平稳",
+   "小盘成长",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "WTBA",
+  "name": "WEST BANCORPORATION",
+  "price": 23.97,
+  "change_pct": 0.25,
+  "volume": 0,
+  "day_range_pct": 1.9,
+  "score": 55,
+  "signals": [
+   "平稳",
+   "小盘成长",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "BBCQ",
+  "name": "BLEICHROEDER ACQUIS II-CL A",
+  "price": 10.81,
+  "change_pct": 0,
+  "volume": 0,
+  "day_range_pct": 2.1,
+  "score": 55,
+  "signals": [
+   "平稳",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "OSW",
+  "name": "ONESPAWORLD HOLDINGS LTD",
+  "price": 24.02,
+  "change_pct": 0.08,
+  "volume": 0,
+  "day_range_pct": 0.9,
+  "score": 55,
+  "signals": [
+   "平稳",
+   "小盘成长",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "KMT",
+  "name": "KENNAMETAL INC",
+  "price": 32.95,
+  "change_pct": 0.15,
+  "volume": 0,
+  "day_range_pct": 1.8,
+  "score": 55,
+  "signals": [
+   "平稳",
+   "小盘成长",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "RDN",
+  "name": "RADIAN GROUP INC",
+  "price": 33.82,
+  "change_pct": 0.65,
+  "volume": 0,
+  "day_range_pct": 2.3,
+  "score": 55,
+  "signals": [
+   "平稳",
+   "小盘成长",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "RREV",
+  "name": "RRE VENTURES ACQUI CORP CL-A",
+  "price": 9.88,
+  "change_pct": 0,
+  "volume": 0,
+  "day_range_pct": 0.1,
+  "score": 55,
+  "signals": [
+   "平稳",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "SITE",
+  "name": "SITEONE LANDSCAPE SUPPLY INC",
+  "price": 104.66,
+  "change_pct": 1.92,
+  "volume": 0,
+  "day_range_pct": 3.4,
+  "score": 55,
+  "signals": [
+   "温和上涨",
+   "中盘稳健"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "INTG",
+  "name": "INTERGROUP CORP",
+  "price": 33.81,
+  "change_pct": 0.93,
+  "volume": 0,
+  "day_range_pct": 1.7,
+  "score": 55,
+  "signals": [
+   "平稳",
+   "小盘成长",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "DLX",
+  "name": "DELUXE CORP",
+  "price": 23.04,
+  "change_pct": 0.52,
+  "volume": 0,
+  "day_range_pct": 1.7,
+  "score": 55,
+  "signals": [
+   "平稳",
+   "小盘成长",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "LARK",
+  "name": "LANDMARK BANCORP INC",
+  "price": 28.69,
+  "change_pct": 0.21,
+  "volume": 0,
+  "day_range_pct": 0.7,
+  "score": 55,
+  "signals": [
+   "平稳",
+   "小盘成长",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "GBLI",
+  "name": "GLOBAL INDEMNITY GROUP LLC-A",
+  "price": 27.01,
+  "change_pct": 0.04,
+  "volume": 0,
+  "day_range_pct": 0.0,
+  "score": 55,
+  "signals": [
+   "平稳",
+   "小盘成长",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "TMUS",
+  "name": "T-MOBILE US INC",
+  "price": 179.56,
+  "change_pct": 1.43,
+  "volume": 0,
+  "day_range_pct": 1.8,
+  "score": 53,
+  "signals": [
+   "温和上涨",
+   "大盘蓝筹",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "HSY",
+  "name": "HERSHEY CO/THE",
+  "price": 185.0,
+  "change_pct": 1.25,
+  "volume": 0,
+  "day_range_pct": 1.1,
+  "score": 53,
+  "signals": [
+   "温和上涨",
+   "大盘蓝筹",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "TORO",
+  "name": "TORO CORP",
+  "price": 5.08,
+  "change_pct": -2.31,
+  "volume": 0,
+  "day_range_pct": 2.8,
+  "score": 52,
+  "signals": [
+   "微调(关注)",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "DERM",
+  "name": "JOURNEY MEDICAL CORP",
+  "price": 6.08,
+  "change_pct": -2.25,
+  "volume": 0,
+  "day_range_pct": 2.6,
+  "score": 52,
+  "signals": [
+   "微调(关注)",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "HBIO",
+  "name": "HARVARD BIOSCIENCE INC",
+  "price": 6.34,
+  "change_pct": -2.16,
+  "volume": 0,
+  "day_range_pct": 1.8,
+  "score": 52,
+  "signals": [
+   "微调(关注)",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "MED",
+  "name": "MEDIFAST INC",
+  "price": 12.25,
+  "change_pct": -0.16,
+  "volume": 0,
+  "day_range_pct": 2.1,
+  "score": 52,
+  "signals": [
+   "微调(关注)",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "STLA",
+  "name": "STELLANTIS NV",
+  "price": 7.24,
+  "change_pct": -2.03,
+  "volume": 0,
+  "day_range_pct": 2.8,
+  "score": 52,
+  "signals": [
+   "微调(关注)",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "VNDA",
+  "name": "VANDA PHARMACEUTICALS INC",
+  "price": 6.19,
+  "change_pct": -0.96,
+  "volume": 0,
+  "day_range_pct": 3.0,
+  "score": 52,
+  "signals": [
+   "微调(关注)",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "NL",
+  "name": "NLI HOLDINGS INC",
+  "price": 6.04,
+  "change_pct": -0.33,
+  "volume": 0,
+  "day_range_pct": 1.9,
+  "score": 52,
+  "signals": [
+   "微调(关注)",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "CPSS",
+  "name": "CONSUMER PORTFOLIO SERVICES",
+  "price": 9.17,
+  "change_pct": -0.65,
+  "volume": 0,
+  "day_range_pct": 0.9,
+  "score": 52,
+  "signals": [
+   "微调(关注)",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "TACO",
+  "name": "BERTO ACQUISITION CORP",
+  "price": 10.43,
+  "change_pct": -0.19,
+  "volume": 0,
+  "day_range_pct": 0.4,
+  "score": 52,
+  "signals": [
+   "微调(关注)",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "SI",
+  "name": "SHOULDER INNOVATIONS INC",
+  "price": 14.47,
+  "change_pct": -0.07,
+  "volume": 0,
+  "day_range_pct": 2.1,
+  "score": 52,
+  "signals": [
+   "微调(关注)",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "AXIL",
+  "name": "AXIL BRANDS INC",
+  "price": 6.99,
+  "change_pct": -0.14,
+  "volume": 0,
+  "day_range_pct": 1.5,
+  "score": 52,
+  "signals": [
+   "微调(关注)",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XASE"
+ },
+ {
+  "symbol": "WBTN",
+  "name": "WEBTOON ENTERTAINMENT INC",
+  "price": 11.61,
+  "change_pct": -0.43,
+  "volume": 0,
+  "day_range_pct": 2.5,
+  "score": 52,
+  "signals": [
+   "微调(关注)",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "DEC",
+  "name": "DIVERSIFIED ENERGY CO",
+  "price": 13.98,
+  "change_pct": -0.92,
+  "volume": 0,
+  "day_range_pct": 1.7,
+  "score": 52,
+  "signals": [
+   "微调(关注)",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "JENA",
+  "name": "JENA ACQUISITION CORP II - A",
+  "price": 10.32,
+  "change_pct": -0.19,
+  "volume": 0,
+  "day_range_pct": 0.1,
+  "score": 52,
+  "signals": [
+   "微调(关注)",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "GSBD",
+  "name": "GOLDMAN SACHS BDC INC",
+  "price": 8.97,
+  "change_pct": -1.54,
+  "volume": 0,
+  "day_range_pct": 2.3,
+  "score": 52,
+  "signals": [
+   "微调(关注)",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "BBDC",
+  "name": "BARINGS BDC INC",
+  "price": 8.32,
+  "change_pct": -1.19,
+  "volume": 0,
+  "day_range_pct": 1.5,
+  "score": 52,
+  "signals": [
+   "微调(关注)",
+   "低价小盘",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "IONS",
+  "name": "IONIS PHARMACEUTICALS INC",
+  "price": 75.65,
+  "change_pct": 0.69,
+  "volume": 0,
+  "day_range_pct": 1.2,
+  "score": 50,
+  "signals": [
+   "平稳",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "DIS",
+  "name": "WALT DISNEY CO/THE",
+  "price": 99.58,
+  "change_pct": 0.24,
+  "volume": 0,
+  "day_range_pct": 1.0,
+  "score": 50,
+  "signals": [
+   "平稳",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "VIK",
+  "name": "VIKING HOLDINGS LTD",
+  "price": 90.12,
+  "change_pct": 0.14,
+  "volume": 0,
+  "day_range_pct": 2.2,
+  "score": 50,
+  "signals": [
+   "平稳",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "EE",
+  "name": "EXCELERATE ENERGY INC-A",
+  "price": 32.39,
+  "change_pct": 0,
+  "volume": 0,
+  "day_range_pct": 1.4,
+  "score": 50,
+  "signals": [
+   "平稳",
+   "小盘成长",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "D",
+  "name": "DOMINION ENERGY INC",
+  "price": 66.93,
+  "change_pct": 0.65,
+  "volume": 0,
+  "day_range_pct": 1.3,
+  "score": 50,
+  "signals": [
+   "平稳",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "LLYVA",
+  "name": "LIBERTY LIVE HOLDINGS-A",
+  "price": 88.74,
+  "change_pct": 0.11,
+  "volume": 0,
+  "day_range_pct": 1.2,
+  "score": 50,
+  "signals": [
+   "平稳",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "ALC",
+  "name": "ALCON INC",
+  "price": 66.9,
+  "change_pct": 0.48,
+  "volume": 0,
+  "day_range_pct": 1.0,
+  "score": 50,
+  "signals": [
+   "平稳",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "ATRC",
+  "name": "ATRICURE INC",
+  "price": 27.48,
+  "change_pct": 0.77,
+  "volume": 0,
+  "day_range_pct": 3.1,
+  "score": 50,
+  "signals": [
+   "平稳",
+   "小盘成长"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "LIVN",
+  "name": "LIVANOVA PLC",
+  "price": 74.03,
+  "change_pct": 0.42,
+  "volume": 0,
+  "day_range_pct": 1.4,
+  "score": 50,
+  "signals": [
+   "平稳",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "LKFN",
+  "name": "LAKELAND FINANCIAL CORP",
+  "price": 59.76,
+  "change_pct": 0.78,
+  "volume": 0,
+  "day_range_pct": 1.2,
+  "score": 50,
+  "signals": [
+   "平稳",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "UFPI",
+  "name": "UFP INDUSTRIES INC",
+  "price": 80.26,
+  "change_pct": 0.05,
+  "volume": 0,
+  "day_range_pct": 1.7,
+  "score": 50,
+  "signals": [
+   "平稳",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "J",
+  "name": "JACOBS SOLUTIONS INC",
+  "price": 124.15,
+  "change_pct": 0.47,
+  "volume": 0,
+  "day_range_pct": 1.3,
+  "score": 50,
+  "signals": [
+   "平稳",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "XYL",
+  "name": "XYLEM INC",
+  "price": 110.72,
+  "change_pct": 0.49,
+  "volume": 0,
+  "day_range_pct": 1.1,
+  "score": 50,
+  "signals": [
+   "平稳",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "BMI",
+  "name": "BADGER METER INC",
+  "price": 128.52,
+  "change_pct": 0.43,
+  "volume": 0,
+  "day_range_pct": 2.3,
+  "score": 50,
+  "signals": [
+   "平稳",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "PLBC",
+  "name": "PLUMAS BANCORP",
+  "price": 53.94,
+  "change_pct": 0.28,
+  "volume": 0,
+  "day_range_pct": 0.7,
+  "score": 50,
+  "signals": [
+   "平稳",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "BFH",
+  "name": "BREAD FINANCIAL HOLDINGS INC",
+  "price": 91.19,
+  "change_pct": 0.04,
+  "volume": 0,
+  "day_range_pct": 1.3,
+  "score": 50,
+  "signals": [
+   "平稳",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "AON",
+  "name": "AON PLC-CLASS A",
+  "price": 325.85,
+  "change_pct": 1.12,
+  "volume": 0,
+  "day_range_pct": 1.3,
+  "score": 48,
+  "signals": [
+   "温和上涨",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "CSL",
+  "name": "CARLISLE COS INC",
+  "price": 346.29,
+  "change_pct": 1.08,
+  "volume": 0,
+  "day_range_pct": 2.0,
+  "score": 48,
+  "signals": [
+   "温和上涨",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "MATX",
+  "name": "MATSON INC",
+  "price": 192.02,
+  "change_pct": 2.53,
+  "volume": 0,
+  "day_range_pct": 4.6,
+  "score": 48,
+  "signals": [
+   "温和上涨",
+   "大盘蓝筹"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "RMIX",
+  "name": "SUNCRETE INC-A",
+  "price": 17.39,
+  "change_pct": -1.86,
+  "volume": 0,
+  "day_range_pct": 4.7,
+  "score": 47,
+  "signals": [
+   "微调(关注)",
+   "低价小盘"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "RGS",
+  "name": "REGIS CORP",
+  "price": 27.26,
+  "change_pct": -0.69,
+  "volume": 0,
+  "day_range_pct": 0.0,
+  "score": 47,
+  "signals": [
+   "微调(关注)",
+   "小盘成长",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "WU",
+  "name": "WESTERN UNION CO",
+  "price": 7.54,
+  "change_pct": -2.2,
+  "volume": 0,
+  "day_range_pct": 3.5,
+  "score": 47,
+  "signals": [
+   "微调(关注)",
+   "低价小盘"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "CRNX",
+  "name": "CRINETICS PHARMACEUTICALS IN",
+  "price": 34.23,
+  "change_pct": -1.16,
+  "volume": 0,
+  "day_range_pct": 1.9,
+  "score": 47,
+  "signals": [
+   "微调(关注)",
+   "小盘成长",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "TCBS",
+  "name": "TEXAS COMMUNITY BANCSHARES",
+  "price": 16.74,
+  "change_pct": -0.95,
+  "volume": 0,
+  "day_range_pct": 3.5,
+  "score": 47,
+  "signals": [
+   "微调(关注)",
+   "低价小盘"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "COHN",
+  "name": "COHEN & CO INC",
+  "price": 11.39,
+  "change_pct": -0.18,
+  "volume": 0,
+  "day_range_pct": 3.4,
+  "score": 47,
+  "signals": [
+   "微调(关注)",
+   "低价小盘"
+  ],
+  "exchange": "XASE"
+ },
+ {
+  "symbol": "KRRO",
+  "name": "KORRO BIO INC",
+  "price": 11.02,
+  "change_pct": -1.43,
+  "volume": 0,
+  "day_range_pct": 3.4,
+  "score": 47,
+  "signals": [
+   "微调(关注)",
+   "低价小盘"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "OEC",
+  "name": "ORION SA",
+  "price": 6.97,
+  "change_pct": -2.92,
+  "volume": 0,
+  "day_range_pct": 4.0,
+  "score": 47,
+  "signals": [
+   "微调(关注)",
+   "低价小盘"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "FTRE",
+  "name": "FORTREA HOLDINGS INC",
+  "price": 16.87,
+  "change_pct": -2.2,
+  "volume": 0,
+  "day_range_pct": 5.5,
+  "score": 47,
+  "signals": [
+   "微调(关注)",
+   "低价小盘"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "ATEN",
+  "name": "A10 NETWORKS INC",
+  "price": 31.59,
+  "change_pct": -0.35,
+  "volume": 0,
+  "day_range_pct": 1.8,
+  "score": 47,
+  "signals": [
+   "微调(关注)",
+   "小盘成长",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "MBIN",
+  "name": "MERCHANTS BANCORP/IN",
+  "price": 47.41,
+  "change_pct": -0.61,
+  "volume": 0,
+  "day_range_pct": 2.1,
+  "score": 47,
+  "signals": [
+   "微调(关注)",
+   "小盘成长",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "WSHP",
+  "name": "WESHOP HOLDINGS LTD-CL A",
+  "price": 6.72,
+  "change_pct": -0.44,
+  "volume": 0,
+  "day_range_pct": 4.9,
+  "score": 47,
+  "signals": [
+   "微调(关注)",
+   "低价小盘"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "VIR",
+  "name": "VIR BIOTECHNOLOGY INC",
+  "price": 8.97,
+  "change_pct": -1.97,
+  "volume": 0,
+  "day_range_pct": 3.7,
+  "score": 47,
+  "signals": [
+   "微调(关注)",
+   "低价小盘"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "NSSC",
+  "name": "NAPCO SECURITY TECHNOLOGIES",
+  "price": 35.49,
+  "change_pct": -0.78,
+  "volume": 0,
+  "day_range_pct": 0.9,
+  "score": 47,
+  "signals": [
+   "微调(关注)",
+   "小盘成长",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "NKSH",
+  "name": "NATIONAL BANKSHARES INC/VA",
+  "price": 34.57,
+  "change_pct": -0.95,
+  "volume": 0,
+  "day_range_pct": 0.7,
+  "score": 47,
+  "signals": [
+   "微调(关注)",
+   "小盘成长",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "SPT",
+  "name": "SPROUT SOCIAL INC - CLASS A",
+  "price": 7.18,
+  "change_pct": -2.71,
+  "volume": 0,
+  "day_range_pct": 6.0,
+  "score": 47,
+  "signals": [
+   "微调(关注)",
+   "低价小盘"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "METCB",
+  "name": "RAMACO RESOURCES INC-B",
+  "price": 12.28,
+  "change_pct": -1.92,
+  "volume": 0,
+  "day_range_pct": 5.4,
+  "score": 47,
+  "signals": [
+   "微调(关注)",
+   "低价小盘"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "ALH",
+  "name": "ALLIANCE LAUNDRY HOLDINGS IN",
+  "price": 24.7,
+  "change_pct": -0.96,
+  "volume": 0,
+  "day_range_pct": 2.0,
+  "score": 47,
+  "signals": [
+   "微调(关注)",
+   "小盘成长",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "MRX",
+  "name": "MAREX GROUP PLC",
+  "price": 54.57,
+  "change_pct": 0.17,
+  "volume": 0,
+  "day_range_pct": 4.9,
+  "score": 45,
+  "signals": [
+   "平稳",
+   "中盘稳健"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "TNC",
+  "name": "TENNANT CO",
+  "price": 84.73,
+  "change_pct": 0,
+  "volume": 0,
+  "day_range_pct": 1.6,
+  "score": 45,
+  "signals": [
+   "平稳",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "RELY",
+  "name": "REMITLY GLOBAL INC",
+  "price": 18.94,
+  "change_pct": -4.39,
+  "volume": 0,
+  "day_range_pct": 4.9,
+  "score": 43,
+  "signals": [
+   "回调",
+   "低价小盘"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "RNGR",
+  "name": "RANGER ENERGY SERVICES-CL A",
+  "price": 15.85,
+  "change_pct": -3.06,
+  "volume": 0,
+  "day_range_pct": 4.6,
+  "score": 43,
+  "signals": [
+   "回调",
+   "低价小盘"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "TALO",
+  "name": "TALOS ENERGY INC",
+  "price": 14.75,
+  "change_pct": -3.59,
+  "volume": 0,
+  "day_range_pct": 4.2,
+  "score": 43,
+  "signals": [
+   "回调",
+   "低价小盘"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "ESE",
+  "name": "ESCO TECHNOLOGIES INC",
+  "price": 294.71,
+  "change_pct": 0.94,
+  "volume": 0,
+  "day_range_pct": 2.2,
+  "score": 43,
+  "signals": [
+   "平稳",
+   "大盘蓝筹",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "LAKE",
+  "name": "LAKELAND INDUSTRIES INC",
+  "price": 9.63,
+  "change_pct": -3.17,
+  "volume": 0,
+  "day_range_pct": 5.9,
+  "score": 43,
+  "signals": [
+   "回调",
+   "低价小盘"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "SOTK",
+  "name": "SONO-TEK CORP",
+  "price": 5.28,
+  "change_pct": -5.71,
+  "volume": 0,
+  "day_range_pct": 4.6,
+  "score": 43,
+  "signals": [
+   "回调",
+   "低价小盘"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "IDCC",
+  "name": "INTERDIGITAL INC",
+  "price": 261.33,
+  "change_pct": 0.1,
+  "volume": 0,
+  "day_range_pct": 1.7,
+  "score": 43,
+  "signals": [
+   "平稳",
+   "大盘蓝筹",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "BBCP",
+  "name": "CONCRETE PUMPING HOLDINGS IN",
+  "price": 11.42,
+  "change_pct": 43.11,
+  "volume": 0,
+  "day_range_pct": 20.0,
+  "score": 42,
+  "signals": [
+   "暴涨(注意)",
+   "低价小盘",
+   "剧烈波动"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "TPR",
+  "name": "TAPESTRY INC",
+  "price": 138.63,
+  "change_pct": -1.31,
+  "volume": 0,
+  "day_range_pct": 2.1,
+  "score": 42,
+  "signals": [
+   "微调(关注)",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "ELTX",
+  "name": "ELICIO THERAPEUTICS INC",
+  "price": 13.76,
+  "change_pct": -1.22,
+  "volume": 0,
+  "day_range_pct": 7.8,
+  "score": 42,
+  "signals": [
+   "微调(关注)",
+   "低价小盘"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "PVLA",
+  "name": "PALVELLA THERAPEUTICS INC",
+  "price": 112.47,
+  "change_pct": -2.05,
+  "volume": 0,
+  "day_range_pct": 2.4,
+  "score": 42,
+  "signals": [
+   "微调(关注)",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "TOL",
+  "name": "TOLL BROTHERS INC",
+  "price": 138.32,
+  "change_pct": -1.07,
+  "volume": 0,
+  "day_range_pct": 1.3,
+  "score": 42,
+  "signals": [
+   "微调(关注)",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "AR",
+  "name": "ANTERO RESOURCES CORP",
+  "price": 36.09,
+  "change_pct": -2.72,
+  "volume": 0,
+  "day_range_pct": 3.1,
+  "score": 42,
+  "signals": [
+   "微调(关注)",
+   "小盘成长"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "SF",
+  "name": "STIFEL FINANCIAL CORP",
+  "price": 71.27,
+  "change_pct": -0.21,
+  "volume": 0,
+  "day_range_pct": 1.3,
+  "score": 42,
+  "signals": [
+   "微调(关注)",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "BILL",
+  "name": "BILL HOLDINGS INC",
+  "price": 35.38,
+  "change_pct": -1.61,
+  "volume": 0,
+  "day_range_pct": 4.9,
+  "score": 42,
+  "signals": [
+   "微调(关注)",
+   "小盘成长"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "COP",
+  "name": "CONOCOPHILLIPS",
+  "price": 118.84,
+  "change_pct": -0.33,
+  "volume": 0,
+  "day_range_pct": 1.7,
+  "score": 42,
+  "signals": [
+   "微调(关注)",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "NDAQ",
+  "name": "NASDAQ INC",
+  "price": 87.29,
+  "change_pct": -1.31,
+  "volume": 0,
+  "day_range_pct": 2.3,
+  "score": 42,
+  "signals": [
+   "微调(关注)",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNAS"
+ },
+ {
+  "symbol": "BAC",
+  "name": "BANK OF AMERICA CORP",
+  "price": 53.98,
+  "change_pct": -0.35,
+  "volume": 0,
+  "day_range_pct": 1.3,
+  "score": 42,
+  "signals": [
+   "微调(关注)",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "C",
+  "name": "CITIGROUP INC",
+  "price": 133.63,
+  "change_pct": -1.12,
+  "volume": 0,
+  "day_range_pct": 2.4,
+  "score": 42,
+  "signals": [
+   "微调(关注)",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ },
+ {
+  "symbol": "BBY",
+  "name": "BEST BUY CO INC",
+  "price": 70.42,
+  "change_pct": -0.8,
+  "volume": 0,
+  "day_range_pct": 2.8,
+  "score": 42,
+  "signals": [
+   "微调(关注)",
+   "中盘稳健",
+   "窄幅(蓄力)"
+  ],
+  "exchange": "XNYS"
+ }
+]

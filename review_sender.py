@@ -61,7 +61,7 @@ def send_daily_review():
 
 
 def send_weekly_review():
-    from services.review import run_weekly_review
+    from services.review_weekly import run_weekly_review
     report = run_weekly_review()
     if report.get("error"):
         send("拾米 · 每周复盘", f"⚠️ {report['error']}")

@@ -2209,14 +2209,7 @@ function renderUSHots(data) {
   tbody.innerHTML = data.slice(0, 15).map(s => {
     const chg = s.change_pct || 0;
     return '<tr>' +
-      '<td style="color:var(--text-muted);font-size:11px;font-weight:600">' + s.ticker + '</td>' +
-      '<td style="font-size:12px;font-weight:600">' + (s.name || '').substring(0, 25) + '</td>' +
-      '<td class="code-num">$' + fmt(s.price, 2) + '</td>' +
-      '<td class="code-num ' + cls(chg) + '">' + arrow(chg) + ' ' + Math.abs(chg).toFixed(2) + '%</td>' +
-      '</tr>';
-  }).join('');
-}
-
+      '<td style="color:var(--text-muted);font-size:11px;font-weight:6
 function renderUSAdr(data) {
   const tbody = document.getElementById('usAdrBody');
   const count = document.getElementById('usAdrCount');
@@ -2350,38 +2343,34 @@ async function goldPan(mode) {
   count.textContent = '⛏️';
   
   try {
-    const r = await fetchJSON('/api/us/gold/pan?mode=' + mode);
-    const items = r.results || [];
-    const golds = items.filter(x => x.score >= 60);
-    const silvers = items.filter(x => x.score >= 45 && x.score < 60);
+    const r = await fetchJSON('/api/us/screener/top');
+    const golds = r.golds || [];
+    const silvers = r.silvers || [];
+    const items = golds.concat(silvers).slice(0, 15);
     count.textContent = golds.length + '金/' + silvers.length + '银';
     
     if (items.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">当前无金矿标的</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">暂无扫描结果，点击运行扫描</td></tr>';
       return;
     }
     
     tbody.innerHTML = items.map(s => {
       const sc = s.score || 0;
-      const rating = s.rating || '--';
-      const phase = s.phase || '--';
-      const signals = (s.gold_signals || []).slice(0, 2).join(' / ');
-      const price = s.current_price || 0;
+      const rating = sc >= 70 ? '🥇金矿' : (sc >= 50 ? '🥈银矿' : (sc >= 30 ? '🥉铜矿' : '🪨石矿'));
+      const signals = (s.signals || []).slice(0, 2).join(' / ');
+      const price = s.price || 0;
       
-      // Color by rating
-      let bg = 'rgba(255,255,255,.02)';
-      let border = 'var(--text-muted)';
-      if (sc >= 75) { bg = 'rgba(240,180,41,.08)'; border = 'var(--gold)'; }
-      else if (sc >= 60) { bg = 'rgba(192,192,192,.06)'; border = '#c0c0c0'; }
-      else if (sc >= 45) { bg = 'rgba(205,127,50,.04)'; border = '#cd7f32'; }
+      let bg = 'rgba(255,255,255,.02)'; let border = 'var(--text-muted)';
+      if (sc >= 70) { bg = 'rgba(240,180,41,.08)'; border = 'var(--gold)'; }
+      else if (sc >= 50) { bg = 'rgba(192,192,192,.06)'; border = '#c0c0c0'; }
       
-      const scColor = sc >= 75 ? 'var(--gold)' : (sc >= 60 ? '#c0c0c0' : (sc >= 45 ? '#cd7f32' : 'var(--text-muted)'));
+      const scColor = sc >= 70 ? 'var(--gold)' : (sc >= 50 ? '#c0c0c0' : 'var(--text-muted)');
       
       return '<tr style="background:' + bg + ';border-left:3px solid ' + border + '">' +
-        '<td style="font-weight:600;font-size:12px">' + s.ticker + '</td>' +
+        '<td style="font-weight:600;font-size:12px">' + s.symbol + '</td>' +
         '<td style="color:' + scColor + ';font-weight:700;font-size:14px">' + sc + '</td>' +
         '<td style="font-size:11px;font-weight:600;color:' + scColor + '">' + rating + '</td>' +
-        '<td style="font-size:11px;color:var(--text-secondary)">' + phase + '</td>' +
+        '<td style="font-size:11px;color:var(--text-muted)">全市场</td>' +
         '<td style="font-size:11px">' + signals + '</td>' +
         '<td class="code-num" style="font-size:12px">$' + fmt(price, 2) + '</td>' +
         '</tr>';

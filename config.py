@@ -16,7 +16,7 @@ DB_HOST = os.getenv("SHIMI_DB_HOST", "localhost")
 DB_PORT = int(os.getenv("SHIMI_DB_PORT", "5432"))
 DB_NAME = os.getenv("SHIMI_DB_NAME", "shimi")
 DB_USER = os.getenv("SHIMI_DB_USER", "shimi")
-DB_PASS = os.getenv("SHIMI_DB_PASS", "shimi_secret")
+DB_PASS = os.getenv("SHIMI_DB_PASS", "")
 
 # Redis
 REDIS_HOST = os.getenv("SHIMI_REDIS_HOST", "localhost")

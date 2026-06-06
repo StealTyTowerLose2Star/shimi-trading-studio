@@ -7,7 +7,8 @@ import time
 import json
 
 from db import get_latest_review, get_review_history
-from services.review import run_daily_review, run_weekly_review
+from services.review import run_daily_review
+from services.review_weekly import run_weekly_review
 
 bp = Blueprint("review", __name__, url_prefix="/api")
 

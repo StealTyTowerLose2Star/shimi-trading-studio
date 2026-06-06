@@ -9,11 +9,9 @@ from typing import Dict, List, Optional
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 import config
+from data.fetcher_core import get_ts
 
 
-def get_ts():
-    import tushare as ts
-    return ts.pro_api(config.TUSHARE_TOKEN)
 
 
 def get_kline(code: str, days: int = 60, force: bool = False):

@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import numpy as np
 import pandas as pd
 
-from haitao.us_fetcher import get_quotes, get_history, calc_technical_indicators, _yahoo_fetch
+from haitao.us_fetcher import get_quotes, get_history, calc_technical_indicators
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
@@ -27,33 +27,21 @@ logger = logging.getLogger(__name__)
 def gold_score(ticker: str) -> dict:
     """对一只美股进行黄金挖掘评分（0-100）"""
     # Try full history first, fall back to whatever is available
-    hist = get_history(ticker, period="6mo")
+    hist = get_history(ticker, 180)
     if hist is None or len(hist) < 5:
-        # Last resort: try short period
-        hist = get_history(ticker, period="1mo")
+        hist = get_history(ticker, 60)
     if hist is None or len(hist) < 5:
-        # Try the chart endpoint (always has 5d)
-        result = _yahoo_fetch(ticker, "chart")
-        if result:
-            ts = result.get("timestamp", [])
-            if ts:
-                quotes = result.get("indicators", {}).get("quote", [{}])[0]
-                recs = []
-                for i, tstamp in enumerate(ts):
-                    cv = quotes.get("close", [None])[i] if quotes else None
-                    if cv is None: continue
-                    recs.append({"Date": datetime.fromtimestamp(tstamp, tz=timezone.utc),
-                                 "Open": quotes.get("open", [None])[i],
-                                 "High": quotes.get("high", [None])[i],
-                                 "Low": quotes.get("low", [None])[i], "Close": cv,
-                                 "Volume": int(quotes.get("volume", [0])[i] or 0)})
-                if recs:
-                    import pandas as pd
-                    hist = pd.DataFrame(recs)
+        hist = get_history(ticker, 30)
+    if hist is None or len(hist) < 5:
+        hist = get_history(ticker, 10)
     
     if hist is None or len(hist) < 5:
         return {"ticker": ticker, "score": 0, "rating": "数据不足", "error": "insufficient data"}
-
+    
+    # Convert to DataFrame if needed
+    if not isinstance(hist, pd.DataFrame):
+        hist = pd.DataFrame(hist)
+    
     tech = calc_technical_indicators(hist)
     days = len(hist)
     data_quality = "优" if days >= 60 else ("中" if days >= 20 else "低")

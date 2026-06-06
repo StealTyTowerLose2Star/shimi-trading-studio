@@ -9,11 +9,9 @@ from typing import Dict, List, Optional, Tuple
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 import config
+from data.fetcher_core import get_ts
 
 
-def get_ts():
-    import tushare as ts
-    return ts.pro_api(config.TUSHARE_TOKEN)
 
 
 # 进程级 K 线缓存：{code_days: (DataFrame, timestamp)}
