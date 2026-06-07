@@ -84,6 +84,113 @@ def _turnover_score(turnover):
     else: return 1
 
 
+def _early_stage_score_batch(candidates: list) -> dict:
+    """启动前期过滤器 (批量版) — 魔法师核心算法
+
+    批量获取K线数据，避免对300只股票逐个调用API。
+    对每只候选股评估启动阶段并返回评分。
+
+    Args:
+        candidates: recommend_current_month 的候选列表
+
+    Returns:
+        {code: {"score": int, "level": str, "reason": str, "exclude": bool}}
+    """
+    from collections import defaultdict
+    results = defaultdict(lambda: {"score": 0, "level": "neutral", "reason": "", "exclude": False})
+
+    if len(candidates) < 3:
+        return results
+
+    try:
+        # 批量获取K线数据 (利用 realtime_scorer 的 get_kline_batch)
+        from realtime_scorer import get_kline_batch
+        codes = [c["code"] for c in candidates]
+        klines = get_kline_batch(codes, days=22)  # 约1个月交易日
+
+        if not klines:
+            return results
+
+        from datetime import datetime
+        today = datetime.now().strftime("%Y%m%d")
+
+        for c in candidates:
+            code = c["code"]
+            close = c["close"]
+            vol_ratio = c.get("vol_ratio", 0)
+
+            kline = klines.get(code)
+            if kline is None or len(kline) < 3:
+                continue
+
+            # 计算本月近似涨幅
+            first_close = float(kline["close"].iloc[0]) if "close" in kline.columns else close
+            monthly_change = (close / first_close - 1) * 100 if first_close > 0 else 0
+
+            result = results[code]
+
+            # ─── 启动前期评分逻辑 ─────────────────
+            if monthly_change > 80:
+                result["exclude"] = True
+                result["reason"] = f"月涨幅{monthly_change:.0f}% >80%"
+                result["score"] = -10
+                result["level"] = "excluded"
+                continue
+
+            if monthly_change > 50:
+                result["score"] = -8
+                result["reason"] = f"月涨幅{monthly_change:.0f}% >50%"
+                result["level"] = "late"
+            elif monthly_change > 25:
+                result["score"] = -3
+                result["reason"] = f"月涨幅{monthly_change:.0f}%"
+                result["level"] = "mid_stage"
+            elif monthly_change > 10:
+                result["score"] = 5
+                result["reason"] = f"月涨幅{monthly_change:.0f}% 温和启动"
+                result["level"] = "warming"
+            elif monthly_change > -5:
+                result["score"] = 10
+                result["reason"] = f"月涨幅{monthly_change:.1f}% 启动前期"
+                result["level"] = "early"
+            else:
+                result["score"] = 5
+                result["reason"] = f"月跌幅{abs(monthly_change):.1f}% 回调中"
+                result["level"] = "pullback"
+
+            # ─── 横盘整理检测 ─────────────────────
+            if len(kline) >= 15:
+                close_arr = kline["close"].values[-15:].astype(float)
+                price_range = (close_arr.max() - close_arr.min()) / close_arr.mean() * 100
+                if price_range < 5 and vol_ratio > 1.5:
+                    result["score"] += 5
+                    result["reason"] += " | 横盘放量"
+
+            # ─── 连续涨停检测 ─────────────────────
+            if len(kline) >= 3 and "pct_chg" in kline.columns:
+                recent_pct = kline["pct_chg"].values[-5:].astype(float)
+                consecutive_limit = 0
+                for p in reversed(recent_pct):
+                    if p >= 9.5:
+                        consecutive_limit += 1
+                    else:
+                        break
+                if consecutive_limit >= 3:
+                    result["exclude"] = True
+                    result["reason"] = f"连续涨停{consecutive_limit}天"
+                    result["score"] = -10
+                    result["level"] = "excluded"
+                    continue
+                elif consecutive_limit >= 2:
+                    result["score"] -= 5
+                    result["reason"] += f" | 已{consecutive_limit}连板"
+
+    except Exception:
+        pass
+
+    return results
+
+
 def _board_score(code):
     if code.startswith('6'): return 5
     elif code.startswith('3'): return 3
@@ -344,7 +451,11 @@ def recommend_current_month():
     except Exception as e:
         print(f"[doubler] catalyst skipped (ok): {e}")
 
-    # 合并10维总分
+    # D0 启动前期过滤器 (批量版, 魔法师核心: 排除已涨过高的标的)
+    early_stages = _early_stage_score_batch(base_top300)
+
+    # 合并10维总分 + 启动前期过滤
+    filtered_candidates = []
     for c in base_top300:
         short = c["code"]
         cat = catalyst_scores.get(short, {})
@@ -359,13 +470,26 @@ def recommend_current_month():
         # D10 共振
         d10 = 2 if resonance else 0
 
-        c["score"] = c["base_score"] + d7 + d8 + d9 + d10
-        c["catalyst"] = {"d7": d7, "d8": d8, "d9": d9, "d10": d10,
-                        "cat_type": cat_type, "resonance": resonance}
+        # D0 启动前期评分
+        stage = early_stages.get(short, {"score": 0, "level": "neutral", "reason": "", "exclude": False})
+        d0 = stage["score"]
+
+        # 强制排除: 月涨幅 >80% 或 连续涨停 ≥3天
+        if stage.get("exclude"):
+            continue
+
+        c["score"] = c["base_score"] + d0 + d7 + d8 + d9 + d10
+        c["catalyst"] = {"d0_early_stage": d0, "d7": d7, "d8": d8, "d9": d9, "d10": d10,
+                        "cat_type": cat_type, "resonance": resonance,
+                        "early_stage": stage["level"], "early_reason": stage["reason"]}
+        c["score_breakdown"]["early_stage_d0"] = d0
         c["score_breakdown"]["catalyst_d7"] = d7
         c["score_breakdown"]["catalyst_d8"] = d8
         c["score_breakdown"]["pre_surge_d9"] = d9
         c["score_breakdown"]["resonance_d10"] = d10
+        filtered_candidates.append(c)
+
+    candidates = filtered_candidates
 
     candidates.sort(key=lambda x: -x["score"])
     top30 = candidates[:30]

@@ -270,3 +270,100 @@ def get_monitor_status() -> Dict:
         "has_alerts": len(alerts) > 0,
         "timestamp": time.strftime("%H:%M:%S"),
     }
+
+
+# ─── 外部依赖健康检查 ──────────────────────────────
+
+def check_external_deps() -> Dict:
+    """检查外部 API 依赖是否可达
+
+    Returns:
+        dict: {
+            "tushare": {"reachable": bool, "latency_ms": float, "message": str},
+            "finnhub":  {...},
+            "yfinance": {...},
+            "overall": "healthy" | "degraded" | "down"
+        }
+    """
+    import requests
+    import config
+
+    results = {}
+    healthy_count = 0
+    total = 0
+
+    # Tushare Pro
+    total += 1
+    try:
+        t0 = time.time()
+        r = requests.post("https://api.tushare.pro", json={
+            "api_name": "trade_cal",
+            "token": config.TUSHARE_TOKEN,
+            "params": {"exchange": "SSE", "start_date": "20260101", "end_date": "20260101"},
+        }, timeout=5)
+        latency = (time.time() - t0) * 1000
+        if r.status_code == 200:
+            data = r.json()
+            if data.get("code") == 0:
+                results["tushare"] = {"reachable": True, "latency_ms": round(latency, 0), "message": "正常"}
+                healthy_count += 1
+            else:
+                results["tushare"] = {"reachable": False, "latency_ms": round(latency, 0), "message": f"API错误: {data.get('msg', 'unknown')}"}
+        else:
+            results["tushare"] = {"reachable": False, "latency_ms": round(latency, 0), "message": f"HTTP {r.status_code}"}
+    except Exception as e:
+        results["tushare"] = {"reachable": False, "latency_ms": 0, "message": str(e)[:80]}
+
+    # Finnhub
+    total += 1
+    try:
+        finnhub_key = os.getenv("FINNHUB_KEY", "")
+        t0 = time.time()
+        r = requests.get(f"https://finnhub.io/api/v1/quote?symbol=AAPL&token={finnhub_key}", timeout=5)
+        latency = (time.time() - t0) * 1000
+        if r.status_code == 200:
+            data = r.json()
+            if "c" in data:
+                results["finnhub"] = {"reachable": True, "latency_ms": round(latency, 0), "message": f"AAPL ${data.get('c', '?')}"}
+                healthy_count += 1
+            elif data.get("error"):
+                results["finnhub"] = {"reachable": False, "latency_ms": round(latency, 0), "message": data.get("error", "API错误")}
+            else:
+                results["finnhub"] = {"reachable": True, "latency_ms": round(latency, 0), "message": "正常"}
+                healthy_count += 1
+        else:
+            results["finnhub"] = {"reachable": False, "latency_ms": round(latency, 0), "message": f"HTTP {r.status_code}"}
+    except Exception as e:
+        results["finnhub"] = {"reachable": False, "latency_ms": 0, "message": str(e)[:80]}
+
+    # yfinance (通过 Finnhub 间接验证，不做额外请求)
+    total += 1
+    try:
+        import yfinance as yf
+        t0 = time.time()
+        tk = yf.Ticker("AAPL")
+        info = tk.info
+        latency = (time.time() - t0) * 1000
+        if info and info.get("symbol"):
+            results["yfinance"] = {"reachable": True, "latency_ms": round(latency, 0), "message": "正常"}
+            healthy_count += 1
+        else:
+            results["yfinance"] = {"reachable": False, "latency_ms": round(latency, 0), "message": "返回空数据"}
+    except Exception as e:
+        results["yfinance"] = {"reachable": False, "latency_ms": 0, "message": str(e)[:80]}
+
+    # 综合状态
+    if healthy_count == total:
+        overall = "healthy"
+    elif healthy_count > 0:
+        overall = "degraded"
+    else:
+        overall = "down"
+
+    results["overall"] = overall
+    results["healthy_count"] = healthy_count
+    results["total_count"] = total
+    results["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S")
+
+    return results
+

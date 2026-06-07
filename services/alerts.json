@@ -1,0 +1,28 @@
+[
+ {
+  "id": 1,
+  "type": "price_break",
+  "params": {
+   "code": "000001",
+   "threshold": 15,
+   "direction": "above"
+  },
+  "enabled": true,
+  "created": "2026-06-07 19:51",
+  "last_triggered": null,
+  "trigger_count": 0
+ },
+ {
+  "id": 2,
+  "type": "pct_change",
+  "params": {
+   "code": "000001",
+   "threshold_pct": 5,
+   "direction": "up"
+  },
+  "enabled": true,
+  "created": "2026-06-07 19:55",
+  "last_triggered": null,
+  "trigger_count": 0
+ }
+]

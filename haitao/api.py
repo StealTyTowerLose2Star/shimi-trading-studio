@@ -330,3 +330,13 @@ def api_analyze_symbol(symbol):
     """单只股票深度分析"""
     result = analyze_gold_pick(symbol.strip().upper())
     return jsonify(result)
+
+
+# ─── 盈亏追踪 API ──────────────────────────
+
+@bp.route("/trades/pnl-report")
+def api_us_pnl_report():
+    """美股交易盈亏统计"""
+    from haitao.us_pnl import calculate_pnl
+    period = request.args.get("period", "month")
+    return jsonify(calculate_pnl(period=period))

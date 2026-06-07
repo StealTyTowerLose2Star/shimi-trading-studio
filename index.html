@@ -236,6 +236,21 @@
     .sentiment-grid { grid-template-columns: repeat(2, 1fr); }
     #marketAdviceBanner > div { flex: 1 1 100%; }
   }
+
+  /* 🏛️ 双市场并排视图 — A股 | 美股 同屏显示 */
+  .unified-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .unified-split #ashareSection,
+  .unified-split #haitaoSection {
+    min-width: 0;
+    overflow: hidden;
+  }
+  @media (max-width: 1200px) {
+    .unified-split { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
@@ -846,6 +861,10 @@ async function refreshAll() {
   btn.textContent = '⏳ 刷新中...';
   btn.disabled = true;
   await loadDashboard();
+  // 如果在美股或同屏模式，也刷新美股数据
+  if (currentMarket !== 'ashare') {
+    try { await loadHaitaoDashboard(); } catch(e) { /* 静默 */ }
+  }
   btn.textContent = '🔄 刷新数据';
   btn.disabled = false;
 }
@@ -2141,16 +2160,31 @@ function switchMarket() {
   if (!ashare || !haitao) return;
   
   if (currentMarket === 'ashare') {
+    // → 美股
     ashare.style.display = 'none';
     haitao.style.display = '';
     currentMarket = 'us';
-    btn.textContent = '📊 A股';
+    btn.textContent = '🔀 总览';
     btn.style.border = '1px solid rgba(59,130,246,.3)';
     btn.style.background = 'rgba(59,130,246,.08)';
     btn.style.color = 'var(--blue, #60a5fa)';
     document.getElementById('dataSourceLabel').textContent = '🌊 海淘 · 美股';
+    document.querySelector('.dashboard').classList.remove('unified-split');
+    loadHaitaoDashboard();
+  } else if (currentMarket === 'us') {
+    // → 双市场并排
+    ashare.style.display = '';
+    haitao.style.display = '';
+    currentMarket = 'unified';
+    btn.textContent = '📊 A股';
+    btn.style.border = '1px solid rgba(34,197,94,.3)';
+    btn.style.background = 'rgba(34,197,94,.08)';
+    btn.style.color = 'var(--green)';
+    document.getElementById('dataSourceLabel').textContent = '🇨🇳+🌊 A股 · 美股 同屏';
+    document.querySelector('.dashboard').classList.add('unified-split');
     loadHaitaoDashboard();
   } else {
+    // → A股
     ashare.style.display = '';
     haitao.style.display = 'none';
     currentMarket = 'ashare';
@@ -2159,6 +2193,7 @@ function switchMarket() {
     btn.style.background = 'rgba(240,180,41,.08)';
     btn.style.color = 'var(--gold)';
     document.getElementById('dataSourceLabel').textContent = 'A股 · ' + new Date().toLocaleTimeString('zh-CN');
+    document.querySelector('.dashboard').classList.remove('unified-split');
   }
 }
 
@@ -2209,7 +2244,13 @@ function renderUSHots(data) {
   tbody.innerHTML = data.slice(0, 15).map(s => {
     const chg = s.change_pct || 0;
     return '<tr>' +
-      '<td style="color:var(--text-muted);font-size:11px;font-weight:6
+      '<td style="color:var(--text-muted);font-size:11px;font-weight:600">' + s.ticker + '</td>' +
+      '<td style="font-weight:600;font-size:12px">' + (s.name || '') + '</td>' +
+      '<td class="code-num" style="color:' + (chg >= 0 ? 'var(--green)' : 'var(--red)') + ';font-weight:700">$' + (s.price || 0).toFixed(2) + '</td>' +
+      '<td class="code-num" style="color:' + (chg >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%</td>' +
+    '</tr>';
+  });
+}
 function renderUSAdr(data) {
   const tbody = document.getElementById('usAdrBody');
   const count = document.getElementById('usAdrCount');

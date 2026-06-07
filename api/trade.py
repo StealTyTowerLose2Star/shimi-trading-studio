@@ -136,3 +136,51 @@ def api_delete_trade(trade_id):
     if "error" in result:
         return jsonify(result), 404
     return jsonify(result)
+
+
+# ─── 实时行情 ─────────────────────────────────
+
+@bp.route("/positions/realtime", methods=["POST"])
+def api_positions_realtime():
+    """获取持仓实时行情（东方财富盘中数据）"""
+    data = request.get_json(force=True, silent=True) or {}
+    codes = data.get("codes", [])
+    if not codes:
+        return jsonify({"error": "no codes", "prices": {}})
+
+    secids = []
+    for code in codes:
+        c = code.strip()
+        if c.startswith(("0", "3")):
+            secids.append(f"0.{c}")
+        elif c.startswith("6"):
+            secids.append(f"1.{c}")
+
+    if not secids:
+        return jsonify({"prices": {}})
+
+    import time as _time
+    try:
+        from curl_cffi import requests as cffi_requests
+        url = "http://80.push2.eastmoney.com/api/qt/ulist.np/get?fields=f2,f3,f12,f14&secids=" + ",".join(secids)
+        r = cffi_requests.get(url, timeout=5)
+        if r.status_code != 200:
+            return jsonify({"prices": {}, "error": f"HTTP {r.status_code}"})
+        raw = r.json()
+    except ImportError:
+        import requests as std_requests
+        url = "http://80.push2.eastmoney.com/api/qt/ulist.np/get?fields=f2,f3,f12,f14&secids=" + ",".join(secids)
+        r = std_requests.get(url, timeout=5)
+        if r.status_code != 200:
+            return jsonify({"prices": {}, "error": f"HTTP {r.status_code}"})
+        raw = r.json()
+
+    prices = {}
+    for item in raw.get("data", {}).get("diff", []):
+        prices[item["f12"]] = {
+            "price": item.get("f2"),
+            "change_pct": item.get("f3"),
+            "name": item.get("f14", ""),
+        }
+
+    return jsonify({"prices": prices, "timestamp": _time.strftime("%H:%M:%S")})

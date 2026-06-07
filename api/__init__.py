@@ -1,11 +1,19 @@
 """
 拾米交易工作室 - API 蓝图注册
+建筑师基础设施: 所有路由的装配点
 """
 from flask import Flask
 
 
 def register_blueprints(app: Flask):
-    """注册所有 API 蓝图到 Flask 应用"""
+    """注册所有 API 蓝图到 Flask 应用
+
+    蓝图清单 (按角色):
+      拾米A股: market, strategy, advice, trade, review, margin, alert
+      魔法师:   doubler
+      建筑师:   monitor
+      HiTao:    haitao
+    """
     from .market import bp as market_bp
     from .strategy import bp as strategy_bp
     from .advice import bp as advice_bp
@@ -14,6 +22,7 @@ def register_blueprints(app: Flask):
     from .doubler import bp as doubler_bp
     from .review import bp as review_bp
     from .margin import bp as margin_bp
+    from .alert import bp as alert_bp
 
     app.register_blueprint(market_bp)
     app.register_blueprint(strategy_bp)
@@ -23,6 +32,7 @@ def register_blueprints(app: Flask):
     app.register_blueprint(doubler_bp)
     app.register_blueprint(review_bp)
     app.register_blueprint(margin_bp)
+    app.register_blueprint(alert_bp)
 
     # 海淘美股模块
     try:
