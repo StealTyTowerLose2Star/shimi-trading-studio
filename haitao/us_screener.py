@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 FINNHUB_KEY = os.environ.get("FINNHUB_KEY", "")
 FH_BASE = "https://finnhub.io/api/v1"
-SCAN_DIR = "/root/shi-mi-dashboard/haitao/cache"
+SCAN_DIR = "/root/shimi-trading-studio/haitao/cache"
 CACHE_FILE = os.path.join(SCAN_DIR, "gold_picks.json")
 
 # ─── 筛选配置 ───────────────────────────

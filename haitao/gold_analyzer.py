@@ -282,7 +282,7 @@ def _grade(score: int) -> str:
 def analyze_top_picks(top_n: int = 10) -> List[dict]:
     """分析 Top N 黄金股"""
     # 从缓存加载金矿列表
-    cache_path = "/root/shi-mi-dashboard/haitao/cache/gold_picks.json"
+    cache_path = "/root/shimi-trading-studio/haitao/cache/gold_picks.json"
     if not os.path.exists(cache_path):
         return []
 
@@ -306,7 +306,7 @@ def analyze_top_picks(top_n: int = 10) -> List[dict]:
 
 def generate_report() -> dict:
     """生成完整投资报告（基于已缓存的扫描数据，不额外消耗API）"""
-    cache_path = "/root/shi-mi-dashboard/haitao/cache/gold_picks.json"
+    cache_path = "/root/shimi-trading-studio/haitao/cache/gold_picks.json"
     if not os.path.exists(cache_path):
         return {"error": "No scan cache yet", "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M")}
     

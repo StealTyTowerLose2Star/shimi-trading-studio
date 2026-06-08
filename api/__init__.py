@@ -38,9 +38,22 @@ def register_blueprints(app: Flask):
     app.register_blueprint(a_stock_cache_bp)
     app.register_blueprint(plan_1w_bp)
 
-    # 海淘美股模块
+    # ─── 海淘美股模块 (7个蓝图，对齐Shimi分层架构) ──────
     try:
-        from haitao.api import bp as haitao_bp
-        app.register_blueprint(haitao_bp)
+        from haitao.us_market import bp as haitao_market_bp
+        from haitao.us_scan import bp as haitao_scan_bp
+        from haitao.us_trade import bp as haitao_trade_bp
+        from haitao.us_review_bp import bp as haitao_review_bp
+        from haitao.us_doubler import bp as haitao_doubler_bp
+        from haitao.us_short import bp as haitao_short_bp
+        from haitao.us_leveraged import bp as haitao_leveraged_bp
+
+        app.register_blueprint(haitao_market_bp)
+        app.register_blueprint(haitao_scan_bp)
+        app.register_blueprint(haitao_trade_bp)
+        app.register_blueprint(haitao_review_bp)
+        app.register_blueprint(haitao_doubler_bp)
+        app.register_blueprint(haitao_short_bp)
+        app.register_blueprint(haitao_leveraged_bp)
     except Exception as e:
         print(f"⚠️ 海淘模块注册失败: {e}")

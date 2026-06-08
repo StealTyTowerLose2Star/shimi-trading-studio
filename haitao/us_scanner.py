@@ -17,6 +17,16 @@ from haitao.config import CACHE_TTL_SCAN
 logger = logging.getLogger(__name__)
 
 
+def _period_to_days(period: str) -> int:
+    """Convert yfinance-style period to approximate days"""
+    mapping = {
+        "1mo": 30, "3mo": 90, "6mo": 180,
+        "1y": 365, "2y": 730, "5y": 1825,
+        "ytd": 180, "max": 2555,
+    }
+    return mapping.get(period, 180)
+
+
 def score_stock(ticker: str, period: str = "6mo") -> dict:
     """对单只美股进行多因子评分（0-100）
 
@@ -30,7 +40,7 @@ def score_stock(ticker: str, period: str = "6mo") -> dict:
     Returns:
         dict with score, phase, signals, and details
     """
-    df = get_history(ticker, period=period)
+    df = get_history(ticker, days=_period_to_days(period))
     if df is None or len(df) < 20:
         return {
             "ticker": ticker, "score": 0, "phase": "数据不足",

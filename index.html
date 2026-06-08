@@ -745,6 +745,17 @@
     </div>
   </div>
 
+  <div class="row two-col">
+    <div class="card">
+      <div class="card-header"><span class="card-title">🚀 翻倍掘金</span><span class="badge badge-gold" id="usDoublerCount">--</span></div>
+      <table><thead><tr><th>代码</th><th>评分</th><th>启动模式</th><th>信号</th><th>现价</th></tr></thead><tbody id="usDoublerBody"></tbody></table>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">🔻 做空信号</span><span class="badge badge-red" id="usShortCount">--</span></div>
+      <table><thead><tr><th>代码</th><th>做空分</th><th>信号</th><th>现价</th></tr></thead><tbody id="usShortBody"></tbody></table>
+    </div>
+  </div>
+
   <div class="row">
     <div class="card">
       <div class="card-header"><span class="card-title">🔎 行情查询</span></div>
@@ -1016,7 +1027,7 @@ async function refreshAll() {
   loadPlan1W();
   // 如果在美股或同屏模式，也刷新美股数据
   if (currentMarket !== 'ashare') {
-    try { await loadHaitaoDashboard(); } catch(e) { /* 静默 */ }
+    try { refreshHaitao(); } catch(e) { /* 静默 */ }
   }
   btn.textContent = '🔄 刷新数据';
   btn.disabled = false;
@@ -2521,7 +2532,7 @@ function switchMarket() {
     btn.style.color = 'var(--blue, #60a5fa)';
     document.getElementById('dataSourceLabel').textContent = '🌊 海淘 · 美股';
     document.querySelector('.dashboard').classList.remove('unified-split');
-    loadHaitaoDashboard();
+    refreshHaitao();
   } else if (currentMarket === 'us') {
     // → 双市场并排
     ashare.style.display = '';
@@ -2533,7 +2544,7 @@ function switchMarket() {
     btn.style.color = 'var(--green)';
     document.getElementById('dataSourceLabel').textContent = '🇨🇳+🌊 A股 · 美股 同屏';
     document.querySelector('.dashboard').classList.add('unified-split');
-    loadHaitaoDashboard();
+    refreshHaitao();
   } else {
     // → A股
     ashare.style.display = '';
@@ -2716,6 +2727,8 @@ async function lookupUS() {
 
 async function refreshHaitao() {
   await loadHaitaoDashboard();
+  loadDoublerDiscovery();
+  loadShortDiscovery();
 }
 
 
@@ -2735,22 +2748,21 @@ async function goldPan(mode) {
   count.textContent = '⛏️';
   
   try {
-    const r = await fetchJSON('/api/us/screener/top');
-    const golds = r.golds || [];
-    const silvers = r.silvers || [];
-    const items = golds.concat(silvers).slice(0, 15);
-    count.textContent = golds.length + '金/' + silvers.length + '银';
+    const r = await fetchJSON('/api/us/gold/pan?mode=' + mode);
+    const results = r.results || [];
+    count.textContent = results.length + '只';
     
-    if (items.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">暂无扫描结果，点击运行扫描</td></tr>';
+    if (results.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">暂无结果</td></tr>';
       return;
     }
     
-    tbody.innerHTML = items.map(s => {
+    tbody.innerHTML = results.map(s => {
       const sc = s.score || 0;
-      const rating = sc >= 70 ? '🥇金矿' : (sc >= 50 ? '🥈银矿' : (sc >= 30 ? '🥉铜矿' : '🪨石矿'));
-      const signals = (s.signals || []).slice(0, 2).join(' / ');
-      const price = s.price || 0;
+      const rating = s.rating || (sc >= 70 ? '🥇金矿' : (sc >= 50 ? '🥈银矿' : (sc >= 30 ? '🥉铜矿' : '🪨石矿')));
+      const signals = (s.gold_signals || []).slice(0, 2).join(' / ');
+      const price = s.current_price || s.price || 0;
+      const ticker = s.ticker || s.symbol || '?';
       
       let bg = 'rgba(255,255,255,.02)'; let border = 'var(--text-muted)';
       if (sc >= 70) { bg = 'rgba(240,180,41,.08)'; border = 'var(--gold)'; }
@@ -2759,10 +2771,10 @@ async function goldPan(mode) {
       const scColor = sc >= 70 ? 'var(--gold)' : (sc >= 50 ? '#c0c0c0' : 'var(--text-muted)');
       
       return '<tr style="background:' + bg + ';border-left:3px solid ' + border + '">' +
-        '<td style="font-weight:600;font-size:12px">' + s.symbol + '</td>' +
+        '<td style="font-weight:600;font-size:12px">' + ticker + '</td>' +
         '<td style="color:' + scColor + ';font-weight:700;font-size:14px">' + sc + '</td>' +
         '<td style="font-size:11px;font-weight:600;color:' + scColor + '">' + rating + '</td>' +
-        '<td style="font-size:11px;color:var(--text-muted)">全市场</td>' +
+        '<td style="font-size:11px;color:var(--text-muted)">' + (mode==='hot'?'热门股':(mode==='adr'?'中概股':'涨幅榜')) + '</td>' +
         '<td style="font-size:11px">' + signals + '</td>' +
         '<td class="code-num" style="font-size:12px">$' + fmt(price, 2) + '</td>' +
         '</tr>';
@@ -2770,9 +2782,69 @@ async function goldPan(mode) {
   } catch(e) {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--red)">淘金失败: ' + e.message + '</td></tr>';
   }
+
 }
 
-// Override the old scanUS to use gold panning
+// ===== 🚀🔻 翻倍/做空双方向发现 =====
+async function loadDoublerDiscovery() {
+  const tbody = document.getElementById('usDoublerBody');
+  const count = document.getElementById('usDoublerCount');
+  try {
+    const r = await fetchJSON('/api/us/doubler/scan');
+    const results = (r.results || []).slice(0, 10);
+    count.textContent = results.length + '只';
+    if (results.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">暂无翻倍候选</td></tr>';
+      return;
+    }
+    tbody.innerHTML = results.map(s => {
+      const sc = s.score || 0;
+      const mode = s.D0_mode || '--';
+      const sig = (s.signals || []).slice(0, 2).join(' / ');
+      const price = s.current_price || 0;
+      const scColor = sc >= 70 ? 'var(--gold)' : (sc >= 50 ? 'var(--green)' : 'var(--text-muted)');
+      let bg = sc >= 70 ? 'rgba(240,180,41,.08)' : 'rgba(255,255,255,.02)';
+      return '<tr style="background:' + bg + '">' +
+        '<td style="font-weight:600;font-size:12px">' + (s.ticker || '?') + '</td>' +
+        '<td style="color:' + scColor + ';font-weight:700;font-size:14px">' + sc + '</td>' +
+        '<td style="font-size:11px;color:var(--text-muted)">' + mode + '</td>' +
+        '<td style="font-size:11px">' + sig + '</td>' +
+        '<td class="code-num">$' + fmt(price, 2) + '</td></tr>';
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--red)">加载失败</td></tr>';
+  }
+}
+
+async function loadShortDiscovery() {
+  const tbody = document.getElementById('usShortBody');
+  const count = document.getElementById('usShortCount');
+  try {
+    const r = await fetchJSON('/api/us/short/scan');
+    const candidates = (r.results && r.results.candidates) || [];
+    count.textContent = candidates.length + '只';
+    if (candidates.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">暂无做空信号 — 市场偏多</td></tr>';
+      return;
+    }
+    tbody.innerHTML = candidates.slice(0, 10).map(s => {
+      const sc = s.short_score || s.score || 0;
+      const sig = (s.signals || s.reasons || []).slice(0, 2).join(' / ');
+      const price = s.current_price || s.price || 0;
+      const scColor = sc >= 70 ? 'var(--red)' : (sc >= 50 ? '#ff6b35' : 'var(--text-muted)');
+      return '<tr>' +
+        '<td style="font-weight:600;font-size:12px">' + (s.ticker || s.symbol || '?') + '</td>' +
+        '<td style="color:' + scColor + ';font-weight:700;font-size:14px">' + sc + '</td>' +
+        '<td style="font-size:11px">' + sig + '</td>' +
+        '<td class="code-num">$' + fmt(price, 2) + '</td></tr>';
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">暂无做空信号</td></tr>';
+  }
+}
+
+// ===== Override old scanUS to use gold panning =====
+
 async function scanUS(mode) {
   goldPan(mode);
 }

@@ -4,7 +4,7 @@ import os, sys, json, time, requests
 
 KEY = os.environ.get("FINNHUB_KEY", "")
 BASE = "https://finnhub.io/api/v1"
-CACHE = "/root/shi-mi-dashboard/haitao/cache/gold_picks.json"
+CACHE = "/root/shimi-trading-studio/haitao/cache/gold_picks.json"
 BATCH = 300
 DELAY = 0.3
 MAX_BATCHES = 10  # 每轮3000只，用完日配额

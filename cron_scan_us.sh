@@ -7,14 +7,14 @@ set -a
 source /root/.hermes/.env
 set +a
 
-cd /root/shi-mi-dashboard
+cd /root/shimi-trading-studio
 source .venv/bin/activate
 
 echo "[$(date '+%Y-%m-%d %H:%M')] 海淘全市场扫描开始..."
 python3 -c "
 import os, sys
 os.environ['FINNHUB_KEY'] = os.environ.get('FINNHUB_KEY', '')
-sys.path.insert(0, '/root/shi-mi-dashboard')
+sys.path.insert(0, '/root/shimi-trading-studio')
 from haitao.us_screener import full_scan
 result = full_scan(max_batches=2)
 if result:
