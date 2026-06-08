@@ -47,7 +47,22 @@ def format_daily_digest(market_data: dict) -> str:
             lines.append(f"  · [{a_type}] {a_msg}")
         lines.append("")
 
-    if not any([a_stock, us, alerts]):
+    # 存储空间
+    storage = market_data.get("storage", {})
+    if storage:
+        disk = storage.get("disk_usage_pct", 0)
+        db_mb = storage.get("db_size_mb", 0)
+        if disk > 70 or db_mb > 100:
+            lines.append(f"💾 存储告警")
+            if disk > 80:
+                lines.append(f"  · ⚠️ 磁盘使用率 {disk}%！建议清理")
+            elif disk > 70:
+                lines.append(f"  · ⚡ 磁盘使用率 {disk}%，注意监控")
+            if db_mb > 100:
+                lines.append(f"  · 📦 数据库 {db_mb}MB，建议清理历史数据")
+            lines.append("")
+
+    if not any([a_stock, us, alerts, storage]):
         lines.append("ℹ️ 今日无特别市场数据或告警")
         lines.append("")
 

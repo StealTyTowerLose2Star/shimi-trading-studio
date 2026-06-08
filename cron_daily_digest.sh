@@ -5,8 +5,9 @@
 # ───────────────────────────────────────────────
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+# Hermes cron 从 /root/.hermes/scripts/ 执行本脚本副本，必须硬编码路径
+PROJECT_DIR="/root/shimi-trading-studio"
+cd "$PROJECT_DIR"
 
 echo "[$(date '+%Y-%m-%d %H:%M')] 📡 通讯员 · 生成每日收盘摘要"
 

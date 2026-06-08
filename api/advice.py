@@ -54,8 +54,8 @@ def api_portfolio_advice():
 
     for t in open_trades:
         code = t["code"]
-        entry = t["entry_price"]
-        qty = t["qty"]
+        entry = t["entry_price"] or 0
+        qty = t["qty"] or 0
         invested = entry * qty
         total_invested += invested
 

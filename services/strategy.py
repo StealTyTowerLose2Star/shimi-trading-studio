@@ -50,8 +50,9 @@ def run_trend_scan():
             short = row["ts_code"].replace(".SZ","").replace(".SH","").replace(".BJ","")
             chg_map[short] = float(row["pct_chg"])
 
-    # Pre-filter: top 20 by pct_chg
-    candidates = daily.sort_values("pct_chg", ascending=False).head(10)
+    # Pre-filter: top 20 by pct_chg (排除北证)
+    non_bj = daily[~daily["ts_code"].str.endswith(".BJ")] if isinstance(daily, pd.DataFrame) else daily
+    candidates = non_bj.sort_values("pct_chg", ascending=False).head(10)
     stock_codes = [c.replace(".SZ","").replace(".SH","").replace(".BJ","")
                    for c in candidates["ts_code"]]
 
@@ -99,6 +100,9 @@ def run_hybrid_scan():
     basic = get_stock_basic()
     if daily is None or isinstance(daily, dict):
         return {"picked": [], "total_scanned": 0}
+
+    # 排除北证标的
+    daily = daily[~daily["ts_code"].str.endswith(".BJ")]
 
     candidates = daily.sort_values("pct_chg", ascending=False).head(10)
     stock_codes = [c.replace(".SZ","").replace(".SH","").replace(".BJ","")
@@ -171,6 +175,9 @@ def run_dragon_scan():
     basic = get_stock_basic()
     if daily is None or isinstance(daily, dict):
         return {"picked": [], "total_scanned": 0}
+
+    # 排除北证标的
+    daily = daily[~daily["ts_code"].str.endswith(".BJ")]
 
     # Build maps
     name_map = {}

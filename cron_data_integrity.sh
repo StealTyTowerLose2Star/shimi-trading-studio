@@ -51,6 +51,48 @@ else
     _warn "备份目录不存在"
 fi
 
+# 6. 存储空间监控
+echo ""
+echo "  💾 存储空间:"
+DISK_USAGE=$(df -h / | awk 'NR==2{print $5}' | tr -d '%')
+DISK_AVAIL=$(df -h / | awk 'NR==2{print $4}')
+echo "     磁盘使用: ${DISK_USAGE}% (可用: ${DISK_AVAIL})"
+
+# 项目目录大小
+PROJ_SIZE=$(du -sh "$PROJECT_DIR" 2>/dev/null | cut -f1)
+echo "     项目目录: $PROJ_SIZE"
+
+# 数据库大小 (如果>100MB告警)
+DB_BYTES=$(stat -c%s shimi.db 2>/dev/null || echo 0)
+DB_MB=$((DB_BYTES / 1048576))
+echo "     数据库: ${DB_MB}MB"
+[ "$DB_MB" -gt 100 ] && _warn "数据库超过100MB (${DB_MB}MB)，建议清理"
+
+# 日志大小
+LOG_SIZE=$(du -sh logs/ 2>/dev/null | cut -f1)
+echo "     日志目录: ${LOG_SIZE:-0}"
+
+# 备份目录大小
+BACKUP_SIZE=$(du -sh "$BACKUP_DIR" 2>/dev/null | cut -f1)
+echo "     备份目录: ${BACKUP_SIZE:-0}"
+
+# 磁盘告警
+if [ "$DISK_USAGE" -gt 90 ]; then
+    _fail "磁盘使用率 ${DISK_USAGE}% > 90%！立即清理！"
+elif [ "$DISK_USAGE" -gt 80 ]; then
+    _warn "磁盘使用率 ${DISK_USAGE}% > 80%，建议清理"
+elif [ "$DISK_USAGE" -gt 70 ]; then
+    echo "  ⚡ 磁盘使用率 ${DISK_USAGE}%，注意监控"
+fi
+
+# 检查新生成的数据文件
+echo ""
+echo "  📁 最近新增文件 (24h内):"
+find "$PROJECT_DIR" -type f -mtime -1 \( -name "*.db" -o -name "*.json" -o -name "*.csv" \) \
+    -exec ls -lh {} \; 2>/dev/null | awk '{print "     " $NF " (" $5 ")"}' | head -5
+NEW_FILES=$(find "$PROJECT_DIR" -type f -mtime -1 \( -name "*.db" -o -name "*.json" \) 2>/dev/null | wc -l)
+[ "$NEW_FILES" -gt 0 ] && echo "     共 $NEW_FILES 个新数据文件"
+
 echo ""
 echo "──────────────────────────────────────────"
 echo "  通过:$PASS  警告:$WARN  失败:$FAIL"

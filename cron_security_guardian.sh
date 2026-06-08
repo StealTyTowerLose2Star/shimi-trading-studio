@@ -1,10 +1,11 @@
 #!/bin/bash
 # 🧼 舒肤佳安全守卫 — Cron 调度包装脚本
 # 每日定时运行安全巡检并保存报告
+# Hermes cron 从 /root/.hermes/scripts/ 执行本脚本，必须硬编码路径
 set -e
 
-cd /root/shi-mi-dashboard
-source venv/bin/activate
+PROJECT_DIR="/root/shimi-trading-studio"
+cd "$PROJECT_DIR"
 
 TIMESTAMP=$(date '+%Y%m%d-%H%M%S')
 REPORT_DIR="/root/.hermes/cache/security"

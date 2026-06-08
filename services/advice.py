@@ -97,6 +97,11 @@ def generate_advice():
     dragon_map = to_map(dragon.get("picked", []))
 
     all_codes = set(list(trend_map.keys()) + list(hybrid_map.keys()) + list(dragon_map.keys()))
+    # 🚫 排除北证标的（用户无法交易，流动性低）
+    all_codes = {c for c in all_codes if not c.endswith('.BJ')}
+    trend_map = {k: v for k, v in trend_map.items() if k in all_codes}
+    hybrid_map = {k: v for k, v in hybrid_map.items() if k in all_codes}
+    dragon_map = {k: v for k, v in dragon_map.items() if k in all_codes}
 
     # 动态仓位计算
     market_phase = sentiment.get("phase", "未知")
@@ -223,7 +228,7 @@ def generate_advice():
     recommendations.sort(key=lambda x: (x["consensus"], -x["price"]), reverse=True)
     top_sectors = [s["name"] for s in (sectors[:5] if isinstance(sectors, list) else [])]
 
-    return {
+    result = {
         "market": {
             "phase": market_phase,
             "sentiment_score": sentiment.get("sentiment_score", 0),
@@ -236,9 +241,12 @@ def generate_advice():
         "recommendations": recommendations[:5],
         "generated_at": time.strftime("%H:%M:%S"),
     }
+
+    # 保存推荐记录到数据库（供周日复盘用）
     try:
         from db import save_recommendations
         save_recommendations(recommendations[:5], market_phase, time.strftime("%Y-%m-%d %H:%M:%S"))
     except Exception:
         pass
+
     return result

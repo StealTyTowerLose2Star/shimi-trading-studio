@@ -68,12 +68,15 @@ def api_pnl_report():
         return unauthorized()
     period = request.args.get("period", "month")
     trades = get_trades(user_id=user["id"])
-    closed = [t for t in trades if t.get("exit_price")]
 
     from collections import defaultdict
     buckets = defaultdict(lambda: {"trades": 0, "won": 0, "pnl": 0.0})
+    seen_dates = set()
 
-    for t in closed:
+    # 已平仓：按 exit 日期计入盈亏
+    for t in trades:
+        if not t.get("exit_price"):
+            continue
         exit_date = t.get("date", "")
         if not exit_date:
             continue
@@ -84,12 +87,34 @@ def api_pnl_report():
         else:
             key = exit_date
 
-        pnl = (t["exit_price"] - t["entry_price"]) * t["qty"] if t["direction"] == "buy" \
-              else (t["entry_price"] - t["exit_price"]) * t["qty"]
+        entry_p = t.get("entry_price") or 0
+        qty = t.get("qty") or 0
+        exit_p = t.get("exit_price") or 0
+        pnl = (exit_p - entry_p) * qty if t["direction"] == "buy" \
+              else (entry_p - exit_p) * qty
         buckets[key]["trades"] += 1
         if pnl > 0:
             buckets[key]["won"] += 1
         buckets[key]["pnl"] += pnl
+        seen_dates.add(key)
+
+    # 持仓（未平仓）：按入场日期计入，盈亏=0
+    for t in trades:
+        if t.get("exit_price"):
+            continue
+        entry_date = t.get("date", "")
+        if not entry_date:
+            continue
+        if period == "month":
+            key = entry_date[:7]
+        elif period == "year":
+            key = entry_date[:4]
+        else:
+            key = entry_date
+        if key in seen_dates:
+            continue  # 该日期已有已平仓记录
+        buckets[key]  # 创建空记录 (0 trades, 0 won, 0 pnl)
+        seen_dates.add(key)
 
     result = []
     for k in sorted(buckets, reverse=True):
