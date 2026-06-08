@@ -10,7 +10,7 @@ PLUGINS_DIR = os.path.join(HERMES_HOME, "plugins")
 CRON_DIR = os.path.join(HERMES_HOME, "cron")
 CONFIG_PATH = os.path.join(HERMES_HOME, "config.yaml")
 ENV_PATH = os.path.join(HERMES_HOME, ".env")
-PROJECT_DIRS = ["/root/shi-mi-dashboard"]
+PROJECT_DIRS = ["/root/shimi-trading-studio", "/root/shi-mi-dashboard"]
 REPORT_DIR = os.path.join(HERMES_HOME, "cache", "security")
 
 # ─── 恶意代码特征 ─────────────────────────────────
