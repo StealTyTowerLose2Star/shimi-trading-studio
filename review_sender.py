@@ -13,16 +13,18 @@ from message_queue import enqueue
 
 
 def send(title: str, content: str) -> bool:
-    """将消息加入待发送队列（由 Agent 代发到微信）"""
+    """将消息通过 stdout 发送（cron --deliver weixin 会推送 stdout 到微信）"""
     # 写入日志
     log_path = os.path.join(os.path.dirname(__file__), "review_sender.log")
     with open(log_path, "a") as f:
         f.write(f"\n{'='*60}\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] {title}\n{'='*60}\n")
         f.write(content)
         f.write(f"\n{'='*60}\n\n")
-    # 入队
+    # 同时入队（备用）和输出到 stdout（cron 推送）
     enqueue(title, content)
-    print(f"[sender] ✅ 消息已入队，待 Agent 发送: {title}")
+    # 打印到 stdout — hermes cron --deliver weixin 会推送这个到微信
+    print(title)
+    print(content)
     return True
 
 

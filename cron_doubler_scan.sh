@@ -3,9 +3,10 @@
 # cron: 每天 15:30 (收盘后) 自动执行
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
-LOGDIR="$SCRIPT_DIR/logs"
+# Hermes cron 从 /root/.hermes/scripts/ 执行本脚本副本，必须硬编码项目路径
+PROJECT_DIR="/root/shimi-trading-studio"
+cd "$PROJECT_DIR"
+LOGDIR="$PROJECT_DIR/logs"
 mkdir -p "$LOGDIR"
 LOGFILE="$LOGDIR/doubler_scan_$(date +%Y%m%d).log"
 

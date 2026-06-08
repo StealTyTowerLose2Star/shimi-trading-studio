@@ -5,9 +5,10 @@
 # ───────────────────────────────────────────────
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Hermes cron 从 /root/.hermes/scripts/ 执行本脚本副本，必须硬编码项目路径
+PROJECT_DIR="/root/shimi-trading-studio"
 BACKUP_DIR="/root/shimi-backups"
-DB_FILE="$SCRIPT_DIR/shimi.db"
+DB_FILE="$PROJECT_DIR/shimi.db"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_FILE="$BACKUP_DIR/shimi_$TIMESTAMP.db.gz"
 KEEP_DAYS=30

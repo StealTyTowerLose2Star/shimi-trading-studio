@@ -6,6 +6,9 @@ shimi.db
 # Docker
 .env
 
+# Hermes本地令牌
+.local_token
+
 .DS_Store
 *.log
 *.pid

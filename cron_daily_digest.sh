@@ -56,7 +56,9 @@ try:
     # 格式化并发送
     digest = format_daily_digest(market_data)
     enqueue("📋 每日收盘摘要", digest, priority="normal")
-    print(f"✅ 摘要已入队 ({len(digest)} 字符)")
+    # 输出到 stdout — hermes cron --deliver weixin 会推送到微信
+    print("📋 每日收盘摘要")
+    print(digest)
 
 except Exception as e:
     print(f"❌ 摘要生成失败: {e}")

@@ -7,10 +7,11 @@
 set -euo pipefail
 
 ## ─── 路径 ──────────────────────────────────────
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOG_DIR="$SCRIPT_DIR/logs"
+# Hermes cron 从 /root/.hermes/scripts/ 执行本脚本副本，必须硬编码项目路径
+PROJECT_DIR="/root/shimi-trading-studio"
+LOG_DIR="$PROJECT_DIR/logs"
 LOG_FILE="$LOG_DIR/daily_refresh_$(date +%Y%m%d_%H%M%S).log"
-VENV_PYTHON="${SCRIPT_DIR}/.venv/bin/python3"
+VENV_PYTHON="${PROJECT_DIR}/.venv/bin/python3"
 SYSTEM_PYTHON="/usr/bin/python3"
 
 ## ─── 选择 Python ───────────────────────────────
@@ -36,12 +37,12 @@ echo "============================================"
 echo "📅 每日数据刷新 | $(date '+%Y-%m-%d %H:%M:%S')"
 echo "============================================"
 echo "Python: $PYTHON"
-echo "CWD:    $SCRIPT_DIR"
+echo "CWD:    $PROJECT_DIR"
 echo ""
 
 # ─── 第1步: 刷新当日全量数据 ───────────────
 echo "🔄 [1/3] 刷新当日全量缓存..."
-cd "$SCRIPT_DIR"
+cd "$PROJECT_DIR"
 $PYTHON -c "
 import sys
 sys.path.insert(0, '.')

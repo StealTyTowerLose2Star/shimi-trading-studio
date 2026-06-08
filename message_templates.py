@@ -1,92 +1,94 @@
+#!/usr/bin/env python3
 """
-拾米交易工作室 - 通讯员 · 消息模板系统
-职责: 统一消息格式，各角色共享
-
-使用:
-    from message_templates import format_review, format_alert
-    msg = format_review(review_data)
+拾米交易工作室 - 通讯员 · 消息模板
+提供统一的消息格式化函数
 """
-
-from datetime import datetime
-
-
-def format_header(title: str) -> str:
-    return f"📊 {title} | {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-
-
-def format_review(review_data: dict) -> str:
-    """格式化复盘报告"""
-    lines = [format_header("复盘报告")]
-    summary = review_data.get("summary", "")
-    if summary:
-        lines.append(f"\n📋 摘要: {summary}")
-
-    details = review_data.get("details", {})
-    if details.get("indices"):
-        lines.append("\n📈 指数:")
-        for idx in details["indices"][:4]:
-            lines.append(f"  {idx.get('name','?')}: {idx.get('change_pct',0):+.2f}%")
-
-    if details.get("hot_stocks"):
-        lines.append("\n🔥 热门股:")
-        for s in details["hot_stocks"][:5]:
-            lines.append(f"  {s.get('symbol','?')}: {s.get('change_pct',0):+.2f}%")
-
-    pnl = details.get("pnl", {}).get("summary", {})
-    if pnl:
-        lines.append(f"\n💰 盈亏: ${pnl.get('total_pnl',0):+.0f} | 胜率: {pnl.get('win_rate',0)}%")
-
-    return "\n".join(lines)
-
-
-def format_alert(alert_data: dict) -> str:
-    """格式化告警消息"""
-    lines = [format_header("🚨 系统告警")]
-    lines.append(f"\n类型: {alert_data.get('type', '?')}")
-    lines.append(f"消息: {alert_data.get('message', '?')}")
-    if alert_data.get("data"):
-        lines.append(f"数据: {alert_data['data']}")
-    lines.append(f"\n⏰ {alert_data.get('time', '?')}")
-    return "\n".join(lines)
-
-
-def format_doubler_update(picks: list) -> str:
-    """格式化翻倍股推荐更新"""
-    lines = [format_header("🚀 翻倍股推荐更新")]
-    lines.append(f"\n共 {len(picks)} 只推荐:\n")
-
-    for i, p in enumerate(picks[:5], 1):
-        lines.append(
-            f"  #{i} {p.get('code','?')} {p.get('name','?')} "
-            f"评分{p.get('score',0)}分 | "
-            f"催化剂: {p.get('catalyst',{}).get('cat_type','?')}"
-        )
-
-    return "\n".join(lines)
 
 
 def format_daily_digest(market_data: dict) -> str:
-    """格式化每日收盘摘要"""
-    lines = [format_header("📋 今日收盘摘要")]
+    """将 market_data 格式化为每日收盘摘要
 
-    # A股
-    if market_data.get("a_stock"):
-        a = market_data["a_stock"]
-        lines.append("\n🇨🇳 A股:")
-        lines.append(f"  上证: {a.get('shanghai',{}).get('change_pct',0):+.2f}%")
-        lines.append(f"  市场阶段: {a.get('phase','?')}")
-        lines.append(f"  建议仓位: {a.get('position','?')}")
+    消息格式: 📊 今日复盘 | 日期 | 市场阶段 | 核心发现
+    """
+    from datetime import datetime
 
-    # 美股
-    if market_data.get("us"):
-        u = market_data["us"]
-        lines.append("\n🌊 美股:")
-        lines.append(f"  S&P 500: {u.get('sp500_change',0):+.2f}%")
-        lines.append(f"  VIX: {u.get('vix','?')}")
+    date = datetime.now().strftime("%Y-%m-%d")
+    lines = [f"📊 拾米每日收盘摘要 | {date}", "━" * 40, ""]
 
-    # 告警
-    if market_data.get("alerts"):
-        lines.append(f"\n🚨 告警: {len(market_data['alerts'])}条")
+    # A股部分
+    a_stock = market_data.get("a_stock", {})
+    if a_stock:
+        phase = a_stock.get("phase", "?")
+        lines.append(f"🇨🇳 A股市场")
+        lines.append(f"  · 阶段: {phase}")
+        lines.append("")
 
-    lines.append(f"\n⏰ 生成时间: {datetime.now().strftime('%H:%M')}")
+    # 美股部分
+    us = market_data.get("us", {})
+    if us:
+        sp500 = us.get("sp500_change")
+        vix = us.get("vix")
+        if sp500 is not None or vix:
+            lines.append(f"🇺🇸 美股")
+            if sp500 is not None:
+                emoji = "🟢" if sp500 > 0 else "🔴" if sp500 < 0 else "⚪"
+                lines.append(f"  · S&P 500: {emoji} {sp500:+.2f}%")
+            if vix:
+                lines.append(f"  · VIX: {vix}")
+            lines.append("")
+
+    # 告警部分
+    alerts = market_data.get("alerts", [])
+    if alerts:
+        lines.append(f"🚨 系统告警 ({len(alerts)}条)")
+        for a in alerts[:5]:
+            a_type = a.get("type", "?")
+            a_msg = a.get("message", "")
+            lines.append(f"  · [{a_type}] {a_msg}")
+        lines.append("")
+
+    if not any([a_stock, us, alerts]):
+        lines.append("ℹ️ 今日无特别市场数据或告警")
+        lines.append("")
+
+    lines.append("━" * 40)
+    lines.append(f"⏰ 生成时间: {datetime.now().strftime('%H:%M')}")
+    lines.append("💡 每日18:00自动发送 | 通讯员")
+
     return "\n".join(lines)
+
+
+def format_alert(alert_type: str, message: str, severity: str = "warning") -> str:
+    """格式化系统告警消息
+
+    消息格式: 🚨 系统告警 | 级别 | 组件 | 建议
+    """
+    from datetime import datetime
+
+    return (
+        f"🚨 拾米系统告警\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"> 级别: {severity.upper()}\n"
+        f"> 组件: {alert_type}\n"
+        f"> 时间: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
+        f"\n{message}\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"💡 请检查系统状态"
+    )
+
+
+def format_doubler_signal(code: str, name: str, score: float, pattern: str, price: float) -> str:
+    """格式化翻倍股信号消息
+
+    消息格式: 🚀 翻倍股更新 | 新增X只 | 评分变化
+    """
+    return (
+        f"🚀 翻倍股信号\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"> 代码: {code} {name}\n"
+        f"> 评分: {score:.0f}/100\n"
+        f"> 形态: {pattern}\n"
+        f"> 当前价: ¥{price:.2f}\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"💡 进入推荐池，请评估"
+    )

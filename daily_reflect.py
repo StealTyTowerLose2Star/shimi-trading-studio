@@ -28,6 +28,9 @@ def send_msg(title, content):
         f.write(f"\n{'='*60}\n\n")
     from message_queue import enqueue
     enqueue(title, content)
+    # 同时输出到 stdout — hermes cron --deliver weixin 会推送这个到微信
+    print(title)
+    print(content)
     return True, ""
 
 

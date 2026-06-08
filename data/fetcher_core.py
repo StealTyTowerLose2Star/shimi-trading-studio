@@ -18,6 +18,18 @@ def get_ts():
     return ts.pro_api(config.TUSHARE_TOKEN)
 
 
+def ts_call(fn, max_retry=2):
+    """tushare API 调用重试包装器 (处理 Broken pipe/超时)"""
+    for attempt in range(max_retry + 1):
+        try:
+            return fn()
+        except Exception as e:
+            if attempt < max_retry and ('Broken pipe' in str(e) or 'Connection' in str(e) or 'Timeout' in str(e)):
+                time.sleep(1 * (attempt + 1))
+                continue
+            raise
+
+
 # ============================================================
 # 原始数据抓取（不含缓存）
 # ============================================================
@@ -49,12 +61,14 @@ def fetch_all_stocks_basic():
 
 def fetch_daily_data(trade_date):
     """获取某交易日全部股票行情"""
-    pro = get_ts()
-    df = pro.daily(trade_date=trade_date,
-                   fields="ts_code,open,high,low,close,pre_close,pct_chg,amount,vol")
-    if df.empty:
-        return None
-    return df
+    def _call():
+        pro = get_ts()
+        df = pro.daily(trade_date=trade_date,
+                       fields="ts_code,open,high,low,close,pre_close,pct_chg,amount,vol")
+        if df.empty:
+            return None
+        return df
+    return ts_call(_call)
 
 
 def fetch_daily_basic(trade_date):
