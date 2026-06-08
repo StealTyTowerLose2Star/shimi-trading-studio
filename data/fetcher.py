@@ -21,3 +21,19 @@ from position_manager import get_kline, batch_evaluate, evaluate_position
 
 # Re-export from realtime_scorer (maintained for backward compatibility)
 from realtime_scorer import trend_detect, hybrid_score, dragon_leader_score
+
+# ============================================================
+# 日级缓存版数据获取 (带本地持久)
+# ============================================================
+from data.fetcher_cached import (
+    # 行情 - 每日只调一次 Tushare
+    get_daily_cached,
+    get_daily_basic_cached,
+    get_stock_basic_cached,
+    get_latest_trade_date_cached,
+    # 批量刷新
+    refresh_daily,
+    refresh_all_recent,
+    get_cache_summary,
+    invalidate_cache,
+)

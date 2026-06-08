@@ -33,7 +33,7 @@ def analyze_portfolio(user_id: int):
             kline = get_kline(code, days=30)
             if kline is not None and len(kline) > 0:
                 current_price = float(kline["close"].iloc[-1])
-        except:
+        except Exception:
             pass
 
         pnl = (current_price - entry) * qty if t["direction"] == "buy" else (entry - current_price) * qty
@@ -66,13 +66,13 @@ def analyze_portfolio(user_id: int):
 
         trend = None
         try: trend = trend_detect(code)
-        except: pass
+        except Exception: pass
         hybrid = None
         try: hybrid = hybrid_score(code)
-        except: pass
+        except Exception: pass
         dragon = None
         try: dragon = dragon_leader_score(code)
-        except: pass
+        except Exception: pass
 
         tb = trend and trend["total_score"] >= 50
         hb = hybrid and hybrid["score"] >= 45
@@ -133,7 +133,12 @@ def analyze_portfolio(user_id: int):
                 trail = ev.get("trailing_level", 0)
                 if trail >= 1:
                     scenario += "·浮动止盈已激活 ✅" if trail == 1 else "·已锁定利润 ✅"
-        except:
+                # 提取止损价与目标价
+                _stop_loss_price = ev.get("current_stop_loss")
+                _targets = ev.get("targets", [])
+        except Exception:
+            _stop_loss_price = None
+            _targets = []
             pass
 
         positions.append({
@@ -142,6 +147,13 @@ def analyze_portfolio(user_id: int):
             "qty": qty, "invested": round(invested, 2),
             "pnl": round(pnl, 2), "pnl_pct": round(pnl_pct, 1),
             "stop_loss": sl_label, "distance_to_sl": distance_to_sl,
+            "stop_loss_price": round(_stop_loss_price, 2) if _stop_loss_price else None,
+            "target_1_price": round(_targets[0]["price"], 2) if len(_targets) > 0 else None,
+            "target_1_gain": _targets[0].get("gain", "") if len(_targets) > 0 else "",
+            "target_2_price": round(_targets[1]["price"], 2) if len(_targets) > 1 else None,
+            "target_2_gain": _targets[1].get("gain", "") if len(_targets) > 1 else "",
+            "target_3_price": round(_targets[2]["price"], 2) if len(_targets) > 2 else None,
+            "target_3_gain": _targets[2].get("gain", "") if len(_targets) > 2 else "",
             "advice": advice, "action": action, "reason": reason, "scenario": scenario,
             "trend_score": trend["total_score"] if trend else None,
             "trend_stage": trend["stage"] if trend else None,

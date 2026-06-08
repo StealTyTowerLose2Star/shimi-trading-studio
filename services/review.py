@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 
+from logger import get_logger
+
 from db import (
     get_recommendations,
     get_all_recommendations,
@@ -17,13 +19,15 @@ from db import (
 from realtime_scorer import get_kline
 from data.fetcher import fetch_sectors, fetch_sector_flow
 
+logger = get_logger("services.review")
+
 # Re-export weekly review for backward compatibility
 # (removed due to circular import — import from services.review_weekly directly)
 
 
 # ─── 工具函数 ──────────────────────────────────────────
 
-def _parse_price_from_label(label: str) -> float:
+def parse_price_from_label(label: str) -> float:
     """从 '¥15.20 (-5.0%)' 格式中提取数值 15.20"""
     if not label or not isinstance(label, str):
         return 0.0
@@ -33,7 +37,7 @@ def _parse_price_from_label(label: str) -> float:
     return 0.0
 
 
-def _get_current_price(code: str) -> float:
+def get_current_price(code: str) -> float:
     """获取个股最新收盘价"""
     try:
         kline = get_kline(code, days=10)
@@ -44,7 +48,7 @@ def _get_current_price(code: str) -> float:
     return None
 
 
-def _calc_ma20(code: str) -> float:
+def calc_ma20(code: str) -> float:
     """计算个股 MA20（20日均线），需至少 20 个交易日数据"""
     try:
         kline = get_kline(code, days=60)
@@ -55,7 +59,7 @@ def _calc_ma20(code: str) -> float:
     return None
 
 
-def _tech_phase(kline: pd.DataFrame) -> str:
+def tech_phase(kline: pd.DataFrame) -> str:
     """判断股票当前技术阶段：鱼头/鱼身/鱼尾"""
     if kline is None or len(kline) < 30:
         return "未知"
@@ -86,7 +90,7 @@ def _tech_phase(kline: pd.DataFrame) -> str:
     return "鱼身"
 
 
-def _ma_alignment(kline: pd.DataFrame) -> str:
+def ma_alignment(kline: pd.DataFrame) -> str:
     """MA排列描述"""
     if kline is None or len(kline) < 20:
         return "数据不足"
@@ -108,7 +112,7 @@ def _ma_alignment(kline: pd.DataFrame) -> str:
         return "震荡整理 ➡️"
 
 
-def _volume_analysis(kline: pd.DataFrame) -> str:
+def volume_analysis(kline: pd.DataFrame) -> str:
     """成交量变化分析"""
     if kline is None or len(kline) < 10:
         return "数据不足"
@@ -124,12 +128,12 @@ def _volume_analysis(kline: pd.DataFrame) -> str:
         return "量能正常 →"
 
 
-def _analyze_failure_reason(code: str, name: str) -> str:
+def analyze_failure_reason(code: str, name: str) -> str:
     """分析"不及预期"的原因：大盘影响/个股弱势/板块退潮"""
     reasons = []
     try:
         # 1. 大盘影响 — 检查三大指数最近5日表现
-        indices = _get_index_performance()
+        indices = get_index_performance()
         if indices:
             avg_idx_chg = sum(indices.values()) / len(indices)
             if avg_idx_chg < -3:
@@ -174,7 +178,7 @@ def _analyze_failure_reason(code: str, name: str) -> str:
     return "；".join(reasons)
 
 
-def _get_index_performance() -> dict:
+def get_index_performance() -> dict:
     """获取三大指数近5日涨跌幅"""
     result = {}
     try:
@@ -203,15 +207,15 @@ def run_daily_review() -> dict:
     Returns:
         dict: 复盘报告内容
     """
-    print("📊 开始每日复盘...")
+    logger.info("开始每日复盘...")
 
     recs = get_recommendations(days_ago=3)
     if not recs:
         msg = "⚠️ 3天前无推荐记录，跳过每日复盘"
-        print(msg)
+        logger.info(msg)
         return {"error": msg, "items": [], "summary": {}}
 
-    print(f"📋 共找到 {len(recs)} 条推荐记录")
+    logger.info(f"共找到 {len(recs)} 条推荐记录")
 
     items = []
     total_pnl = 0.0
@@ -233,7 +237,7 @@ def run_daily_review() -> dict:
             continue
 
         # 获取最新价
-        current_price = _get_current_price(code)
+        current_price = get_current_price(code)
         if current_price is None or current_price <= 0:
             items.append({
                 "code": code, "name": name,
@@ -247,15 +251,15 @@ def run_daily_review() -> dict:
         change_pct = round((current_price - rec_price) / rec_price * 100, 2)
 
         # 止损/止盈检查
-        sl_price = _parse_price_from_label(sl_label)
-        t1_price = _parse_price_from_label(t1_label)
+        sl_price = parse_price_from_label(sl_label)
+        t1_price = parse_price_from_label(t1_label)
 
         _hit_sl = sl_price > 0 and current_price <= sl_price
         _hit_t1 = t1_price > 0 and current_price >= t1_price
         _below_ma20 = False
 
         # MA20检查
-        ma20 = _calc_ma20(code)
+        ma20 = calc_ma20(code)
         if ma20 is not None:
             _below_ma20 = current_price < ma20
 
@@ -281,7 +285,7 @@ def run_daily_review() -> dict:
         # 不及预期原因分析
         fail_reason = None
         if change_pct < -5:
-            fail_reason = _analyze_failure_reason(code, name)
+            fail_reason = analyze_failure_reason(code, name)
 
         item = {
             "code": code,
@@ -344,8 +348,8 @@ def run_daily_review() -> dict:
     )
 
     content["report_id"] = report_id
-    print(f"✅ 每日复盘完成 (ID={report_id})")
-    print(f"   {summary_text}")
+    logger.info(f"每日复盘完成 (ID={report_id})")
+    logger.info(summary_text)
     return content
 
 
@@ -366,5 +370,5 @@ if __name__ == "__main__":
         from services.review_weekly import run_weekly_review
         result = run_weekly_review()
 
-    print("\n📄 报告摘要:")
-    print(json.dumps(result.get("summary", result), ensure_ascii=False, indent=2))
+    logger.info("报告摘要:")
+    logger.info(json.dumps(result.get("summary", result), ensure_ascii=False, indent=2))

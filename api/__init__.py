@@ -9,7 +9,7 @@ def register_blueprints(app: Flask):
     """注册所有 API 蓝图到 Flask 应用
 
     蓝图清单 (按角色):
-      拾米A股: market, strategy, advice, trade, review, margin, alert
+      拾米A股: market, strategy, advice, trade, review, margin, alert, a_stock_cache
       魔法师:   doubler
       建筑师:   monitor
       HiTao:    haitao
@@ -23,6 +23,8 @@ def register_blueprints(app: Flask):
     from .review import bp as review_bp
     from .margin import bp as margin_bp
     from .alert import bp as alert_bp
+    from .a_stock_cache import bp as a_stock_cache_bp
+    from .plan_1w import bp as plan_1w_bp
 
     app.register_blueprint(market_bp)
     app.register_blueprint(strategy_bp)
@@ -33,6 +35,8 @@ def register_blueprints(app: Flask):
     app.register_blueprint(review_bp)
     app.register_blueprint(margin_bp)
     app.register_blueprint(alert_bp)
+    app.register_blueprint(a_stock_cache_bp)
+    app.register_blueprint(plan_1w_bp)
 
     # 海淘美股模块
     try:

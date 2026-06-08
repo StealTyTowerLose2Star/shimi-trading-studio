@@ -170,7 +170,7 @@ def get_us_trade_summary(user_id: int = None) -> dict:
                     pnl = (current - t["entry_price"]) * t["qty"] if t["direction"] == "buy" \
                           else (t["entry_price"] - current) * t["qty"]
                     unrealized_pnl += pnl
-            except:
+            except Exception:
                 pass
 
         return {

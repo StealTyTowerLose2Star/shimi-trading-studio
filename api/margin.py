@@ -33,40 +33,42 @@ def _get_user_holdings():
 
 @bp.route("/margin", methods=["GET"])
 def margin_ranking():
-    """获取融资融券排行
+    """获取个股融资融券数据
 
     Query params:
-        code (str, optional): 查询单只股票，如 000001
-        top (int, optional): 返回前 N 条，默认 20
+        code (str, required): 股票代码，如 000001 或 000001.SZ
+        top (int, optional): 忽略 (已废弃)
 
     Returns:
-        JSON: 融资融券排行列表
+        JSON: 该股票融资融券详情
     """
     code = request.args.get("code", "").strip()
-    top = request.args.get("top", 20, type=int)
 
-    data = get_margin_detail()
+    if not code:
+        return jsonify({
+            "data": [],
+            "hint": "使用 ?code=000001 查询个股融资融券",
+        })
+
+    # 支持纯数字或带后缀
+    query_code = code.upper()
+    if not query_code.endswith(".SZ") and not query_code.endswith(".SH"):
+        # 自动补全后缀
+        if query_code.startswith("6") or query_code.startswith("9"):
+            query_code += ".SH"
+        elif query_code.startswith("0") or query_code.startswith("3"):
+            query_code += ".SZ"
+        else:
+            query_code += ".SH"
+
+    data = get_margin_detail(ts_code=query_code)
 
     if isinstance(data, dict) and "error" in data:
-        return jsonify({"error": data["error"]}), 500
+        return jsonify({"error": data["error"], "data": []}), 404
 
-    if not isinstance(data, list):
-        return jsonify({"error": "数据格式异常"}), 500
-
-    if code:
-        # 查询单只股票 — 支持纯数字或带后缀
-        query = code.upper()
-        filtered = [item for item in data if query in item.get("ts_code", "")]
-        if not filtered:
-            return jsonify({"error": f"未找到股票 {code} 的融资融券数据"}), 404
-        return jsonify({"code": query, "data": filtered[0]})
-
-    # 返回排行
-    result = data[:top]
     return jsonify({
-        "total": len(data),
-        "top": top,
-        "data": result,
+        "code": query_code,
+        "data": [data] if isinstance(data, dict) else data,
     })
 
 
@@ -83,24 +85,22 @@ def portfolio_margin():
     if not holdings:
         return jsonify({"error": "未获取到持仓数据或持仓为空"}), 404
 
-    data = get_margin_detail()
-    if isinstance(data, dict) and "error" in data:
-        return jsonify({"error": data["error"]}), 500
-
-    # 匹配持仓
-    holdings_set = set()
-    for code in holdings:
-        # 标准化：去掉 .SZ/.SH 后缀
-        c = code.replace(".SZ", "").replace(".SH", "").upper()
-        holdings_set.add(c)
-
+    # 逐只查询持仓的融资融券
     matched = []
-    for item in data:
-        ts_code = item.get("ts_code", "")
-        c = ts_code.replace(".SZ", "").replace(".SH", "").upper()
-        if c in holdings_set:
-            matched.append(item)
-            holdings_set.discard(c)  # 避免重复
+    for code in holdings:
+        # 标准化代码
+        c = code.replace(".SZ", "").replace(".SH", "").upper()
+        if c.startswith("6") or c.startswith("9"):
+            query = c + ".SH"
+        elif c.startswith("0") or c.startswith("3"):
+            query = c + ".SZ"
+        else:
+            query = c + ".SH"
+
+        data = get_margin_detail(ts_code=query)
+        if isinstance(data, dict) and "error" not in data:
+            data["code"] = code
+            matched.append(data)
 
     return jsonify({
         "total": len(matched),

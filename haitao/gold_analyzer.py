@@ -108,7 +108,7 @@ def _get_quote(symbol: str) -> dict:
                 "open": float(q.get("o", q.get("c", 0))),
                 "prev_close": float(q.get("pc", q.get("c", 0))),
             }
-    except:
+    except Exception:
         pass
     return {}
 

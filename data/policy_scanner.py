@@ -79,7 +79,7 @@ def _search_cninfo(keyword, start_date, end_date, size=15):
         r.encoding = "utf-8"
         j = r.json()
         return j.get("announcements") or []
-    except:
+    except Exception:
         return []
 
 

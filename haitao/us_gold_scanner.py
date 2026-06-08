@@ -287,7 +287,7 @@ def _score_catalyst(ticker: str, tech: dict, df: pd.DataFrame, signals: list) ->
                     elif days_to <= 30:
                         cs += 4
                         cat_info["earnings"] = {"days_to": days_to, "signal": f"{days_to}天"}
-    except:
+    except Exception:
         pass
 
     # ─── 估值简单判断 (5分) ─────────────
@@ -302,7 +302,7 @@ def _score_catalyst(ticker: str, tech: dict, df: pd.DataFrame, signals: list) ->
         elif pe and pe > 50:
             cs -= 2
             signals.append(f"⚠️ 高PE({pe:.1f})")
-    except:
+    except Exception:
         pass
 
     return max(-5, min(35, cs)), cat_info
@@ -348,7 +348,7 @@ def gold_pan(tickers: List[str]) -> List[dict]:
                 r = f.result(timeout=20)  # 20s per ticker max
                 if "error" not in r:
                     results.append(r)
-            except:
+            except Exception:
                 pass
     results.sort(key=lambda x: x.get("score", 0), reverse=True)
     return results

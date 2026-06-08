@@ -39,7 +39,7 @@ def detect_consecutive_up(ts_code, days=5):
             else:
                 break
         return consecutive
-    except:
+    except Exception:
         return 0
 
 
@@ -85,7 +85,7 @@ def fetch_dragon_tiger_signals():
             elif net > 0:
                 signals[short] = 1
         return signals
-    except:
+    except Exception:
         return {}
 
 
@@ -120,7 +120,7 @@ def fetch_moneyflow_signals():
             elif net_main > 500:
                 signals[short] = 2
         return signals
-    except:
+    except Exception:
         return {}
 
 

@@ -32,7 +32,7 @@ def fetch_sentiment():
                     df["ma20"] = df["close"].rolling(20).mean()
                     df["ma60"] = df["close"].rolling(60).mean()
                     index_data[name] = df
-            except:
+            except Exception:
                 pass
 
         if not index_data:

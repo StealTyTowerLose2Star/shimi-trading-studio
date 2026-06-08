@@ -32,7 +32,7 @@ def get_kline(code: str, days: int = 60, force: bool = False):
             return None
         df = df.sort_values("trade_date").reset_index(drop=True)
         return df
-    except:
+    except Exception:
         return None
 
 

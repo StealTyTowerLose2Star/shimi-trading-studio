@@ -177,9 +177,11 @@ def api_positions_realtime():
 
     prices = {}
     for item in raw.get("data", {}).get("diff", []):
+        raw_price = item.get("f2")
+        raw_pct = item.get("f3")
         prices[item["f12"]] = {
-            "price": item.get("f2"),
-            "change_pct": item.get("f3"),
+            "price": round(raw_price / 100, 2) if raw_price else None,
+            "change_pct": round(raw_pct / 100, 2) if raw_pct else None,
             "name": item.get("f14", ""),
         }
 

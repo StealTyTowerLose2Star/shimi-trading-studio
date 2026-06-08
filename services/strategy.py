@@ -73,7 +73,7 @@ def run_trend_scan():
                     "strength": r["strength"],
                     "trend_formed": bool(r["trend_formed"]),
                 })
-        except:
+        except Exception:
             continue
 
     results.sort(key=lambda x: x["trend_score"], reverse=True)
@@ -145,7 +145,7 @@ def run_hybrid_scan():
                     "d_safety": dims.get("d6_safety", 0),
                     "burst": dims.get("burst_bonus", 0),
                 })
-        except:
+        except Exception:
             pass
 
     results.sort(key=lambda x: x["score"], reverse=True)
@@ -216,7 +216,7 @@ def run_dragon_scan():
                     "d_time": dims.get("limit_time", 0),
                     "d_drive": dims.get("drive_effect", 0),
                 })
-        except:
+        except Exception:
             pass
 
     results.sort(key=lambda x: x["leader_score"], reverse=True)

@@ -24,5 +24,17 @@
   "created": "2026-06-07 19:55",
   "last_triggered": null,
   "trigger_count": 0
+ },
+ {
+  "id": 3,
+  "type": "strategy_signal",
+  "params": {
+   "strategy": "doubler",
+   "min_score": 80
+  },
+  "enabled": true,
+  "created": "2026-06-08 12:48",
+  "last_triggered": "2026-06-08 12:48",
+  "trigger_count": 1
  }
 ]

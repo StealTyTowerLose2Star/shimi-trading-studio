@@ -154,7 +154,7 @@ def generate_advice():
                                         (kline["low"]-close).abs()], axis=1).max(axis=1)
                         atr = float(tr.rolling(14).mean().iloc[-1])
                     break
-                except:
+                except Exception:
                     pass
 
         if atr and atr > 0:
@@ -239,6 +239,6 @@ def generate_advice():
     try:
         from db import save_recommendations
         save_recommendations(recommendations[:5], market_phase, time.strftime("%Y-%m-%d %H:%M:%S"))
-    except:
+    except Exception:
         pass
     return result

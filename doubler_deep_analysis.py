@@ -42,7 +42,7 @@ def get_kline(ts_code, days=90):
             KLINE_CACHE[key] = df
             KLINE_CACHE_TIME[key] = time.time()
             return df
-    except:
+    except Exception:
         pass
     return None
 
@@ -53,7 +53,7 @@ def get_daily_basic_safe(trade_date):
                             fields="ts_code,total_mv,circ_mv,turnover_rate,volume_ratio")
         if df is not None and not isinstance(df, dict) and len(df) > 0:
             return df
-    except:
+    except Exception:
         pass
     return None
 

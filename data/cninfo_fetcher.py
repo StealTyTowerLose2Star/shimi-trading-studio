@@ -127,7 +127,7 @@ def fetch_catalyst_announcements(start_date=None, end_date=None):
                 # 转换时间戳
                 try:
                     ann_date = datetime.fromtimestamp(ann_time / 1000).strftime("%Y-%m-%d")
-                except:
+                except Exception:
                     ann_date = start_date
 
                 all_events.append({

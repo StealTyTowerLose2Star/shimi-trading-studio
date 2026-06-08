@@ -15,6 +15,10 @@ import time
 from typing import Dict, List, Optional
 from datetime import datetime
 
+from logger import get_logger
+
+logger = get_logger("services.alert")
+
 # ─── 预警存储 ──────────────────────────────────────
 ALERT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "alerts.json")
 
@@ -25,7 +29,7 @@ def _load_alerts() -> List[Dict]:
         try:
             with open(ALERT_FILE) as f:
                 return json.load(f)
-        except:
+        except Exception:
             pass
     return []
 
@@ -61,8 +65,8 @@ ALERT_TYPES = {
     },
     "strategy_signal": {
         "name": "策略信号",
-        "params": {"strategy": "trend|hybrid|dragon", "min_score": "int"},
-        "desc": "策略评分超过阈值时触发",
+        "params": {"strategy": "trend|hybrid|dragon|doubler", "min_score": "int"},
+        "desc": "策略评分超过阈值时触发 (doubler=翻倍股推荐)",
     },
 }
 
@@ -153,7 +157,7 @@ def check_alerts(force: bool = False) -> List[Dict]:
                 last_dt = datetime.strptime(last, "%Y-%m-%d %H:%M")
                 if (datetime.now() - last_dt).total_seconds() < 300:
                     continue
-            except:
+            except Exception:
                 pass
 
         result = _check_single(alert)
@@ -209,7 +213,7 @@ def _check_price_break(aid: int, params: Dict) -> Optional[Dict]:
         if row.empty:
             return None
         price = float(row.iloc[0]["close"])
-    except:
+    except Exception:
         return None
 
     if (direction == "above" and price >= threshold) or \
@@ -245,7 +249,7 @@ def _check_pct_change(aid: int, params: Dict) -> Optional[Dict]:
         if row.empty:
             return None
         pct = float(row.iloc[0]["pct_chg"])
-    except:
+    except Exception:
         return None
 
     if (direction == "up" and pct >= threshold_pct) or \
@@ -280,7 +284,7 @@ def _check_volume_surge(aid: int, params: Dict) -> Optional[Dict]:
         if row.empty:
             return None
         vol_ratio = float(row.iloc[0].get("volume_ratio", 0))
-    except:
+    except Exception:
         return None
 
     if vol_ratio >= ratio:
@@ -299,13 +303,16 @@ def _check_strategy_signal(aid: int, params: Dict) -> Optional[Dict]:
     strategy = params.get("strategy", "trend")
     min_score = int(params.get("min_score", 50))
 
+    if strategy == "doubler":
+        return _check_doubler_signal(aid, min_score)
+
     try:
         from services.strategy import run_trend_scan, run_hybrid_scan, run_dragon_scan
         fns = {"trend": run_trend_scan, "hybrid": run_hybrid_scan, "dragon": run_dragon_scan}
         result = fns[strategy]()
         if not result or "picked" not in result:
             return None
-    except:
+    except Exception:
         return None
 
     high_scores = [p for p in result.get("picked", []) if p.get("total_score", p.get("score", 0)) >= min_score]
@@ -318,6 +325,53 @@ def _check_strategy_signal(aid: int, params: Dict) -> Optional[Dict]:
             "data": {"strategy": strategy, "count": len(high_scores), "top": top},
             "time": datetime.now().strftime("%H:%M:%S"),
         }
+    return None
+
+
+def _check_doubler_signal(aid: int, min_score: int) -> Optional[Dict]:
+    """检查翻倍股推荐信号 — 读取魔法师扫描结果"""
+    try:
+        import json, os
+        picks_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "..", "current_month_picks_v2.json"
+        )
+        if not os.path.exists(picks_path):
+            picks_path = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "..", "current_month_picks.json"
+            )
+        if not os.path.exists(picks_path):
+            return None
+
+        with open(picks_path) as f:
+            data = json.load(f)
+
+        top30 = data.get("top30", [])
+        high_scores = [p for p in top30 if p.get("score", 0) >= min_score]
+
+        if high_scores:
+            top = high_scores[0]
+            cat = top.get("catalyst", {})
+            return {
+                "alert_id": aid,
+                "type": "strategy_signal",
+                "message": (
+                    f"🔮翻倍股: {len(high_scores)}只≥{min_score}分 | "
+                    f"Top: {top['code']} {top['name']} {top['score']}分 "
+                    f"({cat.get('early_pattern','?')}: {cat.get('early_reason','?')})"
+                ),
+                "data": {
+                    "strategy": "doubler",
+                    "count": len(high_scores),
+                    "top_picks": high_scores[:5],
+                    "scan_time": data.get("scan_time", ""),
+                    "trade_date": data.get("trade_date", ""),
+                },
+                "time": datetime.now().strftime("%H:%M:%S"),
+            }
+    except Exception:
+        pass
     return None
 
 
@@ -346,4 +400,4 @@ def _push_to_queue(triggered: List[Dict]):
         with open(queue_path, "w") as f:
             json.dump(queue, f, indent=1, ensure_ascii=False)
     except Exception as e:
-        print(f"[alert] 消息队列投递失败: {e}")
+        logger.info(f"[alert] 消息队列投递失败: {e}")

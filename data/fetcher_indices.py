@@ -41,7 +41,7 @@ def fetch_indices():
                     "high": round(float(row["high"]), 2) if "high" in row else 0,
                     "low": round(float(row["low"]), 2) if "low" in row else 0,
                 })
-        except:
+        except Exception:
             pass
     return result
 

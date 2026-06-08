@@ -57,7 +57,7 @@ def predict_monthly_doublers():
     try:
         basic_df = pro.daily_basic(trade_date=today,
                                    fields="ts_code,total_mv,circ_mv,turnover_rate")
-    except:
+    except Exception:
         pass
     basic_map = {}
     if basic_df is not None and len(basic_df) > 0:
@@ -71,7 +71,7 @@ def predict_monthly_doublers():
         ym = today[:6]
         cat_result = scan_all_catalysts(ym, trade_date=f"{today[:4]}-{today[4:6]}-{today[6:]}")
         catalyst_scores = cat_result.get("stock_scores", {})
-    except:
+    except Exception:
         pass
 
     # 预加载本月首日全市场价 (1次API调用替代N次)
@@ -103,6 +103,13 @@ def predict_monthly_doublers():
         mtm_gain = 0
         if month_start_price and month_start_price > 0:
             mtm_gain = (close / month_start_price - 1) * 100
+
+        # 启动前期过滤: 排除涨幅过高标的
+        if mtm_gain > 80:
+            continue  # 月涨幅 >80%, 追高风险极大
+        if mtm_gain > 50 and d7 < 12:
+            continue  # 涨幅过高且催化剂不够强
+
         room = max(100 - mtm_gain, 10) / 100
 
         # 小盘弹性

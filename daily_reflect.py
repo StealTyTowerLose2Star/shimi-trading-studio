@@ -15,7 +15,7 @@ def read_file(path):
     try:
         with open(path) as f:
             return f.read()
-    except:
+    except Exception:
         return "(文件不存在)"
 
 

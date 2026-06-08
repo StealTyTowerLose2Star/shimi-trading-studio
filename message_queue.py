@@ -17,7 +17,7 @@ def enqueue(title: str, content: str):
         try:
             with open(QUEUE_PATH) as f:
                 queue = json.load(f)
-        except:
+        except Exception:
             queue = []
     queue.append({
         "title": title,
@@ -42,7 +42,7 @@ def dequeue_all():
         with open(QUEUE_PATH, "w") as f:
             json.dump([], f)
         return queue
-    except:
+    except Exception:
         return []
 
 

@@ -30,7 +30,7 @@ def fetch_latest_trade_date():
         if df.empty:
             return (date.today() - timedelta(days=1)).strftime("%Y%m%d")
         return df["trade_date"].iloc[0]
-    except:
+    except Exception:
         return (date.today() - timedelta(days=1)).strftime("%Y%m%d")
 
 
@@ -43,7 +43,7 @@ def fetch_all_stocks_basic():
         if df.empty:
             return {}
         return {row["ts_code"]: row.to_dict() for _, row in df.iterrows()}
-    except:
+    except Exception:
         return {}
 
 
@@ -66,7 +66,7 @@ def fetch_daily_basic(trade_date):
         if df.empty:
             return None
         return df
-    except:
+    except Exception:
         return None
 
 

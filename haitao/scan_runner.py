@@ -64,7 +64,7 @@ for bi in range(MAX_BATCHES):
         try:
             r = requests.get(f"{BASE}/quote?symbol={sym}&token={KEY}", timeout=8)
             q = r.json()
-        except:
+        except Exception:
             continue
 
         if not isinstance(q, dict) or not q.get("c"):

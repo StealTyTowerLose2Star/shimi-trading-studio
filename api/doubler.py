@@ -42,9 +42,8 @@ def api_doubler_history_refresh():
 # ═══════════════════════════════════════════════════════════════
 @bp.route("/recommend")
 def api_doubler_recommend():
-    """获取当月翻倍潜力股 (翻倍预测引擎)"""
-    from services.doubler_predictor import predict_monthly_doublers
-    result = cache_or_fetch("doubler_recommend", predict_monthly_doublers, 300)
+    """获取当月翻倍潜力股 (10维评分 + 启动前期检测 + 催化剂)"""
+    result = cache_or_fetch("doubler_recommend_v4", recommend_current_month, 300)
     return jsonify(result)
 
 
@@ -64,7 +63,7 @@ def api_doubler_recommend_refresh():
 @bp.route("/plan/10k")
 def api_doubler_plan_10k():
     """基于当月推荐池生成 1W 仓位方案"""
-    recommend = cache_or_fetch("doubler_recommend", recommend_current_month, 300)
+    recommend = cache_or_fetch("doubler_recommend_v4", recommend_current_month, 300)
     if isinstance(recommend, dict) and "elite_picks" in recommend:
         plan = position_plan_10k(recommend["elite_picks"])
         return jsonify({"recommend_time": recommend.get("scan_time"), **plan})

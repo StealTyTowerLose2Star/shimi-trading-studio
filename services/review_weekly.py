@@ -7,11 +7,15 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 
+from logger import get_logger
+
+logger = get_logger("services.review_weekly")
+
 from db import get_all_recommendations, save_review_report
 from realtime_scorer import get_kline
 from data.fetcher import fetch_sectors, fetch_sector_flow
-from services.review import (_get_current_price, _tech_phase, _ma_alignment,
-                           _volume_analysis)
+from services.review import (get_current_price, tech_phase, ma_alignment,
+                           volume_analysis)
 
 # ─── 每周复盘 ──────────────────────────────────────────
 
@@ -28,12 +32,12 @@ def run_weekly_review() -> dict:
     Returns:
         dict: 复盘报告内容
     """
-    print("📊 开始每周复盘...")
+    logger.info("开始每周复盘...")
 
     recs = get_all_recommendations(limit=200)
     if not recs:
         msg = "⚠️ 无推荐记录，跳过每周复盘"
-        print(msg)
+        logger.info(msg)
         return {"error": msg, "items": [], "summary": {}}
 
     # 筛选当月推荐（按 generated_at 的月份）
@@ -46,10 +50,10 @@ def run_weekly_review() -> dict:
 
     if not month_recs:
         msg = f"⚠️ 本月({current_month})无推荐记录，跳过每周复盘"
-        print(msg)
+        logger.info(msg)
         return {"error": msg, "items": [], "summary": {}}
 
-    print(f"📋 本月推荐 {len(month_recs)} 条，正在查找翻倍股...")
+    logger.info(f"本月推荐 {len(month_recs)} 条，正在查找翻倍股...")
 
     # 获取板块数据
     sector_flow = fetch_sector_flow() or []
@@ -65,7 +69,7 @@ def run_weekly_review() -> dict:
         if not code or rec_price <= 0:
             continue
 
-        current_price = _get_current_price(code)
+        current_price = get_current_price(code)
         if current_price is None or current_price <= 0:
             continue
 
@@ -74,13 +78,13 @@ def run_weekly_review() -> dict:
             continue
 
         change_pct = round((current_price - rec_price) / rec_price * 100, 2)
-        print(f"  🔍 发现翻倍股: {name}({code}) 推荐价¥{rec_price} → 现价¥{current_price} ({change_pct:+.2f}%)")
+        logger.info(f"发现翻倍股: {name}({code}) 推荐价¥{rec_price} → 现价¥{current_price} ({change_pct:+.2f}%)")
 
         # 技术分析
         kline = get_kline(code, days=120)
-        phase = _tech_phase(kline) if kline is not None else "数据不足"
-        ma_align = _ma_alignment(kline) if kline is not None else "数据不足"
-        vol_analysis = _volume_analysis(kline) if kline is not None else "数据不足"
+        phase = tech_phase(kline) if kline is not None else "数据不足"
+        ma_align = ma_alignment(kline) if kline is not None else "数据不足"
+        vol_analysis = volume_analysis(kline) if kline is not None else "数据不足"
 
         # 板块分析
         sector_analysis = _analyze_sector_for_stock(code, sector_flow)
@@ -137,11 +141,11 @@ def run_weekly_review() -> dict:
     )
 
     content["report_id"] = report_id
-    print(f"✅ 每周复盘完成 (ID={report_id})")
-    print(f"   {summary_text}")
+    logger.info(f"每周复盘完成 (ID={report_id})")
+    logger.info(summary_text)
     if total_doublers > 0:
         for d in doubler_items:
-            print(f"   🏆 {d['name']}({d['code']}) +{d['change_pct']:.2f}% → {d['advice']}")
+            logger.info(f"🏆 {d['name']}({d['code']}) +{d['change_pct']:.2f}% → {d['advice']}")
     return content
 
 

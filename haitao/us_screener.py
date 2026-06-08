@@ -56,7 +56,7 @@ def scan_batch(stocks: List[dict], start_idx: int = 0) -> List[dict]:
         try:
             r = requests.get(f"{FH_BASE}/quote?symbol={sym}&token={FINNHUB_KEY}", timeout=8)
             q = r.json()
-        except:
+        except Exception:
             continue
         
         if not isinstance(q, dict) or not q.get('c'): continue
@@ -140,7 +140,7 @@ def full_scan(max_batches: int = 2):
                 progress = saved.get('progress', 0)
                 existing_symbols = {p['symbol'] for p in all_picks}
                 logger.info(f"Loaded {len(all_picks)} existing picks, progress={progress}")
-        except:
+        except Exception:
             pass
     
     # Scan next batches

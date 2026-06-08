@@ -22,7 +22,7 @@ def _read_proc(path: str) -> str:
     try:
         with open(path) as f:
             return f.read()
-    except:
+    except Exception:
         return ""
 
 
@@ -75,7 +75,7 @@ def _get_memory() -> Dict:
             val_str = parts[1].strip().split()[0]
             try:
                 mem[key] = int(val_str) // 1024  # KB → MB
-            except:
+            except Exception:
                 pass
 
     total = mem.get("MemTotal", 0)
@@ -119,7 +119,7 @@ def _get_disk() -> Dict:
             "free_gb": free_gb,
             "percent": percent,
         }
-    except:
+    except Exception:
         return {"total_gb": 0, "used_gb": 0, "free_gb": 0, "percent": 0}
 
 
@@ -142,7 +142,7 @@ def _get_uptime() -> int:
     if data:
         try:
             return int(float(data.strip().split()[0]))
-        except:
+        except Exception:
             pass
     return 0
 

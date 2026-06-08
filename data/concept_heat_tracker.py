@@ -216,7 +216,7 @@ def _search_cninfo(keyword, days=7):
                          headers={"User-Agent": "Mozilla/5.0"})
         r.encoding = "utf-8"
         return (r.json().get("announcements") or [])
-    except:
+    except Exception:
         return []
 
 

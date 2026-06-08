@@ -37,7 +37,7 @@ def _get_finnhub():
         try:
             import finnhub
             _finnhub = finnhub.Client(api_key=FINNHUB_KEY)
-        except:
+        except Exception:
             pass
     return _finnhub
 
@@ -104,7 +104,7 @@ def _stooq_quote(ticker: str) -> dict:
         op = float(parts[3]) if parts[3] != "N/A" else price
         return {"price": price, "name": parts[8].strip(), "change": round(price-op,2) if op else 0,
                 "change_pct": round((price-op)/op*100,2) if op and op>0 else 0, "source": "stooq"}
-    except:
+    except Exception:
         return {}
 
 
@@ -143,7 +143,7 @@ def get_quotes(tickers: List[str]) -> List[dict]:
                         _set_cache(f"q_{t}", r, 60)
                         results[t] = r
                         continue
-                except: pass
+                except Exception: pass
                 time.sleep(0.5)
         
         # Finnhub unavailable: parallel Alpha Vantage for remaining
@@ -274,7 +274,7 @@ def _parse_yahoo_chart(data, ck):
             df = pd.DataFrame(recs)
             _set_cache(ck, df, 300)
             return df
-    except:
+    except Exception:
         pass
     return None
 

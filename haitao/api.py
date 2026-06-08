@@ -340,3 +340,19 @@ def api_us_pnl_report():
     from haitao.us_pnl import calculate_pnl
     period = request.args.get("period", "month")
     return jsonify(calculate_pnl(period=period))
+
+
+# ─── 复盘系统 API ──────────────────────────
+
+@bp.route("/review/daily", methods=["GET", "POST"])
+def api_us_review_daily():
+    """美股每日复盘"""
+    from haitao.us_review import run_daily_review
+    return jsonify(run_daily_review())
+
+
+@bp.route("/review/weekly", methods=["GET", "POST"])
+def api_us_review_weekly():
+    """美股每周复盘"""
+    from haitao.us_review import run_weekly_review
+    return jsonify(run_weekly_review())

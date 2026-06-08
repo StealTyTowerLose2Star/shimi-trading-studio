@@ -45,24 +45,24 @@ def _redis_get(key):
     try:
         raw = _get_redis().get(f"shimi:{key}")
         if raw: return json.loads(raw)
-    except: pass
+    except Exception: pass
     return None
 
 def _redis_set(key, data, ttl=None):
     try:
         _get_redis().setex(f"shimi:{key}", ttl or config.CACHE_TTL_DEFAULT, json.dumps(data, default=str))
-    except: pass
+    except Exception: pass
 
 def _redis_delete(key):
     try:
         _get_redis().delete(f"shimi:{key}")
-    except: pass
+    except Exception: pass
 
 def _redis_clear():
     try:
         for k in _get_redis().scan_iter("shimi:*"):
             _get_redis().delete(k)
-    except: pass
+    except Exception: pass
 
 # 统一接口
 def cache_get(key):

@@ -54,7 +54,7 @@ def get_kline(code: str, days: int = 120, force: bool = False):
             df["pct_chg"] = df["close"].pct_change() * 100
         _kline_cache[cache_key] = (df, time.time())
         return df
-    except:
+    except Exception:
         _kline_cache[cache_key] = (None, time.time())
         return None
 
@@ -216,7 +216,7 @@ def _block_time_to_minutes(bt: str) -> int:
     try:
         h, m = bt.split(":")
         return int(h) * 60 + int(m)
-    except: return 570
+    except Exception: return 570
 
 
 def dragon_leader_score(code: str, extra: dict = None):

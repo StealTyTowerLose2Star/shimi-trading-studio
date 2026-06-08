@@ -179,7 +179,7 @@ def update_progress():
                     (current, new_peak, round((new_peak / entry - 1) * 100, 1), rid)
                 )
                 updated += 1
-        except:
+        except Exception:
             continue
 
     conn.commit()
@@ -304,7 +304,7 @@ def verify_month(month=None):
                      datetime.now().strftime("%Y-%m-%d"), row["id"])
                 )
                 verified_count += 1
-        except:
+        except Exception:
             continue
 
     conn.commit()
