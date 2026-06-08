@@ -9,6 +9,11 @@ shimi.db
 # Hermes本地令牌
 .local_token
 
+# 运行时数据 (不入库)
+*.json
+!package.json
+
 .DS_Store
 *.log
 *.pid
+logs/

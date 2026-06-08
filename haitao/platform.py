@@ -66,14 +66,7 @@ class HiTaoPlatform:
 
         return {"mode": mode, "count": len(results), "results": results}
 
-    def check_short_candidates(self, tickers=None) -> dict:
-        """检查做空候选 → 调用 Magician 引擎"""
-        from magician.short_finder import scan_short_candidates
-        from haitao.config import DOUBLER_SEED_POOL
-
-        targets = tickers or DOUBLER_SEED_POOL
-        results = scan_short_candidates(targets)
-        return {"count": len(results), "results": results}
+    # check_short_candidates → 已迁移至 magician/platform.py (Magician职责)
 
     def run_gold_scan(self, mode: str = "hot") -> dict:
         """黄金挖掘扫描"""
