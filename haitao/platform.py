@@ -67,8 +67,8 @@ class HiTaoPlatform:
         return {"mode": mode, "count": len(results), "results": results}
 
     def check_short_candidates(self, tickers=None) -> dict:
-        """检查做空候选"""
-        from haitao.us_short_finder import scan_short_candidates
+        """检查做空候选 → 调用 Magician 引擎"""
+        from magician.short_finder import scan_short_candidates
         from haitao.config import DOUBLER_SEED_POOL
 
         targets = tickers or DOUBLER_SEED_POOL

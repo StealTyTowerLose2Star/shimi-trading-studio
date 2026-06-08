@@ -2790,7 +2790,7 @@ async function loadDoublerDiscovery() {
   const tbody = document.getElementById('usDoublerBody');
   const count = document.getElementById('usDoublerCount');
   try {
-    const r = await fetchJSON('/api/us/doubler/scan');
+    const r = await fetchJSON('/api/magician/doubler/scan');
     const results = (r.results || []).slice(0, 10);
     count.textContent = results.length + '只';
     if (results.length === 0) {
@@ -2820,7 +2820,7 @@ async function loadShortDiscovery() {
   const tbody = document.getElementById('usShortBody');
   const count = document.getElementById('usShortCount');
   try {
-    const r = await fetchJSON('/api/us/short/scan');
+    const r = await fetchJSON('/api/magician/short/scan');
     const candidates = (r.results && r.results.candidates) || [];
     count.textContent = candidates.length + '只';
     if (candidates.length === 0) {

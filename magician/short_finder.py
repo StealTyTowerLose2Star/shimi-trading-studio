@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 
 from haitao.us_fetcher import get_quotes, get_history, calc_technical_indicators, get_pre_post_market
-from haitao.config import SHORT_SCORE_THRESHOLD, CACHE_TTL_SCAN
+from magician.config import SHORT_SCORE_THRESHOLD, CATALYST_WEIGHTS
 from haitao.us_fetcher import _cached, _set_cache
 
 logger = logging.getLogger(__name__)

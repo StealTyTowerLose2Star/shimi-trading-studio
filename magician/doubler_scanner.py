@@ -24,14 +24,14 @@ import pandas as pd
 
 from haitao.us_fetcher import get_quotes, get_history, calc_technical_indicators
 from haitao.us_scanner import score_stock
-from haitao.config import (
+from magician.config import (
     DOUBLER_SEED_POOL, CATALYST_WEIGHTS,
     DOUBLER_SCORE_THRESHOLD,
     COILED_SPRING_MIN_DROP, COILED_SPRING_MAX_DROP,
     SILENT_ACCUM_DAYS, EARLY_WARMING_MIN_VOL,
     SMART_PULLBACK_MIN_DROP, SMART_PULLBACK_MAX_DROP,
-    CACHE_TTL_SCAN,
 )
+from haitao.config import CACHE_TTL_SCAN
 from haitao.us_fetcher import _cached, _set_cache
 
 logger = logging.getLogger(__name__)

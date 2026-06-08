@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 
 from haitao.us_fetcher import get_history, calc_technical_indicators
-from haitao.config import (
+from magician.config import (
     LEVERAGED_3X_ETFS,
     LEVERAGED_MAX_HOLD_DAYS,
     LEVERAGED_DECAY_WARN_PCT,

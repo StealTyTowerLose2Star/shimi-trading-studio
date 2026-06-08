@@ -228,7 +228,7 @@ def get_history(ticker: str, days: int = 60):
     """获取历史K线 — Yahoo/AV/Finnhub, 都受限时回退到5天"""
     ck = f"hist_{ticker}_{days}"
     c = _cached(ck, 300)
-    if c: return c
+    if c is not None: return c
     
     # Try Yahoo via curl_cffi
     try:

@@ -11,7 +11,7 @@
   本引擎对候选池做「翻倍概率排序」—— 综合考虑催化剂、空间、弹性
 
 用法:
-    from haitao.us_doubler_predictor import predict_doublers, predict_batch
+    from magician.doubler_predictor import predict_doublers, predict_batch
 
     result = predict_doublers(["NVDA", "AMD", "TSLA"])
     # result["NVDA"]["potential"]  — 预测潜力值
@@ -30,7 +30,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 from haitao.us_fetcher import get_history, calc_technical_indicators
-from haitao.config import (
+from magician.config import (
     DOUBLER_SEED_POOL,
     CATALYST_WEIGHTS,
     DOUBLER_SCORE_THRESHOLD,
