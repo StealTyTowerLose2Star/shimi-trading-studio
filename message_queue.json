@@ -1,102 +1,41 @@
 [
   {
-    "title": "平台启动",
-    "content": "A股交易平台底座已初始化",
-    "created_at": "2026-06-08 18:39:57"
+    "id": 1,
+    "title": "测试1",
+    "content": "内容1",
+    "priority": "normal",
+    "status": "delivered",
+    "retry_count": 0,
+    "created_at": "2026-06-08 21:57:57",
+    "sent_at": "2026-06-08 21:57:57",
+    "delivered_at": "2026-06-08 21:57:57",
+    "failed_at": null,
+    "error": null
   },
   {
-    "title": "平台启动",
-    "content": "A股交易平台底座已初始化",
-    "created_at": "2026-06-08 18:40:38"
+    "id": 2,
+    "title": "测试2",
+    "content": "内容2",
+    "priority": "normal",
+    "status": "pending",
+    "retry_count": 1,
+    "created_at": "2026-06-08 21:57:57",
+    "sent_at": "2026-06-08 21:57:57",
+    "delivered_at": null,
+    "failed_at": null,
+    "error": "网络超时"
   },
   {
-    "title": "平台启动",
-    "content": "A股交易平台底座已初始化",
-    "created_at": "2026-06-08 18:40:44"
-  },
-  {
-    "title": "平台启动",
-    "content": "A股交易平台底座已初始化",
-    "created_at": "2026-06-08 18:40:50"
-  },
-  {
-    "title": "平台启动",
-    "content": "A股交易平台底座已初始化",
-    "created_at": "2026-06-08 18:45:52"
-  },
-  {
-    "title": "平台启动",
-    "content": "A股交易平台底座已初始化",
-    "created_at": "2026-06-08 18:45:57"
-  },
-  {
-    "title": "平台启动",
-    "content": "A股交易平台底座已初始化",
-    "created_at": "2026-06-08 19:47:36"
-  },
-  {
-    "title": "平台启动",
-    "content": "A股交易平台底座已初始化",
-    "created_at": "2026-06-08 19:47:36"
-  },
-  {
-    "title": "平台启动",
-    "content": "A股交易平台底座已初始化",
-    "created_at": "2026-06-08 20:54:18"
-  },
-  {
-    "title": "平台启动",
-    "content": "A股交易平台底座已初始化",
-    "created_at": "2026-06-08 20:54:32"
-  },
-  {
-    "title": "平台启动",
-    "content": "A股交易平台底座已初始化",
-    "created_at": "2026-06-08 20:54:41"
-  },
-  {
-    "title": "平台启动",
-    "content": "A股交易平台底座已初始化",
-    "created_at": "2026-06-08 20:54:41"
-  },
-  {
-    "title": "平台启动",
-    "content": "A股交易平台底座已初始化",
-    "created_at": "2026-06-08 20:57:16"
-  },
-  {
-    "title": "平台启动",
-    "content": "A股交易平台底座已初始化",
-    "created_at": "2026-06-08 20:57:16"
-  },
-  {
-    "title": "平台启动",
-    "content": "A股交易平台底座已初始化",
-    "created_at": "2026-06-08 20:58:10"
-  },
-  {
-    "title": "平台启动",
-    "content": "A股交易平台底座已初始化",
-    "created_at": "2026-06-08 20:59:55"
-  },
-  {
-    "title": "平台启动",
-    "content": "A股交易平台底座已初始化",
-    "created_at": "2026-06-08 20:59:55"
-  },
-  {
-    "title": "平台启动",
-    "content": "A股交易平台底座已初始化",
-    "created_at": "2026-06-08 21:54:19"
-  },
-  {
-    "title": "平台启动",
-    "content": "A股交易平台底座已初始化",
-    "created_at": "2026-06-08 21:54:37"
-  },
-  {
-    "title": "平台启动",
-    "content": "A股交易平台底座已初始化",
-    "created_at": "2026-06-08 21:55:40"
+    "id": 3,
+    "title": "测试3",
+    "content": "内容3",
+    "priority": "normal",
+    "status": "sent",
+    "retry_count": 0,
+    "created_at": "2026-06-08 21:57:57",
+    "sent_at": "2026-06-08 21:57:57",
+    "delivered_at": null,
+    "failed_at": null,
+    "error": null
   }
 ]
