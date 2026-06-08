@@ -135,3 +135,12 @@ def api_us_search():
 def api_us_clear_cache():
     clear_cache()
     return jsonify({"status": "ok", "message": "海淘缓存已清除"})
+
+
+# ─── 投资建议 ────────────────────────────────
+
+@bp.route("/advice")
+def api_us_advice():
+    """美股投资建议: 市场评估 + 操作策略 + 个股推荐"""
+    from haitao.us_advice import generate_advice
+    return jsonify(generate_advice())

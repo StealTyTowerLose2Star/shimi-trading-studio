@@ -358,6 +358,15 @@ def api_us_review_weekly():
     return jsonify(run_weekly_review())
 
 
+# ─── 投资建议 API ──────────────────────────
+
+@bp.route("/advice")
+def api_us_advice():
+    """美股投资建议: 市场评估 + 操作策略 + 个股推荐"""
+    from haitao.us_advice import generate_advice
+    return jsonify(generate_advice())
+
+
 # ═══════════════════════════════════════════════════════════════
 # Magician（美股翻倍股猎手）API
 # ═══════════════════════════════════════════════════════════════
