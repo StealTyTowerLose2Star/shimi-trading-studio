@@ -22,8 +22,9 @@ from realtime_scorer import (
 def run_trend_scan():
     """趋势策略扫描 — 使用 realtime_scorer.trend_detect 进行真实 TrendDetector 评分
 
-    从当日股票池中筛选涨幅前 10 的候选股，并行预取 K 线数据后逐个调用
-    trend_detect() 评估趋势强度，返回评分 >= 30 的股票。
+    预筛选: 排除涨停(pct_chg < 9%) + 温和上涨(pct_chg >= 1%) → 按成交额取前 80 只
+    目的是找到温和放量上涨且有趋势潜力的股票，而非涨停板。
+    并行预取 K 线数据后逐个调用 trend_detect() 评估趋势强度，返回评分 >= 30 的股票。
 
     Returns:
         dict: {
@@ -50,9 +51,14 @@ def run_trend_scan():
             short = row["ts_code"].replace(".SZ","").replace(".SH","").replace(".BJ","")
             chg_map[short] = float(row["pct_chg"])
 
-    # Pre-filter: top 20 by pct_chg (排除北证)
+    # 新预筛选：排除涨停 + 排除北证 → 按成交额取前 80
+    # 目的是找到温和放量上涨且有趋势潜力的股票，而非涨停板
     non_bj = daily[~daily["ts_code"].str.endswith(".BJ")] if isinstance(daily, pd.DataFrame) else daily
-    candidates = non_bj.sort_values("pct_chg", ascending=False).head(10)
+    pool = non_bj[(non_bj["pct_chg"] >= 1.0) & (non_bj["pct_chg"] < 9.0)]
+    # 兜底：如果筛选后不足 10 只，放宽下限
+    if len(pool) < 10:
+        pool = non_bj[(non_bj["pct_chg"] >= 0.5) & (non_bj["pct_chg"] < 9.0)]
+    candidates = pool.sort_values("amount", ascending=False).head(80)
     stock_codes = [c.replace(".SZ","").replace(".SH","").replace(".BJ","")
                    for c in candidates["ts_code"]]
 
@@ -85,8 +91,8 @@ def run_trend_scan():
 def run_hybrid_scan():
     """混合策略扫描 — 使用 realtime_scorer.hybrid_score 进行真实 MergedScorer 7维评分
 
-    从当日股票池中筛选涨幅前 10 的候选股，并行预取 K 线数据后逐个调用
-    hybrid_score() 评估混合策略评分，返回 score >= 15 的股票。
+    预筛选: 排除涨停(pct_chg < 8%) + 温和上涨(pct_chg >= 1%) → 按成交额取前 60 只
+    并行预取 K 线数据后逐个调用 hybrid_score() 评估混合策略评分，返回 score >= 15 的股票。
 
     Returns:
         dict: {
@@ -104,7 +110,11 @@ def run_hybrid_scan():
     # 排除北证标的
     daily = daily[~daily["ts_code"].str.endswith(".BJ")]
 
-    candidates = daily.sort_values("pct_chg", ascending=False).head(10)
+    # 新预筛选：温和上涨 + 高成交额，排除涨停
+    pool = daily[(daily["pct_chg"] >= 1.0) & (daily["pct_chg"] < 8.0)]
+    if len(pool) < 10:
+        pool = daily[(daily["pct_chg"] >= 0.5) & (daily["pct_chg"] < 8.0)]
+    candidates = pool.sort_values("amount", ascending=False).head(60)
     stock_codes = [c.replace(".SZ","").replace(".SH","").replace(".BJ","")
                    for c in candidates["ts_code"]]
 
