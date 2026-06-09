@@ -45,28 +45,17 @@ def score_doubler(ticker: str) -> dict:
     """对一只美股进行翻倍潜力评分 (0-100)
 
     12维评分体系 (对齐A股魔法师C1-C7, 新增C8-C10):
-
-    做多维度:
-      C1 量价启动(15) — 近5日放量+价格突破
-      C2 趋势强度(12) — MA多头排列+价格位置
-      C3 机构进场(10) — 成交量激增+资金关注
-      C4 估值合理(10) — PE合理区间
-      C5 财报窗口(10) — 14天内财报发布
-      C6 赛道热度(10) — AI/半导体/新能源等热点
-      C7 资金流入(8) — 盘前异动+上涨延续性
-      C8 做空压制释放(8) — 高做空比+近期未下跌
-      C9 盘前异动(7) — 盘前涨>2%且非消息驱动
-      C10 波动弹性(5) — ATR适中保障上涨空间
-
-    D0多模式检测 (启动前期):
-      - coiled_spring: 蓄力待发(回调后缩量企稳)
-      - silent_accumulation: 默默吸筹(窄幅盘整+成交量温和)
-      - early_warming: 早期预热(量价齐升初段)
-      - smart_pullback: 聪明回调(上升趋势中的健康回调)
-
-    Returns:
-        dict with score, patterns, signals, catalyst details
+      C1 量价启动(15) C2 趋势强度(12) C3 机构进场(10)
+      C4 估值合理(10) C5 财报窗口(10) C6 赛道热度(10)
+      C7 资金流入(8) C8 做空压制释放(8) C9 盘前异动(7) C10 波动弹性(5)
+    D0 启动前期: coiled_spring/silent_accumulation/early_warming/smart_pullback
     """
+    # ── 0. 缓存检查 ────────────────────────────
+    cache_key = f"doubler_{ticker}"
+    cached = _cached(cache_key, CACHE_TTL_SCAN)
+    if cached is not None:
+        return cached
+
     # ── 1. 获取数据 ────────────────────────────
     df = get_history(ticker, days=180)
     if df is None or len(df) < 20:
@@ -174,7 +163,7 @@ def score_doubler(ticker: str) -> dict:
     score = max(0, min(100, score))
     rating = _doubler_rating(score)
 
-    return {
+    result = {
         "ticker": ticker,
         "score": score,
         "rating": rating,
@@ -185,6 +174,8 @@ def score_doubler(ticker: str) -> dict:
         "D0_mode": pattern["mode"] if pattern else "无",
         "scanned_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
     }
+    _set_cache(cache_key, result, CACHE_TTL_SCAN)
+    return result
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -814,7 +805,7 @@ def scan_doublers(tickers: List[str] = None) -> List[dict]:
         tickers = DOUBLER_SEED_POOL
 
     results = []
-    with ThreadPoolExecutor(max_workers=4) as ex:
+    with ThreadPoolExecutor(max_workers=2) as ex:  # 2并发避免yfinance限流
         fut_map = {ex.submit(score_doubler, t): t for t in tickers}
         for f in as_completed(fut_map):
             try:

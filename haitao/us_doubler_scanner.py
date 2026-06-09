@@ -1,0 +1,3 @@
+# DEPRECATED — 已迁移至 magician/doubler_scanner.py
+# 此文件保留为向后兼容重导出，新代码请用: from magician.doubler_scanner import ...
+from magician.doubler_scanner import *

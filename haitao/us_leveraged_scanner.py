@@ -1,0 +1,3 @@
+# DEPRECATED — 已迁移至 magician/leveraged_scanner.py
+# 此文件保留为向后兼容重导出，新代码请用: from magician.leveraged_scanner import ...
+from magician.leveraged_scanner import *
