@@ -492,6 +492,16 @@
       </div>
 
       <!-- 推荐标的 -->
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;display:flex;gap:12px;flex-wrap:wrap">
+        <span><span style="color:#ef4444;font-weight:700">▲</span> 趋势策略 — 均线多头排列+突破+斜率</span>
+        <span><span style="color:#22c55e;font-weight:700">◆</span> 混合策略 — 趋势×动量 7维评分</span>
+        <span><span style="color:#a855f7;font-weight:700">★</span> 龙头策略 — 涨停板龙头 5维评分</span>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;display:flex;gap:14px;flex-wrap:wrap">
+        <span><span style="color:var(--red);font-weight:700">⭐⭐⭐</span> <b>三策略共振</b> — 趋势+混合+龙头一致看多，高度可靠</span>
+        <span><span style="color:var(--gold);font-weight:700">⭐⭐</span> <b>双策略共振</b> — 两策略一致看多，中等可靠</span>
+        <span style="color:var(--text-muted)"><b>单策略</b> — 仅一策略选中，不列为推荐（<span title="仅一策略信号强度不足">不展示</span>）</span>
+      </div>
       <table><thead>
         <tr><th>代码</th><th>名称</th><th>信号</th><th>价格</th><th>入场区间</th><th>止损</th><th>目标1</th><th>目标2</th><th>目标3</th><th>操作</th><th>仓位</th><th>记录</th></tr>
       </thead><tbody id="adviceBody">
@@ -564,6 +574,23 @@
       <div class="card-header">
         <span class="card-title">💰 1W实盘追踪</span>
         <span class="badge badge-gold" id="plan1wActiveCount">加载中</span>
+        <span style="font-size:11px;color:var(--text-muted);cursor:pointer;margin-left:8px" 
+              onclick="document.getElementById('plan1wLegend').style.display=document.getElementById('plan1wLegend').style.display==='none'?'block':'none'">📖 模式说明</span>
+      </div>
+      <!-- 模式说明面板 -->
+      <div id="plan1wLegend" style="display:none;padding:10px 14px;margin-bottom:10px;background:rgba(240,180,41,.04);border-radius:6px;border:1px dashed rgba(240,180,41,.2);font-size:12px;color:var(--text-secondary);line-height:1.8">
+        <b style="color:var(--gold)">启动模式说明</b> (按优先级排列)<br>
+        <span style="color:#22c55e">🟢</span> <b>弹簧蓄力</b> 月-3%~+10%, 波动收窄+缩量 → 爆发前夜 (最优)<br>
+        <span style="color:#22c55e">🟢</span> <b>静默吸筹</b> 月-5%~+10%, ATR收缩+缩量 → 资金悄悄进场<br>
+        <span style="color:#3b82f6">🔵</span> <b>放量启动</b> 月+5%~+20%, 成交量放大 → 量价齐升,最佳上车点<br>
+        <span style="color:#3b82f6">🔵</span> <b>板块轮动</b> 月-3%~+5%, 热门行业+个股滞涨 → 补涨潜力<br>
+        <span style="color:#f0b429">🟡</span> <b>缩量回调</b> 月跌>5%, 缩量+区间底部 → 洗盘后反弹<br>
+        <span style="color:#f0b429">🟡</span> <b>横盘蓄势</b> 月-5%~+10% → 价格不动,等催化剂<br>
+        <span style="color:#f0b429">🟡</span> <b>上涨中</b> 月+10%~+25% → 已启动,顺势跟进<br>
+        <span style="color:#94a3b8">⚪</span> <b>回调中</b> 月跌>5% → 普通回调,关注是否缩量<br>
+        <span style="color:#ef4444">🔴</span> <b>放量下跌⚠️</b> 月跌>8%, 放量 → 出货风险,回避<br>
+        <span style="color:#ef4444">🔴</span> <b>涨幅已大</b> 月+25%~+50% → 空间有限,减分<br>
+        <span style="color:#ef4444">🔴</span> <b>排除-涨幅过高</b> 月>50% → 已排除,不推荐<br>
       </div>
 
       <!-- 汇总卡片 -->
@@ -1679,34 +1706,15 @@ function loadAuth() {
       fetch('/api/auth/me', {headers: {'Authorization': 'Bearer ' + saved.token}})
         .then(r => r.json()).then(d => {
           if (d.user) { setUser(d.user, saved.token); }
-          else { tryLocalToken(); }
-        }).catch(() => tryLocalToken());
+          else { showLoginPrompt(); }
+        }).catch(() => showLoginPrompt());
     } else {
-      tryLocalToken();
+      showLoginPrompt();
     }
-  } catch(e) { tryLocalToken(); }
+  } catch(e) { showLoginPrompt(); }
 }
 
-function tryLocalToken() {
-  // 自动登录: 尝试读取本地令牌（本地单用户模式）
-  console.log('🔄 尝试本地自动登录...');
-  fetch('/api/auth/me', {headers: {'Authorization': 'Bearer local_token'}})
-    .then(r => r.json()).then(d => {
-      if (d.user) {
-        console.log('✅ 本地自动登录成功:', d.user.display_name);
-        setUser(d.user, 'local_token');
-        // 确保交易记录加载
-        loadTradesFromServer();
-        loadCacheStatus();
-      } else {
-        console.log('⚠️ 本地自动登录失败: 无用户');
-        showLoginPrompt();
-      }
-    }).catch(e => {
-      console.log('❌ 本地自动登录错误:', e.message);
-      showLoginPrompt();
-    });
-}
+// tryLocalToken 已移除 — 安全原因: 不自动登录未认证访客
 
 function showLoginPrompt() {
   document.getElementById('tradeJournalBody').innerHTML =
@@ -1916,6 +1924,7 @@ function renderServerTrades() {
         <td class="code-num ${pnlCls}" style="font-weight:700">${pnlPct}</td>
         <td>
           <button onclick="showSplitTrades('${p.code}')" style="padding:2px 6px;border:1px solid var(--text-muted);border-radius:3px;background:transparent;color:var(--text-muted);cursor:pointer;font-size:10px" title="展开明细">📋</button>
+          <button onclick="closeAllByCode('${p.code}')" style="padding:2px 6px;border:1px solid var(--gold);border-radius:3px;background:transparent;color:var(--gold);cursor:pointer;font-size:11px;margin-left:2px" title="平仓">平</button>
         </td>
       </tr>`;
     }).join('');
@@ -2006,6 +2015,45 @@ async function closeServerTrade(id) {
       method: 'PUT', headers: apiHeaders(),
       body: JSON.stringify({exit_price: exitPrice, exit_qty: exitQty})
     });
+    loadTradesFromServer();
+  } catch(e) { alert('平仓失败'); }
+}
+
+async function closeAllByCode(code) {
+  // 按标的合并平仓：支持部分平仓
+  const trades = serverTrades.filter(t => !t.exit_price && t.code === code);
+  if (trades.length === 0) { alert('无持仓'); return; }
+  const totalQty = trades.reduce((s, t) => s + (t.qty || 0), 0);
+  const name = trades[0].name || code;
+  const qtyInput = prompt(`平仓 (${code} ${name})\n总持仓: ${totalQty}股 (${trades.length}笔)\n输入平仓数量 (留空=全部平仓)：`, '');
+  if (qtyInput === null) return;
+  let exitQty = totalQty;
+  if (qtyInput.trim() !== '') {
+    exitQty = parseInt(qtyInput);
+    if (isNaN(exitQty) || exitQty <= 0 || exitQty > totalQty) { alert(`无效数量 (1-${totalQty})`); return; }
+  }
+  const price = prompt(`平仓价 (${code} ${name})：`, '');
+  if (!price) return;
+  const exitPrice = parseFloat(price);
+  if (isNaN(exitPrice) || exitPrice <= 0) { alert('无效价格'); return; }
+  try {
+    // 按入场批次从早到晚排序，逐批平仓
+    const sorted = [...trades].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    let remaining = exitQty;
+    const promises = [];
+    for (const t of sorted) {
+      if (remaining <= 0) break;
+      const batchQty = t.qty || 0;
+      const closeQty = Math.min(batchQty, remaining);
+      promises.push(
+        fetch('/api/trades/' + t.id, {
+          method: 'PUT', headers: apiHeaders(),
+          body: JSON.stringify({exit_price: exitPrice, exit_qty: closeQty})
+        })
+      );
+      remaining -= closeQty;
+    }
+    await Promise.all(promises);
     loadTradesFromServer();
   } catch(e) { alert('平仓失败'); }
 }

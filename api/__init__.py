@@ -26,6 +26,7 @@ def register_blueprints(app: Flask):
     from .a_stock_cache import bp as a_stock_cache_bp
     from .plan_1w import bp as plan_1w_bp
     from .market_events import bp as market_events_bp
+    from .prophet_event import bp as prophet_event_bp
 
     app.register_blueprint(market_bp)
     app.register_blueprint(strategy_bp)
@@ -39,6 +40,7 @@ def register_blueprints(app: Flask):
     app.register_blueprint(a_stock_cache_bp)
     app.register_blueprint(plan_1w_bp)
     app.register_blueprint(market_events_bp)
+    app.register_blueprint(prophet_event_bp)
 
     # ─── 海淘美股模块 (4个蓝图: 业务逻辑层) ──────────
     # Magician 翻倍/做空/杠杆ETF蓝图 → /api/magician/* (独立模块)

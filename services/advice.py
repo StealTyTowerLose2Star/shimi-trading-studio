@@ -12,7 +12,8 @@ import pandas as pd
 from cache import cache_or_fetch
 from data.fetcher import fetch_sentiment, fetch_sectors
 from services.strategy import run_trend_scan, run_hybrid_scan, run_dragon_scan
-from realtime_scorer import get_kline
+from realtime_scorer import get_kline, ma_convergence_score, macd_analysis
+from services.kline_patterns import detect_patterns
 
 
 def calc_atr_based_levels(price, atr):
@@ -96,7 +97,28 @@ def generate_advice():
     hybrid_map = to_map(hybrid.get("picked", []))
     dragon_map = to_map(dragon.get("picked", []))
 
-    all_codes = set(list(trend_map.keys()) + list(hybrid_map.keys()) + list(dragon_map.keys()))
+    # ─── K线形态全量扫描（第四策略源，每日一次） ──────
+    kline_map = {}
+    try:
+        from services.kline_patterns import scan_patterns
+        from data.daily_store import get_store
+        store = get_store()
+        today = time.strftime("%Y%m%d")
+        cached = store.load_data("kline_scan", today)
+        if cached is not None and isinstance(cached, list):
+            _kp_results = cached
+        else:
+            _kp_results = scan_patterns(limit=50)
+            if isinstance(_kp_results, list):
+                store.save_data("kline_scan", today, _kp_results, overwrite=True)
+        for item in (_kp_results or []):
+            code = item.get("code", "")
+            if code:
+                kline_map[code] = item
+    except Exception:
+        pass
+
+    all_codes = set(list(trend_map.keys()) + list(hybrid_map.keys()) + list(dragon_map.keys()) + list(kline_map.keys()))
     # 🚫 排除北证标的（用户无法交易，流动性低）
     all_codes = {c for c in all_codes if not c.endswith('.BJ')}
     trend_map = {k: v for k, v in trend_map.items() if k in all_codes}
@@ -133,13 +155,21 @@ def generate_advice():
         if code in trend_map:  strategies.append("趋势")
         if code in hybrid_map: strategies.append("混合")
         if code in dragon_map: strategies.append("龙头")
+        if code in kline_map:  strategies.append("K线形态")
 
         consensus = len(strategies)
-        if consensus < 2:
+        # K线形态仅作为加分维度，不单独推荐（除非评分极高）
+        is_kline_only = consensus == 1 and code in kline_map
+        if consensus < 2 and not is_kline_only:
+            continue
+
+        kp_info = kline_map.get(code, {})
+        kp_score = kp_info.get("score", 0) if kp_info else 0
+        if is_kline_only and kp_score < 30:
             continue
 
         # Get name & price from whichever source has it
-        src = trend_map.get(code) or hybrid_map.get(code) or dragon_map.get(code)
+        src = trend_map.get(code) or hybrid_map.get(code) or dragon_map.get(code) or kline_map.get(code) or {}
         name = src.get("name", "")
         price = float(src.get("price", 0))
 
@@ -191,23 +221,64 @@ def generate_advice():
 
         trailing_stop = f"从¥{round(trailing_start,2)}启动，每涨{round(trailing_step,2)}上移一次浮动止盈"
 
+        # ─── 多均线重合 + MACD 多周期 ──────
+        _ma_score = _macd = None
+        _tech_boost = 0
+        try:
+            _ma = ma_convergence_score(code)
+            if _ma and _ma.get("score", 0) >= 50:
+                _ma_score = _ma
+                _tech_boost += 1
+        except Exception:
+            pass
+        try:
+            _m = macd_analysis(code)
+            if _m and _m.get("score", 0) >= 30:
+                _macd = _m
+                if _m.get("multi_period_bullish"): _tech_boost += 2
+                elif _m.get("daily_golden_cross") or _m.get("weekly_golden_cross"): _tech_boost += 1
+        except Exception:
+            pass
+        # ─── K线形态检测 ──────
+        _kline_patterns = None
+        try:
+            _kp = detect_patterns(code)
+            if _kp and _kp.get("score", 0) >= 15:
+                _kline_patterns = _kp
+                _tech_boost += len(_kp.get("patterns", [])) * 0.5
+        except Exception:
+            pass
+
+        sort_score = consensus * 100
+        if _ma_score: sort_score += _ma_score["score"] * 0.3
+        if _macd: sort_score += _macd["score"] * 0.3
+        if _kline_patterns: sort_score += _kline_patterns["score"] * 0.25
+
         reasons = []
         if "趋势" in strategies:
             s = trend_map[code]
-            reasons.append(f"趋势评分{s.get('trend_score','?')}·{s.get('stage','?')}")
+            reasons.append(f"趋势{s.get('trend_score','?')}·{s.get('stage','?')}")
         if "混合" in strategies:
             s = hybrid_map[code]
             reasons.append(f"混合{s.get('score','?')}分·评级{s.get('grade','?')}")
         if "龙头" in strategies:
             s = dragon_map[code]
             reasons.append(f"龙头{s.get('leader_score','?')}分·{s.get('grade','?')}")
+        if _ma_score:
+            reasons.insert(1, f"均线:{_ma_score['detail']}")
+        if _macd:
+            reasons.append(f"MACD:{_macd['signal']}")
+        if _kline_patterns:
+            for p in _kline_patterns.get("details", []):
+                reasons.append(f"K线:{p}")
 
         recommendations.append({
             "code": code,
             "name": name,
             "consensus": consensus,
             "strategies": strategies,
-            "signal": "⭐⭐⭐" if consensus >= 3 else "⭐⭐",
+            "sort_score": round(sort_score, 1),
+            "signal": "⭐⭐⭐" if consensus >= 3 else ("⭐⭐" if consensus >= 2 else "⭐"),
             "price": price,
             "entry_zone": f"¥{entry_low} ~ ¥{entry_high}",
             "stop_loss": stop_loss,
@@ -222,10 +293,16 @@ def generate_advice():
             "risk_reward_2": rr2,
             "trailing_stop": trailing_stop,
             "position": calc_position(consensus, code),
+            "ma_convergence": _ma_score["detail"] if _ma_score else None,
+            "ma_score": _ma_score["score"] if _ma_score else None,
+            "macd_signal": _macd["signal"] if _macd else None,
+            "macd_score": _macd["score"] if _macd else None,
+            "kline_patterns": (_kline_patterns["patterns"] if _kline_patterns else None),
+            "kline_score": (_kline_patterns["score"] if _kline_patterns else None),
             "reason": " | ".join(reasons),
         })
 
-    recommendations.sort(key=lambda x: (x["consensus"], -x["price"]), reverse=True)
+    recommendations.sort(key=lambda x: (x["sort_score"], -x["price"]), reverse=True)
     top_sectors = [s["name"] for s in (sectors[:5] if isinstance(sectors, list) else [])]
 
     result = {

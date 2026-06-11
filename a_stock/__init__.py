@@ -77,6 +77,7 @@ from data.fetcher_cached import (
 from realtime_scorer import (
     get_kline, get_kline_batch,
     trend_detect, hybrid_score, dragon_leader_score,
+    ma_convergence_score, macd_analysis,
 )
 
 from position_manager import (
@@ -166,6 +167,7 @@ __all__ = [
     # 策略评分
     "get_kline", "get_kline_batch",
     "trend_detect", "hybrid_score", "dragon_leader_score",
+    "ma_convergence_score", "macd_analysis",
     "pm_get_kline", "evaluate_position", "batch_evaluate",
     "calc_atr",
     "ma_fetch_sentiment", "ma_fetch_sectors",

@@ -121,7 +121,7 @@ def _early_stage_score_batch(candidates: list) -> dict:
     try:
         from realtime_scorer import get_kline_batch
         codes = [c["code"] for c in candidates]
-        klines = get_kline_batch(codes, days=35)  # V4: 25→35天，增强压缩检测
+        klines = get_kline_batch(codes, days=35)
 
         if not klines:
             return results
@@ -221,26 +221,25 @@ def _early_stage_score_batch(candidates: list) -> dict:
             reasons = []
             pattern = ""
 
-            # Pattern A: Coiled Spring (压缩 + 缩量 + 横盘)
-            # V4: 阈值再放宽 compression<1.2, vol_dry_up<1.1 (V3 <1.0 仍0命中)
+            # Pattern A: 弹簧蓄力 (压缩 + 缩量 + 横盘)
             if compression < 1.2 and vol_dry_up < 1.1 and -3 <= monthly_change <= 10:
                 score += 15
-                pattern = "coiled_spring"
+                pattern = "弹簧蓄力"
                 reasons.append("弹簧蓄力")
-            # Pattern B: Silent Accumulation (横盘 + ATR收缩)
+            # Pattern B: 静默吸筹 (横盘 + ATR收缩)
             elif -5 <= monthly_change <= 10 and atr_contract < 0.9 and vol_dry_up < 0.95:
                 score += 12
-                pattern = "silent_accumulation"
+                pattern = "静默吸筹"
                 reasons.append("静默吸筹")
-            # Pattern C: Early Warming (温和启动 5-15% + 放量)
+            # Pattern C: 放量启动 (5-20% + 放量)
             elif 5 <= monthly_change <= 20 and vol_expand > 1.2 and consecutive_limit < 2:
                 score += 8
-                pattern = "early_warming"
-                reasons.append("温和启动")
-            # Pattern D: Sector Rotation (热门行业 + 个股滞涨)
+                pattern = "放量启动"
+                reasons.append("放量启动")
+            # Pattern D: 板块轮动 (热门行业 + 个股滞涨)
             elif industry in HOT_INDUSTRIES and -3 <= monthly_change <= 5 and price_pos < 55:
                 score += 5
-                pattern = "sector_rotation"
+                pattern = "板块轮动"
                 reasons.append(f"板块轮动({industry})")
             # ─── Default: monthly change + pullback classification ───
             else:
@@ -250,33 +249,33 @@ def _early_stage_score_batch(candidates: list) -> dict:
                     result["score"] = -15
                     result["level"] = "excluded"
                     result["reason"] = f"涨幅过高{monthly_change:.0f}% >50%"
-                    result["pattern"] = "late_stage"
+                    result["pattern"] = "排除-涨幅过高"
                     continue
                 elif monthly_change > 25:
                     score += -5
-                    pattern = "mid_stage"
-                    reasons.append(f"月中{monthly_change:.0f}%")
+                    pattern = "涨幅已大"
+                    reasons.append(f"月涨{monthly_change:.0f}%")
                 elif monthly_change > 10:
                     score += 5
-                    pattern = "warming"
-                    reasons.append(f"启动{monthly_change:.0f}%")
+                    pattern = "上涨中"
+                    reasons.append(f"月涨{monthly_change:.0f}%")
                 elif monthly_change > -5:
                     score += 8
-                    pattern = "early"
+                    pattern = "横盘蓄势"
                     reasons.append(f"横盘{monthly_change:.1f}%")
                 else:
-                    # V3: Pullback 精细化 — 缩量到底 vs 放量下跌
+                    # 回调精细化: 缩量到底 vs 放量下跌
                     if price_pos < 30 and vol_dry_up < 0.9:
                         score += 8
-                        pattern = "smart_pullback"
+                        pattern = "缩量回调"
                         reasons.append(f"缩量回调{abs(monthly_change):.1f}%")
                     elif vol_expand > 1.5 and monthly_change < -8:
                         score += -3
-                        pattern = "danger_pullback"
-                        reasons.append(f"放量下跌{abs(monthly_change):.1f}% ⚠️")
+                        pattern = "放量下跌⚠️"
+                        reasons.append(f"放量下跌{abs(monthly_change):.1f}%")
                     else:
                         score += 3
-                        pattern = "pullback"
+                        pattern = "回调中"
                         reasons.append(f"回调{abs(monthly_change):.1f}%")
 
             # ─── 额外加权信号 ───
@@ -305,8 +304,17 @@ def _early_stage_score_batch(candidates: list) -> dict:
             result["pattern"] = pattern
             result["mtm_gain"] = round(monthly_change, 1)
 
-    except Exception:
-        pass
+    except Exception as e:
+        import sys
+        print(f"[doubler] _early_stage_score_batch failed: {e}", file=sys.stderr)
+        # Fallback: use pct_chg as mtm_gain for all candidates
+        for c in candidates:
+            code = c["code"]
+            results[code] = {
+                "score": 0, "level": "neutral",
+                "reason": "K线数据不可用", "exclude": False,
+                "pattern": "", "mtm_gain": round(c.get("pct_chg", 0), 1)
+            }
 
     return results
 

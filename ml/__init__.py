@@ -1,10 +1,14 @@
 """
-拾米交易工作室 - ML预测引擎 (占位模块)
-跨角色基础设施: 同时服务魔法师(A股翻倍) + Magician(美股翻倍)
+先知 ML 引擎 (Prophet ML Engine)
 
-待实现:
-  services/predictor.py  → Logistic Regression / XGBoost 训练+推理
-  services/backtest.py   → 回测框架 + 夏普比率/最大回撤报告
+职责: 数据驱动的翻倍股预测、事件信号分析、回测验证
+架构: 零耦合 — 不 import api/ haitao/ magician/
+      单一数据入口 — data/fetcher.py
 
-架构: ml/ 独立模块，仅依赖 data/fetcher.py (统一数据入口)
+模块:
+  event_predictor.py  — 事件抓取→TF-IDF分类→情绪量化→做多/做空信号
+  market_mapper.py    — 事件→行业→个股概率映射
+  predictor.py        — (Phase 2) Logistic/XGBoost翻倍股预测
+  backtest.py         — (Phase 2) Purged Walk-Forward回测框架
+  features.py         — (Phase 2) 15维特征工程管道
 """

@@ -262,3 +262,238 @@ def dragon_leader_score(code: str, extra: dict = None):
                        "drive_effect": ds, "resistance": rs,
                        "block_time": bt, "sealed_amount": round(sa, 2)}
     })
+
+
+# ============================================================
+# 4. 多均线重合判断 — MA Convergence Score
+# ============================================================
+
+def ma_convergence_score(code: str) -> dict:
+    """多均线重合/趋近判断
+
+    检测 MA5/MA10/MA20/MA60 是否处于收敛状态（均线间距缩小）+ 同频向上。
+    这是股价突破前的重要信号：均线由发散→收敛→向上发散。
+
+    Returns:
+        dict: {
+            "score": 0-100,  越高越好
+            "converged": bool,  是否已重合
+            "converging": bool,  是否正在趋近
+            "all_up": bool,     各MA是否同频向上
+            "gap_pct": float,   间距百分比
+            "gap_trend": str,   间距趋势
+            "detail": str       文字描述
+        }
+    """
+    df = get_kline(code, days=120)
+    if df is None or len(df) < 60:
+        return {"score": 0, "converged": False, "converging": False,
+                "all_up": False, "detail": "数据不足"}
+
+    close = df["close"]
+    ma5s = close.rolling(5).mean()
+    ma10s = close.rolling(10).mean()
+    ma20s = close.rolling(20).mean()
+    ma60s = close.rolling(60).mean()
+
+    ma5, ma10, ma20, ma60 = ma5s.iloc[-1], ma10s.iloc[-1], ma20s.iloc[-1], ma60s.iloc[-1]
+    if pd.isna(ma60):
+        return {"score": 20, "converged": False, "converging": False,
+                "all_up": False, "detail": "上市不足60天"}
+
+    gap_10_20 = abs(ma10 - ma20) / ma20 * 100 if ma20 > 0 else 0
+    gap_5_10 = abs(ma5 - ma10) / ma10 * 100 if ma10 > 0 else 0
+    avg_gap = (gap_10_20 + gap_5_10) / 2
+
+    gap_10_20_prev = abs(ma10s.iloc[-6] - ma20s.iloc[-6]) / ma20s.iloc[-6] * 100 if ma20s.iloc[-6] > 0 else 0
+    gap_5_10_prev = abs(ma5s.iloc[-6] - ma10s.iloc[-6]) / ma10s.iloc[-6] * 100 if ma10s.iloc[-6] > 0 else 0
+    avg_gap_prev = (gap_10_20_prev + gap_5_10_prev) / 2
+
+    gap_narrowing = avg_gap < avg_gap_prev * 0.9
+    gap_stable = avg_gap <= 3.0
+
+    def _ma_slope(ma_series, period=5):
+        if len(ma_series) < period + 1:
+            return 0
+        return (ma_series.iloc[-1] - ma_series.iloc[-period-1]) / ma_series.iloc[-period-1] * 100
+
+    slp5 = _ma_slope(ma5s)
+    slp10 = _ma_slope(ma10s)
+    slp20 = _ma_slope(ma20s)
+    slopes = [slp5, slp10, slp20]
+    all_up = all(s > 0.1 for s in slopes)
+    avg_slope = sum(slopes) / len(slopes)
+
+    score = 0
+    parts = []
+
+    if gap_stable:
+        score += 40
+        parts.append("均线已重合")
+    elif gap_narrowing:
+        score += 25
+        parts.append(f"间距收敛({avg_gap:.1f}%)")
+    elif avg_gap < 5:
+        score += 15
+        parts.append(f"间距适中({avg_gap:.1f}%)")
+    else:
+        parts.append(f"间距偏大({avg_gap:.1f}%)")
+
+    if all_up:
+        score += 35
+        parts.append("同频向上")
+    elif avg_slope > 0:
+        score += 15
+        parts.append("MA方向有分歧")
+    else:
+        parts.append("MA向下")
+
+    if gap_narrowing and all_up:
+        score += 25
+        parts.append("收敛+同频↑最优形态")
+    elif gap_narrowing:
+        score += 10
+
+    score = min(100, max(0, score))
+
+    return {
+        "score": score,
+        "converged": gap_stable and all_up,
+        "converging": gap_narrowing,
+        "all_up": all_up,
+        "avg_slope": round(avg_slope, 2),
+        "gap_pct": round(avg_gap, 2),
+        "gap_trend": "收敛" if gap_narrowing else ("发散" if avg_gap > avg_gap_prev * 1.1 else "持平"),
+        "ma5": round(float(ma5), 2), "ma10": round(float(ma10), 2),
+        "ma20": round(float(ma20), 2), "ma60": round(float(ma60), 2),
+        "detail": " · ".join(parts) if parts else "未形成有效形态",
+    }
+
+
+# ============================================================
+# 5. 多周期MACD分析
+# ============================================================
+
+def macd_analysis(code: str) -> dict:
+    """多周期MACD金叉/趋近金叉分析
+
+    同时分析日线(20天)和周线(60天≈12周)两个周期的MACD状态。
+
+    Returns:
+        dict: {
+            "daily_golden_cross": bool,    日线是否金叉
+            "daily_approaching": bool,     日线趋近金叉
+            "weekly_golden_cross": bool,   周线是否金叉
+            "weekly_approaching": bool,    周线趋近金叉
+            "multi_period_bullish": bool,  多周期共振看多
+            "score": 0-100,               综合评分
+            "signal": str                 信号描述
+        }
+    """
+    df = get_kline(code, days=150)
+    if df is None or len(df) < 60:
+        return {"score": 0, "signal": "数据不足"}
+
+    close = df["close"]
+
+    # ─── 日线MACD ───
+    ema12 = close.ewm(span=12).mean()
+    ema26 = close.ewm(span=26).mean()
+    dif = ema12 - ema26
+    dea = dif.ewm(span=9).mean()
+    hist = (dif - dea) * 2
+
+    d_dif = float(dif.iloc[-1])
+    d_dea = float(dea.iloc[-1])
+    d_hist = float(hist.iloc[-1])
+    d_dif_1 = float(dif.iloc[-2]) if len(dif) > 1 else d_dif
+    d_dea_1 = float(dea.iloc[-2]) if len(dea) > 1 else d_dea
+
+    daily_gc = d_dif > d_dea and d_dif_1 <= d_dea_1
+    daily_gc_active = d_dif > d_dea
+    daily_approaching = d_dif < d_dea and d_dea > 0 and d_dif > d_dea * 0.95
+
+    # ─── 周线MACD ───
+    try:
+        df_idx = pd.to_datetime(df["trade_date"])
+        weekly_close = close.copy()
+        weekly_close.index = df_idx
+        weekly_close = weekly_close.resample("W").last().dropna()
+    except Exception:
+        weekly_close = close.iloc[-1:]
+
+    if len(weekly_close) >= 14:
+        w_ema12 = weekly_close.ewm(span=12).mean()
+        w_ema26 = weekly_close.ewm(span=26).mean()
+        w_dif = w_ema12 - w_ema26
+        w_dea = w_dif.ewm(span=9).mean()
+        w_hist = (w_dif - w_dea) * 2
+
+        w_dif_v = float(w_dif.iloc[-1])
+        w_dea_v = float(w_dea.iloc[-1])
+        w_hist_v = float(w_hist.iloc[-1])
+
+        if len(w_dif) > 1:
+            w_dif_1 = float(w_dif.iloc[-2])
+            w_dea_1 = float(w_dea.iloc[-2])
+        else:
+            w_dif_1, w_dea_1 = w_dif_v, w_dea_v
+
+        weekly_gc = w_dif_v > w_dea_v and w_dif_1 <= w_dea_1
+        weekly_gc_active = w_dif_v > w_dea_v
+        weekly_approaching = w_dif_v < w_dea_v and w_dea_v > 0 and w_dif_v > w_dea_v * 0.95
+    else:
+        weekly_gc = weekly_gc_active = weekly_approaching = False
+        w_dif_v = w_dea_v = w_hist_v = 0
+
+    # ─── 综合 ───
+    multi_bullish = daily_gc_active and weekly_gc_active
+    score = 0
+    signals = []
+
+    if daily_gc:
+        score += 30
+        signals.append("日线金叉")
+    elif daily_approaching:
+        score += 18
+        signals.append("日线趋近金叉")
+    elif daily_gc_active:
+        score += 20
+        signals.append("日线金叉持续")
+
+    if weekly_gc:
+        score += 35
+        signals.append("周线金叉")
+    elif weekly_approaching:
+        score += 20
+        signals.append("周线趋近金叉")
+    elif weekly_gc_active:
+        score += 25
+        signals.append("周线金叉持续")
+
+    if multi_bullish:
+        score += 35
+        signals.append("多周期共振↑")
+
+    if d_hist > 0:
+        score += 5
+        signals.append("红柱")
+    elif d_hist < 0:
+        score -= 5
+        signals.append("绿柱")
+
+    score = min(100, max(0, score))
+
+    return {
+        "score": round(score, 1),
+        "signal": " · ".join(signals) if signals else "无MACD信号",
+        "daily_golden_cross": daily_gc,
+        "daily_gc_active": daily_gc_active,
+        "daily_approaching": daily_approaching,
+        "daily_dif": round(d_dif, 4), "daily_dea": round(d_dea, 4), "daily_hist": round(d_hist, 4),
+        "weekly_golden_cross": weekly_gc,
+        "weekly_gc_active": weekly_gc_active,
+        "weekly_approaching": weekly_approaching,
+        "weekly_dif": round(w_dif_v, 4), "weekly_dea": round(w_dea_v, 4), "weekly_hist": round(w_hist_v, 4),
+        "multi_period_bullish": multi_bullish,
+    }

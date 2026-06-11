@@ -20,16 +20,13 @@ def read_file(path):
 
 
 def send_msg(title, content):
-    """将反思报告加入待发送队列（由 Agent 代发）"""
+    """将反思报告写入日志 + 输出到 stdout（Hermes cron no-agent 直接推送微信）"""
     log_path = os.path.join(BASE, "reflect.log")
     with open(log_path, "a") as f:
         f.write(f"\n{'='*60}\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] {title}\n{'='*60}\n")
         f.write(content)
         f.write(f"\n{'='*60}\n\n")
-    from message_queue import enqueue
-    enqueue(title, content)
-    # 同时输出到 stdout — hermes cron --deliver weixin 会推送这个到微信
-    print(title)
+    # 输出到 stdout → Hermes 自动推送微信
     print(content)
     return True, ""
 

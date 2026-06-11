@@ -6,69 +6,37 @@
 
 
 def format_daily_digest(market_data: dict) -> str:
-    """将 market_data 格式化为每日收盘摘要
+    """生成微信友好的收盘摘要 —— 精简、可扫读"""
+    from datetime import datetime, date
 
-    消息格式: 📊 今日复盘 | 日期 | 市场阶段 | 核心发现
-    """
-    from datetime import datetime
+    today = date.today().strftime("%m-%d")
+    lines = [f"📊 拾米收盘 {today}"]
 
-    date = datetime.now().strftime("%Y-%m-%d")
-    lines = [f"📊 拾米每日收盘摘要 | {date}", "━" * 40, ""]
+    # A股
+    a = market_data.get("a_stock", {})
+    phase = a.get("phase", "—")
+    lines.append(f"A股 {phase}")
 
-    # A股部分
-    a_stock = market_data.get("a_stock", {})
-    if a_stock:
-        phase = a_stock.get("phase", "?")
-        lines.append(f"🇨🇳 A股市场")
-        lines.append(f"  · 阶段: {phase}")
-        lines.append("")
-
-    # 美股部分
+    # 美股
     us = market_data.get("us", {})
-    if us:
-        sp500 = us.get("sp500_change")
-        vix = us.get("vix")
-        if sp500 is not None or vix:
-            lines.append(f"🇺🇸 美股")
-            if sp500 is not None:
-                emoji = "🟢" if sp500 > 0 else "🔴" if sp500 < 0 else "⚪"
-                lines.append(f"  · S&P 500: {emoji} {sp500:+.2f}%")
-            if vix:
-                lines.append(f"  · VIX: {vix}")
-            lines.append("")
+    sp500 = us.get("sp500_change")
+    vix = us.get("vix")
+    if sp500 is not None:
+        emoji = "🟢" if sp500 > 0 else "🔴" if sp500 < 0 else "⚪"
+        lines.append(f"标普 {emoji}{sp500:+.2f}% | VIX {vix or '—'}")
 
-    # 告警部分
+    # 翻倍股信号
     alerts = market_data.get("alerts", [])
-    if alerts:
-        lines.append(f"🚨 系统告警 ({len(alerts)}条)")
-        for a in alerts[:5]:
-            a_type = a.get("type", "?")
-            a_msg = a.get("message", "")
-            lines.append(f"  · [{a_type}] {a_msg}")
-        lines.append("")
+    for a in alerts:
+        if a.get("type") == "strategy_signal":
+            lines.append(f"🚀 {a.get('message','')[:60]}")
+            break
 
-    # 存储空间
+    # 存储
     storage = market_data.get("storage", {})
-    if storage:
-        disk = storage.get("disk_usage_pct", 0)
-        db_mb = storage.get("db_size_mb", 0)
-        if disk > 70 or db_mb > 100:
-            lines.append(f"💾 存储告警")
-            if disk > 80:
-                lines.append(f"  · ⚠️ 磁盘使用率 {disk}%！建议清理")
-            elif disk > 70:
-                lines.append(f"  · ⚡ 磁盘使用率 {disk}%，注意监控")
-            if db_mb > 100:
-                lines.append(f"  · 📦 数据库 {db_mb}MB，建议清理历史数据")
-            lines.append("")
-
-    if not any([a_stock, us, alerts, storage]):
-        lines.append("ℹ️ 今日无特别市场数据或告警")
-        lines.append("")
-
-    lines.append("━" * 40)
-    lines.append(f"⏰ 生成时间: {datetime.now().strftime('%H:%M')}")
-    lines.append("💡 每日18:00自动发送 | 通讯员")
+    disk = storage.get("disk_usage_pct", 0)
+    if disk > 70:
+        lines.append(f"💾 磁盘 {disk}%")
 
     return "\n".join(lines)
 

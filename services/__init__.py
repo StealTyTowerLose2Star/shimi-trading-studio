@@ -3,13 +3,14 @@
 导出所有 A 股相关业务服务函数
 
 服务清单:
-  strategy        — 三大策略扫描 (趋势/混合/龙头)
-  advice          — 操作建议生成 + ATR 止盈止损
-  pnl             — 盈亏分析报告
+  strategy        — 三大策略扫描
+  advice          — 操作建议
+  pnl             — 盈亏分析
   portfolio       — 持仓分析
   review          — 每日复盘
   review_weekly   — 每周复盘
-  alert           — 条件预警系统
+  alert           — 条件预警
+  kline_patterns  — K线形态识别
 """
 
 # ─── 策略扫描 ──────────────────────────────────
