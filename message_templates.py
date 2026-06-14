@@ -7,32 +7,69 @@
 
 def format_daily_digest(market_data: dict) -> str:
     """生成微信友好的收盘摘要 —— 精简、可扫读"""
-    from datetime import datetime, date
+    from datetime import date
 
     today = date.today().strftime("%m-%d")
     lines = [f"📊 拾米收盘 {today}"]
-
-    # A股
     a = market_data.get("a_stock", {})
-    phase = a.get("phase", "—")
-    lines.append(f"A股 {phase}")
 
-    # 美股
+    # ─── 指数行情 ───
+    indices = a.get("indices", [])
+    if indices:
+        idx_parts = []
+        for i in indices:
+            name = i.get("name", "?")
+            chg = i.get("change", 0)
+            arrow = "↑" if chg > 0 else "↓" if chg < 0 else "→"
+            idx_parts.append(f"{name} {chg:+.2f}%{arrow}")
+        lines.append("  ".join(idx_parts))
+    else:
+        lines.append(f"A股 {a.get('phase', '—')}")
+
+    # ─── 市场情绪 ───
+    total = a.get("total", 0)
+    up = a.get("up", 0)
+    down = a.get("down", 0)
+    lu = a.get("limit_up", 0)
+    ld = a.get("limit_down", 0)
+    vol = a.get("volume_ratio", 1.0)
+    pos = a.get("position_ratio", 50)
+
+    if total > 0:
+        ratio = up / total * 100 if total else 0
+        mood = "🔥" if ratio > 60 else "😐" if ratio > 35 else "❄️"
+        lines.append(
+            f"{mood} 涨跌: {up}↑ / {down}↓ ({ratio:.0f}%)  "
+            f"涨停{lu} 跌停{ld}  "
+            f"量比{vol:.2f}  "
+            f"仓位{pos:.0f}%"
+        )
+
+    # ─── 翻倍股 ───
+    doubler = market_data.get("doubler", {})
+    top5 = doubler.get("top5", [])
+    if top5:
+        dp = []
+        for p in top5[:5]:
+            dp.append(f"{p['code']} {p['name']} {p['score']:.0f}分")
+        lines.append(f"🚀 翻倍股: {' | '.join(dp)}")
+
+    # ─── 美股 ───
     us = market_data.get("us", {})
     sp500 = us.get("sp500_change")
     vix = us.get("vix")
     if sp500 is not None:
         emoji = "🟢" if sp500 > 0 else "🔴" if sp500 < 0 else "⚪"
-        lines.append(f"标普 {emoji}{sp500:+.2f}% | VIX {vix or '—'}")
+        lines.append(f"🇺🇸 标普 {emoji}{sp500:+.2f}%  VIX {vix or '—'}")
 
-    # 翻倍股信号
+    # ─── 告警 ───
     alerts = market_data.get("alerts", [])
     for a in alerts:
         if a.get("type") == "strategy_signal":
-            lines.append(f"🚀 {a.get('message','')[:60]}")
+            lines.append(f"🔔 {a.get('message','')[:80]}")
             break
 
-    # 存储
+    # ─── 磁盘 ───
     storage = market_data.get("storage", {})
     disk = storage.get("disk_usage_pct", 0)
     if disk > 70:
@@ -42,12 +79,8 @@ def format_daily_digest(market_data: dict) -> str:
 
 
 def format_alert(alert_type: str, message: str, severity: str = "warning") -> str:
-    """格式化系统告警消息
-
-    消息格式: 🚨 系统告警 | 级别 | 组件 | 建议
-    """
+    """格式化系统告警消息"""
     from datetime import datetime
-
     return (
         f"🚨 拾米系统告警\n"
         f"━━━━━━━━━━━━━━━━\n"
@@ -61,10 +94,7 @@ def format_alert(alert_type: str, message: str, severity: str = "warning") -> st
 
 
 def format_doubler_signal(code: str, name: str, score: float, pattern: str, price: float) -> str:
-    """格式化翻倍股信号消息
-
-    消息格式: 🚀 翻倍股更新 | 新增X只 | 评分变化
-    """
+    """格式化翻倍股信号消息"""
     return (
         f"🚀 翻倍股信号\n"
         f"━━━━━━━━━━━━━━━━\n"

@@ -443,7 +443,7 @@
         10维评分(量化6维+催化剂4维) · C1政策/C2商品/C3合同/C5重组/C7业绩
       </div>
       <!-- 排行表格 -->
-      <table><thead><tr><th>#</th><th>代码</th><th>名称</th><th>现价</th><th>行业</th><th>市值</th><th>本月涨</th><th>翻倍潜力</th><th>催化剂</th></tr></thead><tbody id="doublerBody"></tbody></table>
+      <table><thead><tr><th>#</th><th>代码</th><th>名称</th><th>现价</th><th>行业</th><th>市值</th><th>本月涨</th><th>翻倍潜力</th><th>催化剂</th><th>操作</th></tr></thead><tbody id="doublerBody"></tbody></table>
       <!-- 仓位方案卡片 -->
       <div id="doublerPlanArea" style="margin-top:14px;padding:12px;background:rgba(34,197,94,.04);border:1px solid rgba(34,197,94,.12);border-radius:8px;display:none">
         <div style="font-size:13px;font-weight:700;margin-bottom:8px">💰 买入方案 <span id="doublerPlanCapital" style="font-weight:400;font-size:12px;color:var(--text-secondary)"></span></div>
@@ -503,9 +503,9 @@
         <span style="color:var(--text-muted)"><b>单策略</b> — 仅一策略选中，不列为推荐（<span title="仅一策略信号强度不足">不展示</span>）</span>
       </div>
       <table><thead>
-        <tr><th>代码</th><th>名称</th><th>信号</th><th>价格</th><th>入场区间</th><th>止损</th><th>目标1</th><th>目标2</th><th>目标3</th><th>操作</th><th>仓位</th><th>记录</th></tr>
+        <tr><th>代码</th><th>名称</th><th>信号</th><th>价格</th><th>入场区间</th><th>止损</th><th>目标1</th><th>目标2</th><th>目标3</th><th>理由</th><th>操作</th><th>仓位</th><th>记录</th></tr>
       </thead><tbody id="adviceBody">
-        <tr><td colspan="12" style="text-align:center;color:var(--text-muted)">分析中...</td></tr>
+        <tr><td colspan="13" style="text-align:center;color:var(--text-muted)">分析中...</td></tr>
       </tbody></table>
     </div>
   </div>
@@ -590,7 +590,10 @@
         <span style="color:#94a3b8">⚪</span> <b>回调中</b> 月跌>5% → 普通回调,关注是否缩量<br>
         <span style="color:#ef4444">🔴</span> <b>放量下跌⚠️</b> 月跌>8%, 放量 → 出货风险,回避<br>
         <span style="color:#ef4444">🔴</span> <b>涨幅已大</b> 月+25%~+50% → 空间有限,减分<br>
-        <span style="color:#ef4444">🔴</span> <b>排除-涨幅过高</b> 月>50% → 已排除,不推荐<br>
+        <span style="color:#ef4444">🔴</span> <b>弱势下行</b> 价<MA20,10日跌>8% → 趋势走坏<br>
+        <span style="color:#ef4444">🔴</span> <b>连阴下行</b> 价<MA20,近5日4阴 → 持续走弱<br>
+        <span style="color:#dc2626">⛔</span> <b>单边下行</b> 价<MA20,20日跌>15% → 已排除,不推荐<br>
+        <span style="color:#dc2626">⛔</span> <b>排除-涨幅过高</b> 月>50% → 已排除,不推荐<br>
       </div>
 
       <!-- 汇总卡片 -->
@@ -1192,7 +1195,7 @@ async function loadDoublerPanel() {
       fetchJSON('/api/doubler/plan/10k'),
     ]);
 
-    if (!rec || rec.error) { tbody.innerHTML = '<tr><td colspan="9">数据加载失败</td></tr>'; return; }
+    if (!rec || rec.error) { tbody.innerHTML = '<tr><td colspan="10">数据加载失败</td></tr>'; return; }
 
     dateEl.textContent = '📅 ' + (rec.trade_date || '');
     let picks = (rec.elite_picks || []).slice(0, 12);
@@ -1219,6 +1222,7 @@ async function loadDoublerPanel() {
         <td style="color:${mtmClr}">${p.mtm_gain > 0 ? '+' : ''}${p.mtm_gain}%</td>
         <td style="color:${potClr(p.potential)};font-weight:700">${p.potential}</td>
         <td>${catLabel}</td>
+        <td><button onclick="addToPlan('${p.code}','${p.name}',${p.close},${p.score||0},'${(p.catalyst||{}).early_pattern||''}')" style="padding:3px 8px;border:1px solid var(--gold);border-radius:4px;background:rgba(240,180,41,.08);color:var(--gold);cursor:pointer;font-size:11px">+方案</button></td>
       </tr>`;
     }).join('');
 
@@ -1239,7 +1243,29 @@ async function loadDoublerPanel() {
       }
     }
   } catch(e) {
-    tbody.innerHTML = '<tr><td colspan="9">加载异常: ' + e.message + '</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10">加载异常: ' + e.message + '</td></tr>';
+  }
+}
+
+// 从掘金面板加入1W实盘方案
+async function addToPlan(code, name, price, score, pattern) {
+  if (price > 25 && !confirm(name + ' 单价¥' + price + ' 超25元, 仍要加入?')) return;
+  try {
+    const today = new Date().toISOString().slice(0,10);
+    const r = await fetch(API + '/api/plan-1w', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        plan_date: today,
+        picks: [{ code, name, close: price, score, catalyst: { early_pattern: pattern, early_reason: '' } }]
+      })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const data = await r.json();
+    alert('✅ ' + name + ' 已加入1W实盘方案 (草稿)');
+    loadPlan1W();
+  } catch(e) {
+    alert('❌ 加入失败: ' + e.message);
   }
 }
 
@@ -1416,32 +1442,35 @@ try {
   const tbody = $('adviceBody');
   const items = data.recommendations || [];
   if (items.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted)">当前无多策略共振信号</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--text-muted)">当前无多策略共振信号</td></tr>';
     return;
   }
   tbody.innerHTML = items.map(r => {
     const signalColor = r.consensus >= 3 ? 'var(--red)' : 'var(--gold)';
     const posColor = r.position === '25%' ? 'var(--red)' : 'var(--gold)';
+    const reasonShort = (r.reason || '').substring(0, 40) + ((r.reason || '').length > 40 ? '...' : '');
+    const reasonEsc = (r.reason || '').replace(/"/g, '&quot;');
     return `<tr>
       <td class="code-num" style="color:var(--text-muted)">${r.code}</td>
       <td style="font-weight:600">${r.name}</td>
       <td style="color:${signalColor};font-weight:700">${r.signal}</td>
-      <td class="code-num">¥${r.price.toFixed(2)}</td>
+      <td class="code-num">${r.price.toFixed(2)}</td>
       <td class="code-num" style="color:var(--green);font-size:12px">${r.entry_zone}</td>
-      <td class="code-num" style="color:var(--red);font-size:12px" title="${r.stop_loss_action||''}">${r.stop_loss}</td>
-      <td class="code-num" style="color:var(--green);font-size:12px">${r.target_1}<br><span style="font-size:10px;color:var(--text-muted)">${r.target_1_action||''}</span></td>
-      <td class="code-num" style="color:var(--gold);font-size:12px">${r.target_2}<br><span style="font-size:10px;color:var(--text-muted)">${r.target_2_action||''}</span></td>
-      <td class="code-num" style="color:var(--purple);font-size:12px">${r.target_3 || ''}<br><span style="font-size:10px;color:var(--text-muted)">${r.target_3_action||''}</span></td>
-      <td><button onclick='showAdviceDetail(\`${r.code}\`,\`${r.name}\`,\`${r.signal}\`,\`${r.entry_zone}\`,\`${r.stop_loss}\`,\`${r.target_1}\`,\`${r.target_2}\`,\`${r.target_3||""}\`,\`${r.target_1_action||""}\`,\`${r.target_2_action||""}\`,\`${r.target_3_action||""}\`,\`${r.trailing_stop||""}\`,\`${r.position}\`,\`${r.reason||""}\`)' style="padding:3px 8px;border:1px solid var(--gold);border-radius:4px;background:transparent;color:var(--gold);cursor:pointer;font-size:11px">详情</button></td>
+      <td class="code-num" style="color:var(--red);font-size:12px">${r.stop_loss}</td>
+      <td class="code-num" style="color:var(--green);font-size:12px">${r.target_1}</td>
+      <td class="code-num" style="color:var(--gold);font-size:12px">${r.target_2}</td>
+      <td class="code-num" style="color:var(--purple);font-size:12px">${r.target_3 || ''}</td>
+      <td style="font-size:11px;color:var(--text-secondary);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${reasonEsc}">${reasonShort}</td>
+      <td><button onclick="showAdviceDetail('${r.code}','${r.name}','${r.signal}','${r.entry_zone}','${r.stop_loss}','${r.target_1}','${r.target_2}','${r.target_3||''}','${r.target_1_action||''}','${r.target_2_action||''}','${r.target_3_action||''}','${r.trailing_stop||''}','${r.position}','${(r.reason||'').replace(/'/g,"\\'")}')" style="padding:3px 8px;border:1px solid var(--gold);border-radius:4px;background:transparent;color:var(--gold);cursor:pointer;font-size:11px">详情</button></td>
       <td style="color:${posColor};font-weight:700">${r.position}</td>
       <td style="white-space:nowrap">
-        <button onclick="showReason('${r.code}','${r.name}',\`${(r.reason||'').replace(/`/g,'\\`')}\`)" style="padding:3px 6px;border:1px solid var(--blue);border-radius:4px;background:transparent;color:var(--blue);cursor:pointer;font-size:11px" title="入选原因">i</button>
+        <button onclick="showReason('${r.code}','${r.name}','${(r.reason||'').replace(/'/g,"\\'")}')" style="padding:3px 6px;border:1px solid var(--blue);border-radius:4px;background:transparent;color:var(--blue);cursor:pointer;font-size:11px" title="入选原因">i</button>
         <button onclick="quickLog('${r.code}','${r.name}',${r.price})" style="padding:3px 8px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-secondary);cursor:pointer;font-size:11px">记录</button>
       </td>
     </tr>`;
   }).join('');
 } catch (err) {
-  $('adviceBody').innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--red)">⚠️ ' + err.message + '</td></tr>';
+  $('adviceBody').innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--red)">⚠️ ' + err.message + '</td></tr>';
 }
 }
 

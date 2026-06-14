@@ -10,9 +10,17 @@ LOGDIR="$PROJECT_DIR/logs"
 mkdir -p "$LOGDIR"
 LOGFILE="$LOGDIR/doubler_scan_$(date +%Y%m%d).log"
 
-echo "[$(date '+%Y-%m-%d %H:%M')] 🔮 魔法师每日扫描开始" | tee -a "$LOGFILE"
+# 选择 Python：优先 venv（tushare 在 venv 中）
+VENV_PYTHON="${PROJECT_DIR}/.venv/bin/python3"
+if command -v "$VENV_PYTHON" &>/dev/null; then
+    PYTHON="$VENV_PYTHON"
+else
+    PYTHON="python3"
+fi
 
-python3 -c "
+echo "[$(date '+%Y-%m-%d %H:%M')] 🔮 魔法师每日扫描开始 | Python: $PYTHON" | tee -a "$LOGFILE"
+
+$PYTHON -c "\
 from dotenv import load_dotenv; load_dotenv()
 import json, sys, os, time
 
@@ -57,7 +65,7 @@ except Exception as e:
 " 2>&1 | tee -a "$LOGFILE"
 
 # 检查预警是否自动推送
-python3 -c "
+$PYTHON -c "
 from services.alert import check_alerts
 triggered = check_alerts(force=True)
 doubler_trig = [t for t in triggered if 'doubler' in str(t.get('data',{}).get('strategy',''))]

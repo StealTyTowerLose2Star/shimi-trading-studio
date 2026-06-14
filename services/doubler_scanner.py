@@ -216,10 +216,38 @@ def _early_stage_score_batch(candidates: list) -> dict:
                     result["reason"] = f"连续涨停{consecutive_limit}天"
                     continue
 
+            # ─── 趋势过滤器 (排除单边下行) ───
+            trend_score = 0
+            if nk >= 20:
+                import numpy as np
+                ma20 = np.mean(closes[-20:])
+                trend_20d = (closes[-1] / closes[-min(20, nk)] - 1) * 100
+                trend_10d = (closes[-1] / closes[-min(10, nk)] - 1) * 100
+                below_ma20 = closes[-1] < ma20 * 0.98
+                down_days = sum(1 for i in range(1, min(5, nk)) if closes[-i] < closes[-i-1])
+                
+                if below_ma20 and trend_20d < -15:
+                    result["exclude"] = True
+                    result["score"] = -15
+                    result["level"] = "excluded"
+                    result["reason"] = f"单边下行{trend_20d:.0f}%"
+                    result["pattern"] = "单边下行"
+                    result["mtm_gain"] = round(monthly_change, 1)
+                    continue
+                elif below_ma20 and trend_10d < -8:
+                    trend_score = -10
+                    reasons_extra = [f"弱势{trend_10d:.0f}%"]
+                elif below_ma20 and down_days >= 4:
+                    trend_score = -8
+                    reasons_extra = ["连阴下行"]
+                else:
+                    reasons_extra = []
+            else:
+                reasons_extra = []
+
             # ─── 多模式评分 ───
             score = 0
             reasons = []
-            pattern = ""
 
             # Pattern A: 弹簧蓄力 (压缩 + 缩量 + 横盘)
             if compression < 1.2 and vol_dry_up < 1.1 and -3 <= monthly_change <= 10:
@@ -298,11 +326,38 @@ def _early_stage_score_batch(candidates: list) -> dict:
                     score -= 6
                     reasons.append(f"已{consecutive_limit}连板")
 
+            # ─── 趋势惩罚 ───
+            score += trend_score
+            if reasons_extra:
+                reasons.extend(reasons_extra)
+                # Override pattern if trend penalty dominates
+                if trend_score <= -10:
+                    pattern = "弱势下行"
+                elif trend_score <= -8:
+                    pattern = "连阴下行"
+
             result["score"] = score
             result["level"] = pattern or "neutral"
             result["reason"] = " | ".join(reasons) if reasons else "无特殊信号"
             result["pattern"] = pattern
             result["mtm_gain"] = round(monthly_change, 1)
+
+            # ─── MA均线收敛检测 (额外加分, 需上行斜率) ───
+            # 检测 MA5/MA20 是否粘合且 MA5>MA20 (上行趋势)
+            if nk >= 20:
+                try:
+                    import numpy as np
+                    ma20_val = np.mean(closes[-min(20, nk):])
+                    ma5_val = np.mean(closes[-min(5, nk):])
+                    ma_gap = abs(ma5_val - ma20_val) / max(ma20_val, 0.01) * 100
+                    # 斜率: MA20 10日前vs当前
+                    ma20_10d = np.mean(closes[-min(30, nk):-min(20, nk)]) if nk >= 30 else ma20_val
+                    slope_up = ma5_val > ma20_val and ma20_val > ma20_10d  # 均线向上发散
+                    if ma_gap < 2.5 and slope_up:
+                        result["score"] += 5
+                        result["reason"] = result.get("reason","") + " | MA粘合↑"
+                except Exception:
+                    pass
 
     except Exception as e:
         import sys
@@ -657,6 +712,59 @@ def recommend_current_month():
         filtered_candidates.append(c)
 
     candidates = filtered_candidates
+
+    # ═══════════════════════════════════════════
+    # D11: MA均线收敛检测 (5日/20日/60日/120日粘合)
+    # ═══════════════════════════════════════════
+    try:
+        from realtime_scorer import get_kline_batch
+        top50 = candidates[:50]
+        deep_codes = [c["code"] for c in top50]
+        deep_klines = get_kline_batch(deep_codes, days=150)
+
+        if deep_klines:
+            import numpy as np
+            for c in top50:
+                kline = deep_klines.get(c["code"])
+                if kline is None or len(kline) < 60:
+                    continue
+                closes = kline["close"].values.astype(float)
+                nk = len(closes)
+
+                # 计算4条均线
+                ma5 = np.mean(closes[-min(5, nk):])
+                ma20 = np.mean(closes[-min(20, nk):])
+                ma60 = np.mean(closes[-min(60, nk):]) if nk >= 60 else None
+                ma120 = np.mean(closes[-min(120, nk):]) if nk >= 120 else None
+
+                # 均线粘合度: 最大均线差 / 当前价 < 5% 即为粘合
+                mas = [ma5, ma20] + ([ma60] if ma60 else []) + ([ma120] if ma120 else [])
+                ma_range = (max(mas) - min(mas)) / ma20 * 100 if ma20 > 0 else 100
+
+                # 均线斜率: MA20 10日前 vs 当前 (必须>0才加分)
+                ma20_10d_ago = np.mean(closes[-min(30, nk):-min(20, nk)]) if nk >= 30 else ma20
+                ma_slope = (ma20 - ma20_10d_ago) / ma20_10d_ago * 100 if ma20_10d_ago > 0 else -1
+
+                bonus = 0
+                if ma_slope <= 0:
+                    bonus = 0  # 均线下行, 粘合不加分
+                elif ma_range < 2 and len(mas) >= 3:
+                    bonus = 12  # 多均线高度粘合+上行
+                elif ma_range < 3 and len(mas) >= 3:
+                    bonus = 8
+                elif ma_range < 4:
+                    bonus = 5
+                elif ma_range < 5:
+                    bonus = 3
+
+                if bonus > 0:
+                    c["score"] += bonus
+                    c["score_breakdown"]["ma_convergence"] = bonus
+                    c["catalyst"]["ma_bonus"] = bonus
+                    c["catalyst"]["ma_range"] = round(ma_range, 1)
+                    c["catalyst"]["ma_slope"] = round(ma_slope, 1)
+    except Exception:
+        pass
 
     candidates.sort(key=lambda x: -x["score"])
     top30 = candidates[:30]
