@@ -98,7 +98,27 @@ def api_pnl_report():
         buckets[key]["pnl"] += pnl
         seen_dates.add(key)
 
-    # 持仓（未平仓）：按入场日期计入，盈亏=0
+    # 持仓（未平仓）：按入场日期计入浮动盈亏
+    # 尝试获取最新价计算浮动盈亏
+    try:
+        from position_manager import get_kline as _pm_get_kline
+        _price_cache = {}
+        for t in trades:
+            if t.get("exit_price"):
+                continue
+            code = t["code"]
+            if code not in _price_cache:
+                try:
+                    df = _pm_get_kline(code, days=10)
+                    if df is not None and len(df) > 0:
+                        _price_cache[code] = float(df["close"].iloc[-1])
+                    else:
+                        _price_cache[code] = None
+                except Exception:
+                    _price_cache[code] = None
+    except Exception:
+        _price_cache = {}
+
     for t in trades:
         if t.get("exit_price"):
             continue
@@ -111,9 +131,20 @@ def api_pnl_report():
             key = entry_date[:4]
         else:
             key = entry_date
-        if key in seen_dates:
-            continue  # 该日期已有已平仓记录
-        buckets[key]  # 创建空记录 (0 trades, 0 won, 0 pnl)
+
+        entry_p = t.get("entry_price") or 0
+        qty = t.get("qty") or 0
+        cp = _price_cache.get(t["code"])
+        if cp is not None:
+            u_pnl = (cp - entry_p) * qty if t["direction"] == "buy" \
+                   else (entry_p - cp) * qty
+        else:
+            u_pnl = 0
+
+        if key not in seen_dates:
+            buckets[key] = {"trades": 0, "won": 0, "pnl": 0.0}
+
+        buckets[key]["pnl"] += u_pnl
         seen_dates.add(key)
 
     result = []
