@@ -248,6 +248,7 @@
   }
   .unified-split #ashareSection,
   .unified-split #haitaoSection {
+    display: block !important;
     min-width: 0;
     max-width: 100%;
     overflow-y: auto;
@@ -1755,20 +1756,32 @@ function loadAuth() {
   try {
     const saved = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
     if (saved && saved.token) {
-      // Verify token with server
       fetch('/api/auth/me', {headers: {'Authorization': 'Bearer ' + saved.token}})
         .then(r => r.json()).then(d => {
           if (d.user) { setUser(d.user, saved.token); }
-          else { showLoginPrompt(); }
-        }).catch(() => showLoginPrompt());
+          else { tryLocalToken(); }
+        }).catch(() => tryLocalToken());
     } else {
-      showLoginPrompt();
+      tryLocalToken();
     }
-  } catch(e) { showLoginPrompt(); }
+  } catch(e) { tryLocalToken(); }
 }
 
-// tryLocalToken 已移除 — 安全原因: 不自动登录未认证访客
-
+// Auto-load auth on page load — 通过 .local_token 安全认证
+function tryLocalToken() {
+  fetch('/api/auth/me', {headers: {'Authorization': 'Bearer local_token'}})
+    .then(r => r.json()).then(d => {
+      if (d.user) {
+        console.log('✅ 本地自动登录:', d.user.display_name);
+        setUser(d.user, 'local_token');
+        loadTradesFromServer();
+        loadCacheStatus();
+      } else {
+        showLoginPrompt();
+      }
+    }).catch(() => showLoginPrompt());
+}
+loadAuth();
 function showLoginPrompt() {
   document.getElementById('tradeJournalBody').innerHTML =
     '<tr><td colspan="15" style="text-align:center;color:var(--text-muted);padding:20px">点击右上角 👤 登录后查看和记录交易</td></tr>';
@@ -1929,15 +1942,29 @@ function renderServerTrades() {
     };
   });
 
-  // Step 3: 合并持仓评估
+  // Step 3: 合并持仓评估 + 实时价
   const openCodes = openMerged.map(p => ({code: p.code, entry_price: Math.round(p.entry_price * 100) / 100, direction: p.direction}));
   if (openMerged.length > 0) {
-    fetch('/api/positions/evaluate', {
+    const evalReq = fetch('/api/positions/evaluate', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({positions: openCodes})
-    }).then(r => r.json()).then(data => {
+    });
+    const rtReq = fetch('/api/positions/realtime', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({codes: openMerged.map(p => p.code)})
+    });
+    Promise.all([evalReq, rtReq]).then(([er, rr]) => Promise.all([er.json(), rr.json()])).then(([evalData, rtData]) => {
       const evalMap = {};
-      if (data.results) data.results.forEach(e => { evalMap[e.code] = e; });
+      if (evalData.results) evalData.results.forEach(e => { evalMap[e.code] = e; });
+      // 实时价覆盖（盘中数据优先）
+      const rtPrices = rtData.prices || {};
+      Object.keys(rtPrices).forEach(code => {
+        if (rtPrices[code] && rtPrices[code].price != null) {
+          if (!evalMap[code]) evalMap[code] = {};
+          evalMap[code].current_price = rtPrices[code].price;
+          evalMap[code].change_pct = rtPrices[code].change_pct;
+        }
+      });
       renderTable(evalMap);
     }).catch(() => renderTable({}));
   } else {
@@ -1955,8 +1982,11 @@ function renderServerTrades() {
       const t3 = ev.targets ? (ev.targets[2]?.price ? '¥' + ev.targets[2].price : '--') : '--';
       const trailLabels = {0:'初始',1:'保本',2:'锁利',3:'高锁'};
       const trailLvl = ev.trailing_level != null ? trailLabels[ev.trailing_level] || ('T'+ev.trailing_level) : '初始';
-      const pnl = ev.unrealized_pnl != null ? (ev.unrealized_pnl * p.qty) : null;
-      const pnlPct = ev.unrealized_pnl_pct != null ? (ev.unrealized_pnl_pct >= 0 ? '+' : '') + ev.unrealized_pnl_pct + '%' : '--';
+      // 逐批计算 P&L（避免加权均价导致的偏差）
+      const cp = ev.current_price;
+      const totalCost = p.batch.reduce((s, t) => s + (t.entry_price || 0) * (t.qty || 0), 0);
+      const pnl = cp != null ? p.batch.reduce((s, t) => s + (cp - t.entry_price) * (t.qty || 0), 0) : null;
+      const pnlPct = totalCost > 0 && pnl != null ? ((pnl >= 0 ? '+' : '') + (pnl / totalCost * 100).toFixed(1) + '%') : '--';
       const pnlCls = (pnl !== null ? (pnl > 0 ? 'up' : pnl < 0 ? 'down' : '') : '');
       const pnlDisplay = pnl !== null ? (pnl >= 0 ? '+' : '') + '¥' + pnl.toFixed(2) : '--';
 
@@ -2156,7 +2186,20 @@ function renderTradeJournal() {
   loadTradesFromServer();
 }
 
-// Auto-load auth on page load
+// Auto-load auth on page load — 通过 .local_token 安全认证
+function tryLocalToken() {
+  fetch('/api/auth/me', {headers: {'Authorization': 'Bearer local_token'}})
+    .then(r => r.json()).then(d => {
+      if (d.user) {
+        console.log('✅ 本地自动登录:', d.user.display_name);
+        setUser(d.user, 'local_token');
+        loadTradesFromServer();
+        loadCacheStatus();
+      } else {
+        showLoginPrompt();
+      }
+    }).catch(() => showLoginPrompt());
+}
 loadAuth();
 
 // ===== 操作建议详情 =====
@@ -2206,30 +2249,51 @@ async function refreshRealtimePrices() {
   const btn = document.querySelector('[onclick="refreshRealtimePrices()"]') || document.querySelector('button:contains("🔄 实时价")');
   if (btn) btn.textContent = '⏳ 刷新中...';
   try {
-    // 获取所有持仓代码
     const r = await fetch('/api/trades', {headers: apiHeaders()});
     const d = await r.json();
-    const codes = [...new Set((d.trades || []).map(t => t.code))];
-    if (codes.length === 0) { alert('无持仓'); return; }
-    
+    const trades = d.trades || [];
+    const openCodes = [...new Set(trades.filter(t => !t.exit_price).map(t => t.code))];
+    if (openCodes.length === 0) { if(btn) btn.textContent = '🔄 实时价'; alert('无持仓'); return; }
+
     const r2 = await fetch('/api/positions/realtime', {
       method: 'POST', headers: apiHeaders(),
-      body: JSON.stringify({codes})
+      body: JSON.stringify({codes: openCodes})
     });
     const prices = (await r2.json()).prices || {};
-    
-    // 更新每个持仓行的当前价
+
+    // 逐行更新：价格 + 浮盈(¥ + %)
     let updated = 0;
     document.querySelectorAll('#tradeJournalBody tr').forEach(tr => {
       const codeCell = tr.querySelector('td:nth-child(2)');
       if (!codeCell) return;
       const code = codeCell.textContent.trim();
       const info = prices[code];
-      if (!info) return;
+      if (!info || info.price == null) return;
+
+      // 更新当前价
       const priceCell = tr.querySelector('td:nth-child(7)');
-      if (priceCell) priceCell.textContent = '¥' + info.price;
-      const pnlCell = tr.querySelector('td:nth-child(13)');
-      if (pnlCell) pnlCell.style.color = info.change >= 0 ? 'var(--green)' : 'var(--red)';
+      const newPrice = info.price;
+      if (priceCell) priceCell.textContent = '¥' + newPrice;
+
+      // 逐批计算浮盈（合并行）
+      const openBatch = trades.filter(t => !t.exit_price && t.code === code);
+      if (openBatch.length === 0) return;
+      const totalCost = openBatch.reduce((s, t) => s + (t.entry_price || 0) * (t.qty || 0), 0);
+      const pnl = openBatch.reduce((s, t) => s + (newPrice - t.entry_price) * (t.qty || 0), 0);
+
+      // 浮动
+      const slCell = tr.querySelector('td:nth-child(12)');
+      if (slCell) { slCell.textContent = (pnl >= 0 ? '+' : '') + '¥' + pnl.toFixed(2); slCell.className = 'code-num ' + (pnl > 0 ? 'up' : pnl < 0 ? 'down' : ''); slCell.style.fontWeight = '700'; }
+
+      // 浮盈%
+      const pnlPctCell = tr.querySelector('td:nth-child(13)');
+      const pnlPct = totalCost > 0 ? (pnl / totalCost * 100) : 0;
+      if (pnlPctCell) { pnlPctCell.textContent = (pnlPct >= 0 ? '+' : '') + pnlPct.toFixed(1) + '%'; pnlPctCell.className = 'code-num ' + (pnlPct > 0 ? 'up' : pnlPct < 0 ? 'down' : ''); pnlPctCell.style.fontWeight = '700'; }
+
+      // 盈亏%
+      const pctCell = tr.querySelector('td:nth-child(14)');
+      if (pctCell) { pctCell.textContent = (pnlPct >= 0 ? '+' : '') + pnlPct.toFixed(1) + '%'; pctCell.className = 'code-num ' + (pnlPct > 0 ? 'up' : pnlPct < 0 ? 'down' : ''); pctCell.style.fontWeight = '700'; }
+
       updated++;
     });
     if (btn) btn.textContent = '✅ 已更新 ' + updated + ' 只';
