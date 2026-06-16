@@ -3063,6 +3063,7 @@ async function loadPlan1W() {
 }
 
 async function generatePlan() {
+  if (!confirm('将替换当前所有方案（旧方案标记为已平仓），\n生成最新的市场最强3只，确定吗？')) return;
   const btn = event.target;
   btn.disabled = true;
   btn.textContent = '⏳ 生成中...';
@@ -3074,7 +3075,8 @@ async function generatePlan() {
     });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || '生成失败');
-    alert('✅ 成功生成 ' + (data.created || 0) + ' 个新方案！');
+    const msg = '✅ 已生成 ' + (data.created || 0) + ' 只新股' + (data.replaced ? ' (替换 ' + data.replaced + ' 只旧方案)' : '');
+    alert(msg);
     loadPlan1W();
   } catch(e) {
     alert('❌ 生成失败: ' + e.message);

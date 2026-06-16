@@ -10,10 +10,11 @@ LOGDIR="$PROJECT_DIR/logs"
 mkdir -p "$LOGDIR"
 LOGFILE="$LOGDIR/doubler_scan_$(date +%Y%m%d).log"
 
-# 选择 Python：优先 venv（tushare 在 venv 中）
-VENV_PYTHON="${PROJECT_DIR}/.venv/bin/python3"
-if command -v "$VENV_PYTHON" &>/dev/null; then
-    PYTHON="$VENV_PYTHON"
+# 选择 Python：优先系统 python3（tushare 安装在系统 site-packages）
+# Flask 进程 backend.py 使用 /usr/bin/python3
+SYSTEM_PYTHON="/usr/bin/python3"
+if command -v "$SYSTEM_PYTHON" &>/dev/null; then
+    PYTHON="$SYSTEM_PYTHON"
 else
     PYTHON="python3"
 fi

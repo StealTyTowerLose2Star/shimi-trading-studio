@@ -396,5 +396,18 @@ def generate_from_doubler():
     if len(picks) < 3:
         picks = [c for c in top30 if "ST" not in c.get("name", "")][:3]
 
+    # 替换模式: 先关闭所有旧方案 (draft/active → closed)
+    conn = _get_conn()
+    old_ids = [r[0] for r in conn.execute(
+        "SELECT id FROM plan_1w WHERE status IN ('draft','active')"
+    ).fetchall()]
+    for oid in old_ids:
+        conn.execute("UPDATE plan_1w SET status='closed', close_reason='方案替换', close_date=? WHERE id=?",
+                     (today, oid))
+    conn.commit()
+    conn.close()
+    if old_ids:
+        logger.info("[plan_1w] 替换旧方案: %d条 → closed", len(old_ids))
+
     plans = create_plan(today, picks, trade_date)
-    return {"created": len(plans), "plans": plans}
+    return {"created": len(plans), "replaced": len(old_ids), "plans": plans}

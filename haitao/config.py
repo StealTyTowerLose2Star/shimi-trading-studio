@@ -49,16 +49,4 @@ US_MARKET_CLOSE_MIN = 0
 # ─── 项目根目录 ──────────────────────────────
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# ═══════════════════════════════════════════════════════════════
-# Magician 配置 → 已迁移至 magician/config.py
-# 以下仅保留向后兼容重导出，新代码请用 from magician.config import ...
-# ═══════════════════════════════════════════════════════════════
-from magician.config import (
-    DOUBLER_SEED_POOL, LEVERAGED_3X_ETFS,
-    DOUBLER_SCORE_THRESHOLD, SHORT_SCORE_THRESHOLD,
-    LEVERAGED_MAX_HOLD_DAYS, LEVERAGED_DECAY_WARN_PCT,
-    CATALYST_WEIGHTS,
-    COILED_SPRING_MIN_DROP, COILED_SPRING_MAX_DROP,
-    SILENT_ACCUM_DAYS, EARLY_WARMING_MIN_VOL,
-    SMART_PULLBACK_MIN_DROP, SMART_PULLBACK_MAX_DROP,
-)
+# Magician 配置已迁移至 magician/config.py，禁止回引（市场隔离）

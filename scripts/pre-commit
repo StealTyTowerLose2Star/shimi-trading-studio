@@ -1,0 +1,31 @@
+#!/bin/bash
+# 拾米交易工作室 · pre-commit hook
+# 每次 git commit 前自动运行冒烟测试
+# 安装: cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+
+set -e
+
+echo "🧪 pre-commit: 运行冒烟测试..."
+cd "$(git rev-parse --show-toplevel)"
+
+# 只测试快速项 (跳过外部API依赖)
+python3 -c "
+import sys, os
+sys.path.insert(0, '.')
+from test_smoke import TestImports, TestCache, TestMiddleware, TestLogger
+import unittest
+suite = unittest.TestSuite()
+loader = unittest.TestLoader()
+suite.addTests(loader.loadTestsFromTestCase(TestImports))
+suite.addTests(loader.loadTestsFromTestCase(TestCache))
+suite.addTests(loader.loadTestsFromTestCase(TestMiddleware))
+suite.addTests(loader.loadTestsFromTestCase(TestLogger))
+runner = unittest.TextTestRunner(verbosity=1)
+result = runner.run(suite)
+if not result.wasSuccessful():
+    print('❌ 冒烟测试失败, 提交被阻止')
+    sys.exit(1)
+print('✅ 冒烟测试通过')
+" 2>&1
+
+echo "✅ pre-commit 检查完成"
