@@ -237,42 +237,6 @@
     #marketAdviceBanner > div { flex: 1 1 100%; }
   }
 
-  /* 🏛️ 双市场并排视图 — A股 | 美股 同屏显示 */
-  .unified-split {
-    display: grid;
-    grid-template-columns: minmax(420px, 1fr) minmax(420px, 1fr);
-    gap: 16px;
-    width: 100%;
-    max-width: 100vw;
-    overflow-x: hidden;
-  }
-  .unified-split #ashareSection,
-  .unified-split #haitaoSection {
-    display: block !important;
-    min-width: 0;
-    max-width: 100%;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding: 0 4px;
-  }
-  .unified-split #ashareSection table,
-  .unified-split #haitaoSection table {
-    font-size: 10px;
-  }
-  .unified-split #ashareSection th,
-  .unified-split #haitaoSection th,
-  .unified-split #ashareSection td,
-  .unified-split #haitaoSection td {
-    padding: 3px 4px;
-    white-space: nowrap;
-  }
-  @media (max-width: 1100px) {
-    .unified-split { 
-      grid-template-columns: 1fr;
-      max-width: 100%;
-    }
-  }
-
   /* ===== 1W实盘追踪 ===== */
   .pnl-positive { color: var(--green) !important; font-weight: 700; }
   .pnl-negative { color: var(--red) !important; font-weight: 700; }
@@ -361,7 +325,6 @@
     <span style="display:inline-flex;gap:0;margin-left:8px;border-radius:8px;overflow:hidden;border:1px solid var(--border);">
       <button id="tabAshare" onclick="switchMarket('ashare')" style="padding:3px 12px;border:none;background:rgba(240,180,41,.12);color:var(--gold);cursor:pointer;font-size:11px;font-weight:600">📊 A股</button>
       <button id="tabUS" onclick="switchMarket('us')" style="padding:3px 12px;border:none;background:transparent;color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:500;border-left:1px solid var(--border)">🌊 美股</button>
-      <button id="tabUnified" onclick="switchMarket('unified')" style="padding:3px 12px;border:none;background:transparent;color:var(--text-muted);cursor:pointer;font-size:11px;font-weight:500;border-left:1px solid var(--border)">🔀 总览</button>
     </span>
   </div>
   <div>
@@ -2677,7 +2640,7 @@ if (_addTradeBtn) {
   };
 }
 
-// ===== 市场切换 (三Tab并排) =====
+// ===== 市场切换 (A股 | 美股) =====
 let currentMarket = 'ashare';
 
 function switchMarket(target) {
@@ -2687,28 +2650,17 @@ function switchMarket(target) {
 
   const tabA = document.getElementById('tabAshare');
   const tabU = document.getElementById('tabUS');
-  const tabX = document.getElementById('tabUnified');
   const label = document.getElementById('dataSourceLabel');
-  const dash = document.querySelector('.dashboard');
 
-  // 重置所有tab样式
-  [tabA, tabU, tabX].forEach(t => {
+  [tabA, tabU].forEach(t => {
     t.style.background = 'transparent';
     t.style.color = 'var(--text-muted)';
     t.style.fontWeight = '500';
   });
 
   currentMarket = target;
-  dash.classList.remove('unified-split');
 
-  if (target === 'ashare') {
-    ashare.style.display = '';
-    haitao.style.display = 'none';
-    tabA.style.background = 'rgba(240,180,41,.12)';
-    tabA.style.color = 'var(--gold)';
-    tabA.style.fontWeight = '600';
-    label.textContent = 'A 股 · ' + new Date().toLocaleTimeString('zh-CN');
-  } else if (target === 'us') {
+  if (target === 'us') {
     ashare.style.display = 'none';
     haitao.style.display = '';
     tabU.style.background = 'rgba(59,130,246,.12)';
@@ -2718,13 +2670,11 @@ function switchMarket(target) {
     refreshHaitao();
   } else {
     ashare.style.display = '';
-    haitao.style.display = '';
-    tabX.style.background = 'rgba(34,197,94,.12)';
-    tabX.style.color = 'var(--green)';
-    tabX.style.fontWeight = '600';
-    label.textContent = '🇨🇳+🌊 A股 · 美股 同屏';
-    dash.classList.add('unified-split');
-    refreshHaitao();
+    haitao.style.display = 'none';
+    tabA.style.background = 'rgba(240,180,41,.12)';
+    tabA.style.color = 'var(--gold)';
+    tabA.style.fontWeight = '600';
+    label.textContent = 'A 股 · ' + new Date().toLocaleTimeString('zh-CN');
   }
 }
 
