@@ -39,7 +39,7 @@ def api_us_score(ticker: str):
 # ─── 掘金 API ──────────────────────────────────
 
 from haitao.us_gold_scanner import (
-    gold_score, gold_pan, gold_pan_hot, gold_pan_adr, gold_pan_top_gainers, gold_report,
+    gold_score, gold_pan, gold_pan_hot, gold_pan_adr, gold_pan_top_gainers,
 )
 
 @bp.route("/gold/score/<ticker>")

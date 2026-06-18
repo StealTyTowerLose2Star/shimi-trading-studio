@@ -46,6 +46,9 @@ def api_me():
 
 @bp.route("/users")
 def api_users():
+    user = require_user()
+    if not user:
+        return unauthorized()
     return jsonify(list_users())
 
 

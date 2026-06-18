@@ -1722,28 +1722,15 @@ function loadAuth() {
       fetch('/api/auth/me', {headers: {'Authorization': 'Bearer ' + saved.token}})
         .then(r => r.json()).then(d => {
           if (d.user) { setUser(d.user, saved.token); }
-          else { tryLocalToken(); }
-        }).catch(() => tryLocalToken());
+          else { showLoginPrompt(); }
+        }).catch(() => showLoginPrompt());
     } else {
-      tryLocalToken();
+      showLoginPrompt();
     }
-  } catch(e) { tryLocalToken(); }
+  } catch(e) { showLoginPrompt(); }
 }
 
-// Auto-load auth on page load — 通过 .local_token 安全认证
-function tryLocalToken() {
-  fetch('/api/auth/me', {headers: {'Authorization': 'Bearer local_token'}})
-    .then(r => r.json()).then(d => {
-      if (d.user) {
-        console.log('✅ 本地自动登录:', d.user.display_name);
-        setUser(d.user, 'local_token');
-        loadTradesFromServer();
-        loadCacheStatus();
-      } else {
-        showLoginPrompt();
-      }
-    }).catch(() => showLoginPrompt());
-}
+// tryLocalToken 已移除 — 安全: 禁止自动登录未认证访客
 loadAuth();
 function showLoginPrompt() {
   document.getElementById('tradeJournalBody').innerHTML =
@@ -2149,20 +2136,8 @@ function renderTradeJournal() {
   loadTradesFromServer();
 }
 
-// Auto-load auth on page load — 通过 .local_token 安全认证
-function tryLocalToken() {
-  fetch('/api/auth/me', {headers: {'Authorization': 'Bearer local_token'}})
-    .then(r => r.json()).then(d => {
-      if (d.user) {
-        console.log('✅ 本地自动登录:', d.user.display_name);
-        setUser(d.user, 'local_token');
-        loadTradesFromServer();
-        loadCacheStatus();
-      } else {
-        showLoginPrompt();
-      }
-    }).catch(() => showLoginPrompt());
-}
+// tryLocalToken 已移除 — 安全: 禁止自动登录未认证访客
+// loadAuth() 已在第1718行定义，此处仅调用
 loadAuth();
 
 // ===== 操作建议详情 =====
