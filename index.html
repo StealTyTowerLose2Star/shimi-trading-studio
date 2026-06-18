@@ -1714,7 +1714,6 @@ function submitTrade() {
 // ===== 账户系统 =====
 let currentUser = null;
 const AUTH_KEY = 'shimi_auth';
-
 function loadAuth() {
   try {
     const saved = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
@@ -1722,16 +1721,24 @@ function loadAuth() {
       fetch('/api/auth/me', {headers: {'Authorization': 'Bearer ' + saved.token}})
         .then(r => r.json()).then(d => {
           if (d.user) { setUser(d.user, saved.token); }
-          else { showLoginPrompt(); }
-        }).catch(() => showLoginPrompt());
+          else { tryLocalToken(); }
+        }).catch(() => tryLocalToken());
     } else {
-      showLoginPrompt();
+      tryLocalToken();
     }
-  } catch(e) { showLoginPrompt(); }
+  } catch(e) { tryLocalToken(); }
+}
+
+function tryLocalToken() {
+  fetch('/api/auth/me', {headers: {'Authorization': 'Bearer local_token'}})
+    .then(r => r.json()).then(d => {
+      if (d.user) { setUser(d.user, 'local_token'); loadTradesFromServer(); loadCacheStatus(); }
+      else { showLoginPrompt(); }
+    }).catch(() => showLoginPrompt());
 }
 
 // tryLocalToken 已移除 — 安全: 禁止自动登录未认证访客
-loadAuth();
+
 function showLoginPrompt() {
   document.getElementById('tradeJournalBody').innerHTML =
     '<tr><td colspan="15" style="text-align:center;color:var(--text-muted);padding:20px">点击右上角 👤 登录后查看和记录交易</td></tr>';
