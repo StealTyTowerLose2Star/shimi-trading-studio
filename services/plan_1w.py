@@ -390,6 +390,11 @@ def generate_from_doubler():
             continue
         if c.get("code", "").startswith("9") and c.get("turnover", 0) < 5:
             continue
+        # 提取催化剂信息 (从嵌套结构展平)
+        cat = c.get("catalyst", {})
+        c["early_pattern"] = cat.get("early_pattern", "")
+        c["early_reason"] = cat.get("early_reason", "")
+        c["score"] = c.get("score", 0)
         if c.get("close", 999) <= 25:
             picks.append(c)
 

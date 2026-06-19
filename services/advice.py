@@ -186,6 +186,15 @@ def generate_advice():
         if consensus < 2 and not is_kline_only and not is_event_only:
             continue
 
+        # ─── 阶段过滤：鱼尾期直接排除，鱼身末期降权 ──
+        stage_penalty = 0
+        if code in trend_map:
+            stage = trend_map[code].get("stage", "")
+            if stage == "鱼尾期":
+                continue  # 不推荐
+            elif stage == "鱼身末期":
+                stage_penalty = -30  # 排序降权
+
         kp_info = kline_map.get(code, {})
         kp_score = kp_info.get("score", 0) if kp_info else 0
         if is_kline_only and kp_score < 30:
@@ -272,7 +281,7 @@ def generate_advice():
         except Exception:
             pass
 
-        sort_score = consensus * 100
+        sort_score = consensus * 100 + stage_penalty
         if _ma_score: sort_score += _ma_score["score"] * 0.3
         if _macd: sort_score += _macd["score"] * 0.3
         if _kline_patterns: sort_score += _kline_patterns["score"] * 0.25

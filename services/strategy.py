@@ -84,7 +84,7 @@ def run_trend_scan():
             continue
 
     results.sort(key=lambda x: x["trend_score"], reverse=True)
-    return {"picked": results[:15], "total_scanned": len(stock_codes),
+    return {"picked": results[:25], "total_scanned": len(stock_codes),
             "engine": "TrendDetector (real)"}
 
 
@@ -163,7 +163,7 @@ def run_hybrid_scan():
             pass
 
     results.sort(key=lambda x: x["score"], reverse=True)
-    return {"picked": results[:15], "total_scanned": len(stock_codes),
+    return {"picked": results[:25], "total_scanned": len(stock_codes),
             "engine": "MergedScorer 7D (real)"}
 
 
@@ -237,5 +237,5 @@ def run_dragon_scan():
             pass
 
     results.sort(key=lambda x: x["leader_score"], reverse=True)
-    return {"picked": results[:15], "total_scanned": len(stock_codes),
+    return {"picked": results[:25], "total_scanned": len(stock_codes),
             "engine": "LeaderScorer 5D (real)"}
