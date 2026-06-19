@@ -701,7 +701,11 @@
     <!-- 重置密码界面 -->
     <div id="resetPanel" style="display:none">
       <div style="display:flex;flex-direction:column;gap:10px">
-        <input id="resetUser" placeholder="用户名" style="padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-primary);color:var(--text-primary)">
+        <input id="resetUser" placeholder="用户名" style="padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-primary);color:var(--text-primary)" onkeyup="if(this.value.length>=2)loadResetQuestion()">
+        <div id="resetQuestionBox" style="display:none">
+          <div id="resetQuestionLabel" style="font-size:11px;color:var(--text-muted);margin-bottom:4px">密保问题：</div>
+          <input id="resetAnswer" placeholder="请输入答案" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-primary);color:var(--text-primary)">
+        </div>
         <div style="display:flex;gap:8px">
           <input id="resetCode" placeholder="验证码" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-primary);color:var(--text-primary)">
           <button onclick="getResetCode()" style="padding:10px 14px;border:1px solid var(--gold);border-radius:8px;background:rgba(240,180,41,.1);color:var(--gold);cursor:pointer;font-size:12px;white-space:nowrap">获取验证码</button>
@@ -2104,26 +2108,43 @@ function switchToReset() {
   document.getElementById('loginPanel').style.display = 'none';
   document.getElementById('registerPanel').style.display = 'none';
   document.getElementById('resetPanel').style.display = 'block';
+  document.getElementById('resetQuestionBox').style.display = 'none';
   document.getElementById('loginError').style.display = 'none';
   document.getElementById('resetError').style.display = 'none';
 }
 
+async function loadResetQuestion() {
+  const user = document.getElementById('resetUser').value.trim();
+  if (user.length < 2) { document.getElementById('resetQuestionBox').style.display = 'none'; return; }
+  try {
+    const r = await fetch('/api/auth/reset-question', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username: user})
+    });
+    const d = await r.json();
+    document.getElementById('resetQuestionLabel').textContent = '密保问题：' + (d.question || '您的出生城市是？');
+    document.getElementById('resetQuestionBox').style.display = 'block';
+  } catch(e) { }
+}
+
 async function getResetCode() {
   const user = document.getElementById('resetUser').value.trim();
+  const answer = document.getElementById('resetAnswer').value.trim();
   if (!user) { showResetError('请输入用户名'); return; }
+  if (!answer) { showResetError('请先回答密保问题'); return; }
   const btn = event.target;
   btn.disabled = true; btn.textContent = '发送中...';
   try {
     const r = await fetch('/api/auth/reset-code', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({username: user})
+      body: JSON.stringify({username: user, answer: answer})
     });
     const d = await r.json();
     if (d.code) {
       showResetError('验证码: ' + d.code + ' (有效期10分钟)', 'green');
       document.getElementById('resetCode').value = d.code;
     } else {
-      showResetError(d.message || '发送失败');
+      showResetError(d.error || d.message || '发送失败');
     }
   } catch(e) { showResetError('网络错误'); }
   btn.disabled = false; btn.textContent = '获取验证码';

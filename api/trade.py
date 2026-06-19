@@ -202,9 +202,48 @@ def api_delete_trade(trade_id):
 
 @bp.route("/auth/reset-code", methods=["POST"])
 def api_reset_code():
-    """生成密码重置验证码 (发送给用户, 有效期10分钟)"""
+    """生成密码重置验证码 (需正确回答密保问题)"""
     from flask import request
     import hashlib, secrets, time as _time
+    data = request.get_json(force=True, silent=True) or {}
+    username = data.get("username", "").strip()
+    answer = data.get("answer", "").strip()
+    
+    if not username:
+        return jsonify({"error": "请输入用户名"}), 400
+    
+    conn = get_db()
+    try:
+        user = conn.execute(
+            "SELECT id, security_question, security_answer FROM users WHERE username=?",
+            (username,)
+        ).fetchone()
+        if not user:
+            return jsonify({"message": "如该用户存在，验证码已生成"})
+        
+        # 密保验证
+        stored_answer = (user["security_answer"] or "").strip().lower()
+        if stored_answer and answer.lower() != stored_answer:
+            return jsonify({"error": "密保答案错误", "retry": True}), 403
+        
+        code = secrets.token_hex(3)
+        expires = int(_time.time()) + 600
+        
+        conn.execute("DELETE FROM reset_codes WHERE user_id=?", (user["id"],))
+        conn.execute("INSERT INTO reset_codes (user_id, code, expires_at) VALUES (?, ?, ?)",
+                    (user["id"], code, expires))
+        conn.commit()
+        
+        print(f"[密码重置] {username} 验证码: {code}")
+        
+        return jsonify({"message": "验证码已生成", "code": code})
+    finally:
+        conn.close()
+
+
+@bp.route("/auth/reset-question", methods=["POST"])
+def api_reset_question():
+    """获取用户的密保问题 (不暴露答案)"""
     data = request.get_json(force=True, silent=True) or {}
     username = data.get("username", "").strip()
     if not username:
@@ -212,21 +251,12 @@ def api_reset_code():
     
     conn = get_db()
     try:
-        user = conn.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
+        user = conn.execute(
+            "SELECT security_question FROM users WHERE username=?", (username,)
+        ).fetchone()
         if not user:
-            return jsonify({"message": "如该用户存在，验证码已生成"})  # 不泄露用户存在性
-        
-        code = secrets.token_hex(3)  # 6位验证码
-        expires = int(_time.time()) + 600  # 10分钟
-        
-        conn.execute("DELETE FROM reset_codes WHERE user_id=?", (user["id"],))
-        conn.execute("INSERT INTO reset_codes (user_id, code, expires_at) VALUES (?, ?, ?)",
-                    (user["id"], code, expires))
-        conn.commit()
-        
-        print(f"[密码重置] {username} 验证码: {code}")  # 实际应发送邮件/微信, 此处日志输出
-        
-        return jsonify({"message": "验证码已生成", "code": code})  # 开发阶段直接返回, 生产需改为邮件/微信发送
+            return jsonify({"question": "您的出生城市是？"})  # 不泄露用户存在性
+        return jsonify({"question": user["security_question"] or "您的出生城市是？"})
     finally:
         conn.close()
 
