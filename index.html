@@ -551,6 +551,9 @@
         <button onclick="showPortfolioAdvice()" style="padding:6px 16px;border:1px solid var(--blue);border-radius:8px;background:rgba(59,130,246,.1);color:var(--blue);cursor:pointer;font-size:12px;font-weight:600">📋 持仓分析</button>
         <button onclick="showReviewModal()" style="padding:6px 16px;border:1px solid var(--purple);border-radius:8px;background:rgba(139,92,246,.1);color:var(--purple);cursor:pointer;font-size:12px;font-weight:600">📋 复盘</button>
         <button onclick="showMarginRank()" style="padding:6px 16px;border:1px solid var(--cyan);border-radius:8px;background:rgba(6,182,212,.1);color:var(--cyan);cursor:pointer;font-size:12px;font-weight:600">💰 融资融券</button>
+        <button onclick="batchCloseAll()" style="padding:6px 16px;border:1px solid var(--red);border-radius:8px;background:rgba(239,68,68,.1);color:var(--red);cursor:pointer;font-size:12px;font-weight:600">⏹ 批量平仓</button>
+        <button onclick="batchUpdateSL()" style="padding:6px 16px;border:1px solid var(--gold);border-radius:8px;background:rgba(240,180,41,.1);color:var(--gold);cursor:pointer;font-size:12px;font-weight:600">🛡️ 批量止损</button>
+        <button onclick="exportCSV()" style="padding:6px 16px;border:1px solid var(--green);border-radius:8px;background:rgba(34,197,94,.05);color:var(--green);cursor:pointer;font-size:12px;font-weight:600">📥 导出CSV</button>
         <button onclick="loadTradesFromServer()" style="padding:6px 16px;border:1px solid var(--text-muted);border-radius:8px;background:rgba(255,255,255,.03);color:var(--text-muted);cursor:pointer;font-size:12px;font-weight:600">🔄 刷新</button>
       </div>
 
@@ -3250,6 +3253,47 @@ function searchMargin() {
   const code = document.getElementById('marginCodeInput').value.trim();
   if (!code) return;
   loadMarginData(code);
+}
+
+// ─── 批量操作 ─────────────────────────────
+async function batchCloseAll() {
+  if (!currentUser) { showLoginModal(); return; }
+  if (!confirm('确定要平掉所有持仓吗？此操作不可撤销。')) return;
+  try {
+    const r = await fetch('/api/trades/batch/close', {method:'POST', headers:apiHeaders()});
+    const d = await r.json();
+    alert('✅ 已平仓 ' + d.closed + ' 笔');
+    loadTradesFromServer();
+  } catch(e) { alert('❌ 批量平仓失败: ' + e.message); }
+}
+
+async function batchUpdateSL() {
+  if (!currentUser) { showLoginModal(); return; }
+  const sl = prompt('输入新止损价（所有持仓统一设置）:');
+  if (!sl || isNaN(parseFloat(sl))) return;
+  try {
+    const r = await fetch('/api/trades/batch/update-sl', {method:'POST', headers:apiHeaders(), body:JSON.stringify({stop_loss:parseFloat(sl)})});
+    const d = await r.json();
+    alert('✅ 已更新 ' + d.updated + '/' + d.total + ' 笔止损为 ¥' + d.new_stop_loss);
+    loadTradesFromServer();
+  } catch(e) { alert('❌ 批量止损失败: ' + e.message); }
+}
+
+async function exportCSV() {
+  if (!currentUser) { showLoginModal(); return; }
+  const token = getToken();
+  if (!token) { showLoginModal(); return; }
+  try {
+    const r = await fetch('/api/trades/export/csv', {headers: {'Authorization': 'Bearer ' + token}});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'trades_'+ new Date().toISOString().slice(0,10) + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch(e) { alert('❌ 导出失败: ' + e.message); }
 }
 
 // 当未登录时，点击"记录交易"按钮自动弹出登录

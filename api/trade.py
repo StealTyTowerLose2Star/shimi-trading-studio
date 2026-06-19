@@ -348,3 +348,91 @@ def api_positions_realtime():
         }
 
     return jsonify({"prices": prices, "timestamp": _time.strftime("%H:%M:%S")})
+
+
+# ─── 批量操作 ─────────────────────────────────
+
+@bp.route("/trades/batch/close", methods=["POST"])
+def api_batch_close():
+    """批量平仓: 平掉所有持仓"""
+    user = require_user()
+    if not user:
+        return unauthorized()
+    trades = get_trades(user_id=user["id"])
+    open_trades = [t for t in trades if not t.get("exit_price")]
+    if not open_trades:
+        return jsonify({"message": "无持仓可平", "closed": 0})
+
+    results = []
+    for t in open_trades:
+        try:
+            entry_p = t.get("entry_price", 0)
+            qty = t.get("qty", 0)
+            exit_p = t.get("current_price", entry_p)
+            r = update_trade(t["id"], user["id"], {
+                "exit_price": exit_p, "date": t.get("date", "")
+            })
+            results.append({"id": t["id"], "code": t["code"], "status": "ok" if "error" not in r else r["error"]})
+        except Exception as e:
+            results.append({"id": t.get("id", 0), "code": t.get("code", "?"), "status": str(e)[:60]})
+
+    return jsonify({"closed": len(open_trades), "results": results})
+
+
+@bp.route("/trades/batch/update-sl", methods=["POST"])
+def api_batch_update_sl():
+    """批量更新止损: 为所有持仓设置新止损价"""
+    user = require_user()
+    if not user:
+        return unauthorized()
+    data = request.get_json(force=True, silent=True) or {}
+    new_sl = data.get("stop_loss")
+    if not new_sl:
+        return jsonify({"error": "请提供 stop_loss 参数"}), 400
+
+    trades = get_trades(user_id=user["id"])
+    open_trades = [t for t in trades if not t.get("exit_price")]
+    if not open_trades:
+        return jsonify({"message": "无持仓", "updated": 0})
+
+    updated = 0
+    for t in open_trades:
+        try:
+            r = update_trade(t["id"], user["id"], {"stop_loss": float(new_sl)})
+            if "error" not in r:
+                updated += 1
+        except Exception:
+            pass
+
+    return jsonify({"updated": updated, "total": len(open_trades), "new_stop_loss": float(new_sl)})
+
+
+@bp.route("/trades/export/csv", methods=["GET"])
+def api_export_csv():
+    """导出交易记录为 CSV"""
+    user = require_user()
+    if not user:
+        return unauthorized()
+    trades = get_trades(user_id=user["id"])
+
+    from io import StringIO
+    import csv
+
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["日期", "代码", "名称", "方向", "入场价", "数量", "出场价", "止损", "目标1", "目标2", "目标3", "备注"])
+    for t in trades:
+        writer.writerow([
+            t.get("date", ""), t.get("code", ""), t.get("name", ""),
+            t.get("direction", ""), t.get("entry_price", ""), t.get("qty", ""),
+            t.get("exit_price", ""), t.get("stop_loss", ""),
+            t.get("target_1", ""), t.get("target_2", ""), t.get("target_3", ""),
+            t.get("note", "")
+        ])
+
+    from flask import Response
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=trades.csv"}
+    )
