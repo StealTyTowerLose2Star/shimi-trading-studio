@@ -498,6 +498,42 @@
     </div>
   </div>
 
+  <!-- 🔮 先知 · A股事件信号 -->
+  <div class="row">
+    <div class="card" style="border-color: rgba(139,92,246,.3);">
+      <div class="card-header">
+        <span class="card-title">🔮 先知 · A股事件信号</span>
+        <span class="badge badge-purple" id="prophetASigCount">加载中</span>
+        <span style="font-size:11px;color:var(--text-muted);margin-left:6px" id="prophetAScanTime"></span>
+        <button onclick="loadProphetSignals('ashare',true)" style="margin-left:auto;padding:3px 10px;font-size:11px;cursor:pointer;border:1px solid var(--purple);border-radius:4px;background:rgba(139,92,246,.1);color:var(--purple)">🔄 重新扫描</button>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">
+        ML驱动 · 10数据源 · A股标的概率映射 · 做多/做空信号
+      </div>
+      <div id="prophetASummary" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;padding:12px;background:rgba(139,92,246,.04);border-radius:10px;font-size:13px">
+        <div><span style="color:var(--text-muted)">总事件</span><br><b id="prophetAEvtTotal">--</b></div>
+        <div><span style="color:var(--text-muted)">A股信号</span><br><b id="prophetASigTotal">--</b></div>
+        <div><span style="color:var(--text-muted)">📈做多</span><br><b id="prophetALong" style="color:var(--green)">--</b></div>
+        <div><span style="color:var(--text-muted)">📉做空</span><br><b id="prophetAShort" style="color:var(--red)">--</b></div>
+        <div><span style="color:var(--text-muted)">🔥高置信</span><br><b id="prophetAHigh" style="color:var(--gold)">--</b></div>
+      </div>
+      <div style="margin-bottom:10px">
+        <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">📊 Top A股信号</div>
+        <table style="font-size:12px"><thead>
+          <tr><th>方向</th><th></th><th>事件摘要</th><th>标的</th><th>影响</th><th>分</th></tr>
+        </thead><tbody id="prophetASignalsBody">
+          <tr><td colspan="5" style="text-align:center;color:var(--text-muted)">加载中...</td></tr>
+        </tbody></table>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">🎯 高价值定向分析</div>
+        <div id="prophetADeepDives" style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px">
+          <span style="color:var(--text-muted)">加载中...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 交易日志 -->
   <div class="row">
     <div class="card" style="border-color: rgba(34,197,94,.2);">
@@ -512,6 +548,7 @@
         <div><span style="color:var(--text-muted);font-size:12px">总交易</span><br><span id="tjTotal" style="font-size:18px;font-weight:700">0</span></div>
         <div><span style="color:var(--text-muted);font-size:12px">胜率</span><br><span id="tjWinRate" style="font-size:18px;font-weight:700;color:var(--green)">0%</span></div>
         <div><span style="color:var(--text-muted);font-size:12px">总盈亏</span><br><span id="tjPnl" style="font-size:18px;font-weight:700">¥0</span></div>
+        <div><span style="color:var(--text-muted);font-size:12px">月回报</span><br><span id="tjMonthlyRatio" style="font-size:14px;font-weight:700">--</span></div>
         <div><span style="color:var(--text-muted);font-size:12px">最大盈利</span><br><span id="tjBest" style="font-size:14px;color:var(--green)">--</span></div>
         <div><span style="color:var(--text-muted);font-size:12px">最大亏损</span><br><span id="tjWorst" style="font-size:14px;color:var(--red)">--</span></div>
         <button onclick="showAddTradeForm()" style="padding:6px 16px;border:1px solid var(--green);border-radius:8px;background:rgba(34,197,94,.1);color:var(--green);cursor:pointer;font-size:12px;font-weight:600">+ 记录交易</button>
@@ -785,6 +822,36 @@
     </div>
   </div>
 
+  <!-- 🔮 先知 · 美股事件信号 -->
+  <div class="row">
+    <div class="card" style="border-color: rgba(139,92,246,.3);">
+      <div class="card-header">
+        <span class="card-title">🔮 先知 · 美股事件信号</span>
+        <span class="badge badge-purple" id="prophetUSSigCount">加载中</span>
+        <span style="font-size:11px;color:var(--text-muted);margin-left:6px" id="prophetUSScanTime"></span>
+        <button onclick="loadProphetSignals('us',true)" style="margin-left:auto;padding:3px 10px;font-size:11px;cursor:pointer;border:1px solid var(--purple);border-radius:4px;background:rgba(139,92,246,.1);color:var(--purple)">🔄 重新扫描</button>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">
+        ML驱动 · 10数据源 · 美股标的概率映射 · 做多/做空信号
+      </div>
+      <div id="prophetUSSummary" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;padding:12px;background:rgba(139,92,246,.04);border-radius:10px;font-size:13px">
+        <div><span style="color:var(--text-muted)">总事件</span><br><b id="prophetUSEvtTotal">--</b></div>
+        <div><span style="color:var(--text-muted)">美股信号</span><br><b id="prophetUSSigTotal">--</b></div>
+        <div><span style="color:var(--text-muted)">📈做多</span><br><b id="prophetUSLong" style="color:var(--green)">--</b></div>
+        <div><span style="color:var(--text-muted)">📉做空</span><br><b id="prophetUSShort" style="color:var(--red)">--</b></div>
+        <div><span style="color:var(--text-muted)">🔥高置信</span><br><b id="prophetUSHigh" style="color:var(--gold)">--</b></div>
+      </div>
+      <div style="margin-bottom:10px">
+        <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">📊 Top 美股信号</div>
+        <table style="font-size:12px"><thead>
+          <tr><th>方向</th><th></th><th>事件摘要</th><th>标的</th><th>影响</th><th>分</th></tr>
+        </thead><tbody id="prophetUSSignalsBody">
+          <tr><td colspan="5" style="text-align:center;color:var(--text-muted)">加载中...</td></tr>
+        </tbody></table>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /haitaoSection -->
 
 </div><!-- /dashboard -->
@@ -853,8 +920,8 @@ function updateClock() {
 updateClock(); setInterval(updateClock, 1000);
 
 // ===== Fetch =====
-async function fetchJSON(url) {
-  const r = await fetch(url);
+async function fetchJSON(url, opts) {
+  const r = await fetch(url, opts || {});
   if (!r.ok) throw new Error(r.statusText);
   return r.json();
 }
@@ -1026,6 +1093,9 @@ async function loadDashboard() {
 
     // Load advice after dashboard data is in cache
     loadAdvice();
+
+    // Load prophet signals - A股面板 (non-blocking)
+    loadProphetSignals('ashare', false);
 
   } catch (err) {
     console.error('Dashboard load error:', err);
@@ -1412,6 +1482,184 @@ async function loadTracking() {
 // 加载跟踪面板
 loadTracking();
 
+// ===== 先知事件信号 (A股/美股独立) =====
+
+// 判断A股代码: 6位数字 00/30/60/68 开头
+function isAStock(code) { return /^[036]0\d{4}$|^68\d{4}$/.test(code); }
+// 判断美股: 1-5个大写字母
+function isUSStock(code) { return /^[A-Z]{1,5}$/.test(code) && !/^\d+$/.test(code); }
+
+// 判断信号属于哪个市场 (至少一个标的在该市场)
+function signalMarket(signal) {
+  const stocks = signal.stocks || [];
+  const hasA = stocks.some(s => isAStock(s.code));
+  const hasUS = stocks.some(s => isUSStock(s.code));
+  if (hasA && !hasUS) return 'ashare';
+  if (hasUS && !hasA) return 'us';
+  if (hasA && hasUS) return 'mixed';
+  return 'unknown';
+}
+
+// ══════════════════════════════════════
+// 市场影响因子 (0=无关, 1=强相关)
+// ══════════════════════════════════════
+
+// 数据源→市场倾向
+var SOURCE_BIAS = {
+  // A股原生源
+  'eastmoney':       {a:1.0, u:0.15}, 'eastmoney_ann':  {a:1.0, u:0.10},
+  'cninfo':          {a:1.0, u:0.10}, '10jqka':          {a:0.95,u:0.10},
+  // 美股原生源
+  'finnhub':         {a:0.15,u:1.0},  'yahoo':           {a:0.10,u:1.0},
+  'google_news':     {a:0.10,u:0.95},
+  // 跨市场源
+  'wallstreetcn':    {a:0.85,u:0.80}, 'sina':            {a:0.80,u:0.75},
+  'jin10':           {a:0.75,u:0.75},
+};
+
+// 事件类别→市场倾向 (A股政策市, 中国政策对美股影响小)
+var CATEGORY_BIAS = {
+  '政策监管':  {a:1.0, u:0.20, note:'中国政策,对美股影响有限'},
+  '财报公告':  {a:1.0, u:0.80, note:'公司级事件,跨市场相关'},
+  '宏观数据':  {a:0.90,u:0.90, note:'全球宏观,双向影响'},
+  '地缘国际':  {a:0.70,u:0.85, note:'国际事件,美股更敏感'},
+  'AI科技':   {a:0.90,u:0.95, note:'全球科技,美股定价权更强'},
+  '新能源':    {a:1.0, u:0.60, note:'中国新能源政策强驱动'},
+  '汽车':     {a:1.0, u:0.70, note:'中国汽车以内需为主'},
+  '半导体':    {a:0.85,u:0.95, note:'全球半导体,美股龙头'},
+  '商品资源':  {a:0.80,u:0.90, note:'全球定价,美股更敏感'},
+  '市场行情':  {a:1.0, u:0.40, note:'本土市场情绪'},
+  '其他':     {a:0.50,u:0.50, note:'未知类别'},
+};
+
+function marketRelevance(signal, market) {
+  // 综合源倾向 + 类别倾向
+  var srcBias = SOURCE_BIAS[signal.source] || {a:0.5, u:0.5};
+  var catBias = CATEGORY_BIAS[signal.category] || CATEGORY_BIAS['其他'];
+  var raw = market === 'ashare'
+    ? (srcBias.a * 0.5 + catBias.a * 0.5)
+    : (srcBias.u * 0.5 + catBias.u * 0.5);
+  return Math.round(raw * 100) / 100;
+}
+
+// 缓存全量信号数据 (两个面板共用)
+let _prophetCache = null;
+
+async function loadProphetSignals(market, forceScan) {
+  const prefix = market === 'ashare' ? 'prophetA' : 'prophetUS';
+  
+  try {
+    if (forceScan) {
+      $(prefix + 'SigCount').textContent = '扫描中...';
+      // 直接fetch POST, 避免fetchJSON的GET默认行为
+      await fetch('/api/prophet/event-signals/scan', {method:'POST'});
+      await new Promise(function(r) { setTimeout(r, 2000); });
+    }
+
+    if (!forceScan && _prophetCache) {
+      renderProphetPanel(prefix, _prophetCache, market);
+      return;
+    }
+
+    const data = await fetchJSON('/api/prophet/event-signals');
+    // 如果是空缓存且正在扫描中, 提示用户
+    if (!data.signals || !data.signals.length) {
+      if (forceScan) {
+        $(prefix + 'SigCount').textContent = '扫描中,请10秒后刷新';
+        $(prefix + 'SignalsBody').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--gold)">⏳ 后台扫描进行中, 约20秒后刷新页面查看</td></tr>';
+        return;
+      }
+      $(prefix + 'SigCount').textContent = '等待扫描';
+      $(prefix + 'SignalsBody').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">缓存未就绪, 点击"重新扫描"触发</td></tr>';
+      return;
+    }
+
+    _prophetCache = data;
+    renderProphetPanel(prefix, data, market);
+
+  } catch (err) {
+    console.error('Prophet load error:', err);
+    $(prefix + 'SigCount').textContent = '加载失败';
+    $(prefix + 'SignalsBody').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--red)">⚠️ ' + err.message + '</td></tr>';
+  }
+}
+
+function renderProphetPanel(prefix, data, market) {
+  const allSignals = data.signals || [];
+  const deepDives = data.deep_dives || [];
+  const totalEvents = data.total_events || 0;
+  const scanTime = data.timestamp || '';
+
+  // 按市场+影响因子过滤: 相关性<0.15的直接排除
+  const signals = allSignals
+    .filter(s => {
+      const m = signalMarket(s);
+      return m === market || m === 'mixed';
+    })
+    .filter(s => marketRelevance(s, market) >= 0.15)
+    .sort((a, b) => {
+      // 按调整后分数排序 = 原始分 × 影响因子
+      var sa = a.score * marketRelevance(a, market);
+      var sb = b.score * marketRelevance(b, market);
+      return sb - sa;
+    });
+
+  // Summary
+  $(prefix + 'EvtTotal').textContent = totalEvents;
+  $(prefix + 'SigTotal').textContent = signals.length;
+  $(prefix + 'Long').textContent = signals.filter(s => s.direction === 'long').length;
+  $(prefix + 'Short').textContent = signals.filter(s => s.direction === 'short').length;
+  $(prefix + 'High').textContent = signals.filter(s => s.confidence === 'high').length;
+  $(prefix + 'SigCount').textContent = signals.length + '条信号';
+  $(prefix + 'ScanTime').textContent = scanTime || '';
+
+  // Signals table (top 12)
+  const tbody = $(prefix + 'SignalsBody');
+  if (!signals.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">暂无' + (market === 'ashare' ? 'A股' : '美股') + '信号</td></tr>';
+  } else {
+    tbody.innerHTML = signals.slice(0, 12).map(s => {
+      var rel = marketRelevance(s, market);
+      var adjScore = Math.round(s.score * rel);
+      var dirIcon = s.direction === 'long' ? '📈' : '📉';
+      var dirColor = s.direction === 'long' ? 'var(--green)' : 'var(--red)';
+      var confBadge = s.confidence === 'high' ? '🔥' : (s.confidence === 'medium' ? '⭐' : '');
+      var filterFn = market === 'ashare' ? isAStock : isUSStock;
+      var stocks = (s.stocks || []).filter(function(st) { return filterFn(st.code); }).slice(0, 3).map(function(st) { return st.code || st; }).join(' ');
+      var relColor = rel >= 0.8 ? 'var(--green)' : (rel >= 0.5 ? 'var(--gold)' : 'var(--text-muted)');
+      var scoreColor = adjScore > 100 ? 'var(--gold)' : (adjScore > 60 ? 'var(--text-primary)' : 'var(--text-muted)');
+      return '<tr>' +
+        '<td style="color:' + dirColor + ';font-weight:700;font-size:11px">' + dirIcon + ' ' + (s.direction === 'long' ? '做多' : '做空') + '</td>' +
+        '<td style="font-size:11px">' + confBadge + '</td>' +
+        '<td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px" title="' + s.title.replace(/"/g,'&quot;') + '">' + s.title + '</td>' +
+        '<td style="font-size:11px;color:var(--text-secondary)">' + stocks + '</td>' +
+        '<td style="font-size:11px;color:' + relColor + ';font-weight:600">' + (rel*100).toFixed(0) + '%</td>' +
+        '<td style="color:' + scoreColor + ';font-weight:600;font-size:12px">' + adjScore + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  // Deep dives — A股面板才显示
+  var ddPrefix = market === 'ashare' ? 'prophetADeepDives' : null;
+  if (ddPrefix) {
+    var ddContainer = $(ddPrefix);
+    if (!deepDives.length) {
+      ddContainer.innerHTML = '<span style="color:var(--text-muted)">暂无定向分析</span>';
+    } else {
+      ddContainer.innerHTML = deepDives.slice(0, 6).map(function(d) {
+        var ddDirColor = d.direction.includes('long') ? 'var(--green)' : 'var(--red)';
+        var ddStocks = (d.stocks || []).slice(0, 3).join(', ');
+        return '<div style="padding:8px 10px;background:rgba(139,92,246,.06);border:1px solid rgba(139,92,246,.15);border-radius:8px;min-width:180px;flex:1">' +
+          '<div style="font-weight:600;color:' + ddDirColor + ';margin-bottom:2px">' + d.signal + '</div>' +
+          '<div style="color:var(--text-muted);margin-bottom:4px;line-height:1.4">' + (d.title ? d.title.slice(0, 60) : '') + '</div>' +
+          '<div style="color:var(--text-secondary)">→ ' + ddStocks + '</div>' +
+          '<div style="color:var(--text-muted);font-size:10px;margin-top:2px">' + (d.duration || '') + '</div>' +
+          '</div>';
+      }).join('');
+    }
+  }
+}
+
 // ===== 操作建议 =====
 async function loadAdvice() {
 try {
@@ -1584,6 +1832,24 @@ function updateTradeStats(trades) {
   const worstPnl = closed.length > 0 ? Math.min(...closed.map(t => {
     return t.direction === 'buy' ? (t.exit_price - t.entry_price) * t.qty : (t.entry_price - t.exit_price) * t.qty;
   })) : 0;
+
+  // 月回报 = 本月所有交易盈亏(含持仓浮动) / 本金 × 100%
+  const now = new Date();
+  const thisMonth = String(now.getMonth() + 1).padStart(2, '0');
+  const thisYear = now.getFullYear();
+  let monthPnl = 0, monthCapital = 0;
+  trades.forEach(t => {
+    const d = t.date || '';
+    if (!d || !d.startsWith(thisYear + '-' + thisMonth)) return;
+    const qty = t.qty || 0;
+    const entry = t.entry_price || 0;
+    monthCapital += entry * qty;
+    if (t.exit_price) {
+      monthPnl += (t.direction === 'buy' ? (t.exit_price - entry) : (entry - t.exit_price)) * qty;
+    }
+  });
+  updateMonthRatio(monthPnl, monthCapital);
+
   $('tjTotal').textContent = closed.length;
   $('tjWinRate').textContent = winRate;
   $('tjWinRate').style.color = parseFloat(winRate) >= 50 ? 'var(--green)' : 'var(--red)';
@@ -1592,6 +1858,14 @@ function updateTradeStats(trades) {
   $('tjBest').textContent = bestPnl > 0 ? '¥' + bestPnl.toFixed(2) : '--';
   $('tjWorst').textContent = worstPnl < 0 ? '¥' + worstPnl.toFixed(2) : '--';
   $('tradeJournalStats').textContent = `${trades.length}笔`;
+}
+
+function updateMonthRatio(monthPnl, monthCapital) {
+  const ratio = monthCapital > 0 ? (monthPnl / monthCapital * 100) : null;
+  const el = document.getElementById('tjMonthlyRatio');
+  if (!el) return;
+  el.textContent = ratio !== null ? (ratio >= 0 ? '+' : '') + ratio.toFixed(1) + '%' : '--';
+  el.style.color = ratio !== null ? (ratio >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text-muted)';
 }
 
 function deleteTrade(idx) {
@@ -1997,6 +2271,27 @@ function renderServerTrades() {
 
     tbody.innerHTML = openRows + closedRows;
     updateServerStats();
+
+    // 动态月回报：含持仓浮动盈亏 + 已平仓盈亏
+    if (Object.keys(evalMap).length > 0) {
+      const now = new Date();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const prefix = now.getFullYear() + '-' + m;
+      let pnl = 0, capital = 0;
+      trades.forEach(t => {
+        if (!t.date || !t.date.startsWith(prefix)) return;
+        const q = t.qty || 0, entry = t.entry_price || 0;
+        capital += entry * q;
+        if (t.exit_price) {
+          pnl += (t.direction === 'buy' ? (t.exit_price - entry) : (entry - t.exit_price)) * q;
+        } else {
+          const ev = evalMap[t.code] || {};
+          const cur = ev.current_price || entry;
+          pnl += (t.direction === 'buy' ? (cur - entry) : (entry - cur)) * q;
+        }
+      });
+      updateMonthRatio(pnl, capital);
+    }
   }
 }
 
@@ -2650,6 +2945,8 @@ function switchMarket(target) {
     tabU.style.fontWeight = '600';
     label.textContent = '🌊 海淘 · 美股';
     refreshHaitao();
+    // Load US prophet signals when switching to US panel
+    loadProphetSignals('us', false);
   } else {
     ashare.style.display = '';
     haitao.style.display = 'none';
@@ -3133,8 +3430,6 @@ async function closePlan(id) {
   } catch(e) {
     alert('❌ 平仓失败: ' + e.message);
   }
-}
-
-</script>
+}\n\n// ─── SSE 实时推送 ─────────────────────────────\n(function() {\n  try {\n    const es = new EventSource('/api/sse/stream');\n    es.onmessage = function(e) {\n      try {\n        const msg = JSON.parse(e.data);\n        if (msg.type === 'alert') {\n          showToast(msg.data.message || '系统告警', msg.data.level || 'warning');\n        } else if (msg.type === 'health_update') {\n          const deps = msg.data.deps || {};\n          const status = deps.overall === 'healthy' ? '✅' : deps.overall === 'degraded' ? '⚠️' : '❌';\n          const el = document.getElementById('dataSourceLabel');\n          if (el && !el.textContent.startsWith('A') && !el.textContent.startsWith('🌊')) {\n            // Only update if not showing A-stock/US label\n          }\n        }\n      } catch(_) {}\n    };\n    es.onerror = function() {\n      // 连接断开,30s后自动重连 (EventSource默认行为)\n    };\n  } catch(_) {\n    // SSE not supported, fallback to polling\n  }\n})();\n\n</script>
 </body>
 </html>

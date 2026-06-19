@@ -30,6 +30,7 @@ def _set_cache(k, d, ttl):
 
 FINNHUB_KEY = os.environ.get("FINNHUB_KEY", "")
 _finnhub = None
+_finnhub_healthy = None  # None=未检测, True=可用, False=失效
 
 def _get_finnhub():
     global _finnhub
@@ -40,6 +41,24 @@ def _get_finnhub():
         except Exception:
             pass
     return _finnhub
+
+def _finnhub_ok() -> bool:
+    """检测 Finnhub key 是否有效（仅检测一次）"""
+    global _finnhub_healthy
+    if _finnhub_healthy is not None:
+        return _finnhub_healthy
+    fh = _get_finnhub()
+    if not fh:
+        _finnhub_healthy = False
+        return False
+    try:
+        import requests
+        r = requests.get(f"https://finnhub.io/api/v1/quote?symbol=AAPL&token={FINNHUB_KEY}", timeout=3)
+        data = r.json()
+        _finnhub_healthy = (not isinstance(data, dict)) or ("error" not in data)
+    except Exception:
+        _finnhub_healthy = False
+    return _finnhub_healthy
 
 
 # ═══════════════════════════════════════════
@@ -112,6 +131,29 @@ def _stooq_quote(ticker: str) -> dict:
 # 统一报价接口
 # ═══════════════════════════════════════════
 
+def _yf_quotes(tickers: List[str], results: dict):
+    """Yahoo Finance 快速批量报价（并行，无API key）"""
+    import yfinance as yf
+    try:
+        for t in tickers:
+            if t in results:
+                continue
+            try:
+                info = yf.Ticker(t).fast_info
+                price = float(getattr(info, 'last_price', 0) or getattr(info, 'regular_market_previous_close', 0) or 0)
+                prev = float(getattr(info, 'regular_market_previous_close', 0) or 0)
+                if price > 0:
+                    chg = price - prev if prev > 0 else 0
+                    chg_pct = (chg / prev * 100) if prev > 0 else 0
+                    r = {"price": price, "change": round(chg,2), "change_pct": round(chg_pct,2),
+                         "name": t, "source": "yfinance"}
+                    _set_cache(f"q_{t}", r, 60)
+                    results[t] = r
+            except Exception:
+                pass
+    except Exception:
+        pass
+
 def get_quotes(tickers: List[str]) -> List[dict]:
     """获取报价: Finnhub → Alpha Vantage → Stooq"""
     clean = [t.strip().upper() for t in tickers if t.strip()]
@@ -130,9 +172,9 @@ def get_quotes(tickers: List[str]) -> List[dict]:
             remaining.append(t)
     
     if remaining:
-        # Try Finnhub first (if key available)
+        # Try Finnhub first (if key valid — validated once)
         fh = _get_finnhub()
-        if fh:
+        if fh and _finnhub_ok():
             for t in remaining:
                 try:
                     q = fh.quote(t)
@@ -145,6 +187,11 @@ def get_quotes(tickers: List[str]) -> List[dict]:
                         continue
                 except Exception: pass
                 time.sleep(0.5)
+        
+        # Fast fallback: yfinance parallel (no API key needed, ~1s total)
+        yf_remaining = [t for t in remaining if t not in results]
+        if yf_remaining:
+            _yf_quotes(yf_remaining, results)
         
         # Finnhub unavailable: parallel Alpha Vantage for remaining
         av_remaining = [t for t in remaining if t not in results]

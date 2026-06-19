@@ -5,7 +5,6 @@ import logging
 from typing import Dict, List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-import yfinance as yf
 import pandas as pd
 import numpy as np
 

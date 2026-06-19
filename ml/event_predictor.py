@@ -396,18 +396,165 @@ def fetch_jin10_flash() -> List[Dict]:
     return events
 
 
+# ═══════════════════════════════════════════
+# 新增: 华尔街见闻快讯
+# ═══════════════════════════════════════════
+
+def fetch_wallstreetcn_lives() -> List[Dict]:
+    """从华尔街见闻抓取全球实时快讯 (A股+美股覆盖)"""
+    events = []
+    try:
+        url = "https://api-one.wallstcn.com/apiv1/content/lives?channel=global-channel&limit=20"
+        r = requests.get(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"},
+            timeout=10,
+        )
+        if r.status_code != 200:
+            return events
+        data = r.json()
+        items = data.get("data", {}).get("items", [])
+        for item in items:
+            title = item.get("title", "") or item.get("content_text", "") or ""
+            if not title or len(title) < 10:
+                continue
+            content = item.get("content_text", item.get("content", ""))
+            events.append({
+                "source": "wallstreetcn",
+                "title": title[:200],
+                "content": (content or "")[:200],
+                "timestamp": datetime.fromtimestamp(
+                    item.get("display_time", 0)
+                ).isoformat() if item.get("display_time") else datetime.now().isoformat(),
+            })
+    except Exception:
+        pass
+    return events
+
+
+# ═══════════════════════════════════════════
+# 新增: 新浪财经快讯
+# ═══════════════════════════════════════════
+
+def fetch_sina_finance_roll() -> List[Dict]:
+    """从新浪财经抓取全球滚动快讯"""
+    events = []
+    try:
+        url = "https://feed.mix.sina.com.cn/api/roll/get?pageid=153&lid=2509&num=20"
+        r = requests.get(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"},
+            timeout=10,
+        )
+        if r.status_code != 200:
+            return events
+        data = r.json()
+        items = data.get("result", {}).get("data", [])
+        for item in items:
+            title = item.get("title", "")
+            if not title or len(title) < 10:
+                continue
+            events.append({
+                "source": "sina",
+                "title": title[:200],
+                "content": "",
+                "timestamp": datetime.fromtimestamp(
+                    int(item.get("ctime", 0))
+                ).isoformat() if item.get("ctime") else datetime.now().isoformat(),
+            })
+    except Exception:
+        pass
+    return events
+
+
+# ═══════════════════════════════════════════
+# 新增: 同花顺快讯
+# ═══════════════════════════════════════════
+
+def fetch_10jqka_news() -> List[Dict]:
+    """从同花顺抓取A股快讯"""
+    events = []
+    try:
+        r = requests.get(
+            "https://news.10jqka.com.cn/tapp/news/push/stock/?page=1",
+            headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                "Referer": "https://news.10jqka.com.cn/",
+            },
+            timeout=10,
+        )
+        if r.status_code != 200:
+            return events
+        import re as _re
+        titles = _re.findall(r'"title"\s*:\s*"([^"]{10,200})"', r.text)
+        for title in titles[:20]:
+            # 过滤纯广告/非财经
+            skip_words = ["广告", "推广", "微信", "扫码", "javascript"]
+            if any(w in title for w in skip_words):
+                continue
+            events.append({
+                "source": "10jqka",
+                "title": title[:200],
+                "content": "",
+                "timestamp": datetime.now().isoformat(),
+            })
+    except Exception:
+        pass
+    return events
+
+
+# ═══════════════════════════════════════════
+# 新增: Google News RSS (美股补充)
+# ═══════════════════════════════════════════
+
+def fetch_google_news_finance() -> List[Dict]:
+    """从 Google News RSS 抓取美股/全球财经新闻"""
+    events = []
+    try:
+        import xml.etree.ElementTree as ET
+        url = "https://news.google.com/rss/search?q=stock+market+OR+china+A+shares+OR+US+stocks&hl=en-US&gl=US&ceid=US:en"
+        r = requests.get(
+            url,
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=10,
+        )
+        if r.status_code != 200:
+            return events
+        root = ET.fromstring(r.text)
+        for item in root.findall(".//item")[:15]:
+            title_el = item.find("title")
+            source_el = item.find("source")
+            title = title_el.text if title_el is not None else ""
+            source = source_el.text if source_el is not None else ""
+            if not title or len(title) < 10:
+                continue
+            events.append({
+                "source": "google_news",
+                "title": f"[{source}] {title}" if source else title,
+                "content": "",
+                "timestamp": datetime.now().isoformat(),
+            })
+    except Exception:
+        pass
+    return events
+
+
 def fetch_all_events(pages: int = 3) -> List[Dict]:
-    """统一事件抓取入口 — 7 数据源"""
+    """统一事件抓取入口 — 10 数据源"""
     all_events = []
 
     # A 股源
     all_events.extend(fetch_eastmoney_kuaixun(pages=pages))
     all_events.extend(fetch_eastmoney_announcements(pages=2))
     all_events.extend(fetch_cninfo_announcements())
+    all_events.extend(fetch_wallstreetcn_lives())
+    all_events.extend(fetch_sina_finance_roll())
+    all_events.extend(fetch_10jqka_news())
 
     # 美股源
     all_events.extend(fetch_finnhub_news())
     all_events.extend(fetch_yahoo_news())
+    all_events.extend(fetch_google_news_finance())
 
     # 通用快讯
     all_events.extend(fetch_jin10_flash())

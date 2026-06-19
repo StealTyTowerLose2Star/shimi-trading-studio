@@ -25,7 +25,11 @@ def unauthorized():
 
 
 def _auto_local_user():
-    """尝试使用 .local_token 文件自动登录"""
+    """尝试使用 .local_token 文件自动登录（仅限本地访问）"""
+    # 安全检查：仅允许 localhost / 127.0.0.1 自动登录
+    remote_addr = request.remote_addr or ""
+    if remote_addr not in ("127.0.0.1", "::1", "localhost"):
+        return None
     token_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         ".local_token"
