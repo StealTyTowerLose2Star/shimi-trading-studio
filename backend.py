@@ -202,6 +202,15 @@ def create_app():
     def index():
         return app.send_static_file("index.html")
 
+    # ─── API 文档 ────────────────────────────
+    @app.route("/docs")
+    def api_docs():
+        return app.send_static_file("docs/swagger.html")
+
+    @app.route("/docs/api-spec.yaml")
+    def api_spec():
+        return app.send_static_file("docs/api-spec.yaml")
+
     return app
 
 

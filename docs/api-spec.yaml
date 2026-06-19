@@ -1,0 +1,491 @@
+openapi: 3.0.3
+info:
+  title: 拾米交易工作室 API
+  description: |
+    A股 + 美股 双市场量化交易系统 · 125 端点 · 7 角色松耦合架构
+    
+    认证: 登录 `/api/auth/login` → Bearer Token
+    实时: SSE `/api/sse/stream`
+    健康: `/api/health` `/api/health/deps`
+  version: 1.5.0
+  contact:
+    name: 建筑师
+
+servers:
+  - url: http://47.243.7.26
+    description: 生产环境
+
+tags:
+  - name: 市场数据
+  - name: 策略评分
+  - name: 操作建议
+  - name: 账户交易
+  - name: 翻倍股
+  - name: 预警系统
+  - name: 缓存管理
+  - name: 系统监控
+  - name: 美股HiTao
+  - name: 美股Magician
+  - name: 先知ML
+  - name: 实时推送
+  - name: 认证
+
+paths:
+  # ─── 系统监控 ───
+  /api/health:
+    get:
+      tags: [系统监控]
+      summary: 服务健康检查
+      responses:
+        200:
+          description: OK
+          content: {application/json: {example: {status: ok, studio: 拾米交易工作室, latest_trade_date: "20260618"}}}
+
+  /api/health/deps:
+    get:
+      tags: [系统监控]
+      summary: 外部依赖健康检查 (tushare/Finnhub/yfinance)
+      responses:
+        200:
+          description: 依赖状态
+          content: {application/json: {example: {overall: healthy, healthy_count: 3, total_count: 3}}}
+
+  /api/monitor:
+    get:
+      tags: [系统监控]
+      summary: 服务器资源监控 (CPU/内存/磁盘/负载)
+      responses:
+        200: {description: OK}
+
+  # ─── 市场数据 ───
+  /api/indices:
+    get:
+      tags: [市场数据]
+      summary: 四大指数 (上证/深证/创业板/科创50)
+      responses: {200: {description: OK}}
+
+  /api/sectors:
+    get:
+      tags: [市场数据]
+      summary: 行业板块 Top10
+      responses: {200: {description: OK}}
+
+  /api/sector-flow:
+    get:
+      tags: [市场数据]
+      summary: 板块资金流 · 强度排行
+      responses: {200: {description: OK}}
+
+  /api/sentiment:
+    get:
+      tags: [市场数据]
+      summary: 市场情绪 (涨跌比/涨停/建议仓位)
+      responses: {200: {description: OK}}
+
+  /api/hot-stocks:
+    get:
+      tags: [市场数据]
+      summary: 热门个股 Top20
+      responses: {200: {description: OK}}
+
+  /api/limit-up:
+    get:
+      tags: [市场数据]
+      summary: 涨停板
+      responses: {200: {description: OK}}
+
+  /api/dashboard:
+    get:
+      tags: [市场数据]
+      summary: 聚合仪表盘数据 (指数+板块+情绪+策略)
+      responses: {200: {description: OK}}
+
+  /api/stock/lookup:
+    get:
+      tags: [市场数据]
+      summary: 股票代码搜索
+      parameters: [{name: q, in: query, required: true, schema: {type: string}}]
+      responses: {200: {description: OK}}
+
+  /api/stock/{code}/kline:
+    get:
+      tags: [市场数据]
+      summary: 个股日K线 (OHLCV)
+      parameters:
+        - {name: code, in: path, required: true, schema: {type: string}}
+        - {name: days, in: query, schema: {type: integer, default: 60}}
+      responses: {200: {description: "{code, name, days, kline: [{date,open,high,low,close,volume}]}"}}
+
+  # ─── 策略评分 ───
+  /api/strategy/{name}:
+    get:
+      tags: [策略评分]
+      summary: 策略评分 (trend/hybrid/dragon)
+      parameters: [{name: name, in: path, required: true, schema: {type: string, enum: [trend, hybrid, dragon]}}]
+      responses: {200: {description: "{picked, total_scanned, engine}"}}
+
+  /api/strategy/{name}/refresh:
+    get:
+      tags: [策略评分]
+      summary: 强制刷新策略缓存
+      parameters: [{name: name, in: path, required: true, schema: {type: string}}]
+      responses: {200: {description: OK}}
+
+  # ─── 操作建议 ───
+  /api/advice:
+    get:
+      tags: [操作建议]
+      summary: 多策略共振操作建议 (趋势+混合+龙头)
+      responses: {200: {description: "{market, recommendations, top_sectors}"}}
+
+  /api/portfolio/advice:
+    get:
+      tags: [操作建议]
+      summary: 持仓组合分析 (需登录)
+      responses: {200: {description: OK}}
+
+  /api/positions/evaluate:
+    post:
+      tags: [操作建议]
+      summary: 批量评估持仓 (ATR止损/止盈)
+      responses: {200: {description: OK}}
+
+  /api/positions/realtime:
+    post:
+      tags: [操作建议]
+      summary: 持仓实时行情 (东方财富盘中数据)
+      responses: {200: {description: OK}}
+
+  # ─── 账户交易 ───
+  /api/auth/login:
+    post:
+      tags: [认证]
+      summary: 用户登录
+      requestBody: {content: {application/json: {schema: {type: object, properties: {username: {type: string}, password: {type: string}}}}}}
+      responses: {200: {description: "{token, user, expires_at}"}}
+
+  /api/auth/register:
+    post:
+      tags: [认证]
+      summary: 用户注册
+      responses: {200: {description: OK}}
+
+  /api/auth/me:
+    get:
+      tags: [认证]
+      summary: 当前用户信息 (需登录)
+      responses: {200: {description: OK}}
+
+  /api/auth/reset-question:
+    post:
+      tags: [认证]
+      summary: 获取密保问题
+      responses: {200: {description: OK}}
+
+  /api/auth/reset-code:
+    post:
+      tags: [认证]
+      summary: 生成密码重置验证码 (需密保答案)
+      responses: {200: {description: OK}}
+
+  /api/auth/reset-password:
+    post:
+      tags: [认证]
+      summary: 使用验证码重置密码
+      responses: {200: {description: OK}}
+
+  /api/trades:
+    get:
+      tags: [账户交易]
+      summary: 获取交易记录 (需登录)
+      responses: {200: {description: "{trades, summary}"}}
+    post:
+      tags: [账户交易]
+      summary: 新增交易 (需登录)
+      responses: {200: {description: OK}}
+
+  /api/trades/{trade_id}:
+    put:
+      tags: [账户交易]
+      summary: 更新交易 (需登录)
+      parameters: [{name: trade_id, in: path, required: true, schema: {type: integer}}]
+      responses: {200: {description: OK}}
+    delete:
+      tags: [账户交易]
+      summary: 删除交易 (需登录)
+      parameters: [{name: trade_id, in: path, required: true, schema: {type: integer}}]
+      responses: {200: {description: OK}}
+
+  /api/trades/pnl-report:
+    get:
+      tags: [账户交易]
+      summary: 盈亏统计 (按日/月/年)
+      parameters: [{name: period, in: query, schema: {type: string, enum: [day, month, year], default: month}}]
+      responses: {200: {description: OK}}
+
+  /api/margin:
+    get:
+      tags: [账户交易]
+      summary: 融资融券排行
+      responses: {200: {description: OK}}
+
+  # ─── 翻倍股 ───
+  /api/doubler/recommend:
+    get:
+      tags: [翻倍股]
+      summary: 当月翻倍潜力股推荐
+      responses: {200: {description: "{top30, elite_picks, trade_date}"}}
+
+  /api/doubler/recommend/refresh:
+    get:
+      tags: [翻倍股]
+      summary: 强制刷新当月推荐
+      responses: {200: {description: OK}}
+
+  /api/doubler/plan/10k:
+    get:
+      tags: [翻倍股]
+      summary: 1W仓位方案
+      responses: {200: {description: OK}}
+
+  /api/doubler/history:
+    get:
+      tags: [翻倍股]
+      summary: 历史翻倍股扫描结果
+      responses: {200: {description: OK}}
+
+  /api/doubler/history/refresh:
+    get:
+      tags: [翻倍股]
+      summary: 强制重新扫描历史翻倍股
+      responses: {200: {description: OK}}
+
+  /api/doubler/track/start:
+    get:
+      tags: [翻倍股]
+      summary: 启动跟踪
+      responses: {200: {description: OK}}
+
+  /api/doubler/track/status:
+    get:
+      tags: [翻倍股]
+      summary: 查看跟踪进度
+      responses: {200: {description: OK}}
+
+  /api/doubler/track/update:
+    get:
+      tags: [翻倍股]
+      summary: 手动更新价格
+      responses: {200: {description: OK}}
+
+  /api/doubler/track/verify:
+    get:
+      tags: [翻倍股]
+      summary: 月末验证
+      responses: {200: {description: OK}}
+
+  /api/doubler/track/effectiveness:
+    get:
+      tags: [翻倍股]
+      summary: 催化剂命中率
+      responses: {200: {description: OK}}
+
+  # ─── 预警 ───
+  /api/alert/types:
+    get:
+      tags: [预警系统]
+      summary: 预警类型列表
+      responses: {200: {description: OK}}
+
+  /api/alert:
+    get:
+      tags: [预警系统]
+      summary: 列出所有预警规则
+      responses: {200: {description: OK}}
+    post:
+      tags: [预警系统]
+      summary: 创建预警规则
+      responses: {201: {description: OK}}
+
+  /api/alert/{alert_id}:
+    get:
+      tags: [预警系统]
+      summary: 获取单条预警
+      parameters: [{name: alert_id, in: path, required: true, schema: {type: integer}}]
+      responses: {200: {description: OK}}
+    put:
+      tags: [预警系统]
+      summary: 更新预警规则
+      parameters: [{name: alert_id, in: path, required: true, schema: {type: integer}}]
+      responses: {200: {description: OK}}
+    delete:
+      tags: [预警系统]
+      summary: 删除预警规则
+      parameters: [{name: alert_id, in: path, required: true, schema: {type: integer}}]
+      responses: {200: {description: OK}}
+
+  /api/alert/check:
+    post:
+      tags: [预警系统]
+      summary: 手动触发预警检查
+      responses: {200: {description: OK}}
+
+  # ─── 缓存 ───
+  /api/a-stock/cache/summary:
+    get:
+      tags: [缓存管理]
+      summary: 缓存状态概览
+      responses: {200: {description: OK}}
+
+  /api/a-stock/cache/refresh:
+    post:
+      tags: [缓存管理]
+      summary: 全量刷新缓存
+      responses: {200: {description: OK}}
+
+  # ─── 市场事件 ───
+  /api/market/events:
+    get:
+      tags: [市场数据]
+      summary: 市场事件及交易信号 (观星台)
+      responses: {200: {description: "{events, signals, summary}"}}
+
+  /api/market/events/refresh:
+    post:
+      tags: [市场数据]
+      summary: 触发后台事件扫描
+      responses: {200: {description: "{status: started}"}}
+
+  # ─── 复盘 ───
+  /api/review/daily:
+    get:
+      tags: [操作建议]
+      summary: 获取最新每日复盘
+      responses: {200: {description: OK}}
+    post:
+      tags: [操作建议]
+      summary: 触发每日复盘
+      responses: {200: {description: OK}}
+
+  /api/review/weekly:
+    get:
+      tags: [操作建议]
+      summary: 获取最新每周复盘
+      responses: {200: {description: OK}}
+    post:
+      tags: [操作建议]
+      summary: 触发每周复盘
+      responses: {200: {description: OK}}
+
+  /api/review/history:
+    get:
+      tags: [操作建议]
+      summary: 复盘历史列表
+      responses: {200: {description: OK}}
+
+  # ─── 先知ML ───
+  /api/prophet/status:
+    get:
+      tags: [先知ML]
+      summary: 模型状态
+      responses: {200: {description: OK}}
+
+  /api/prophet/train:
+    post:
+      tags: [先知ML]
+      summary: 触发模型训练
+      responses: {200: {description: OK}}
+
+  /api/prophet/predict:
+    post:
+      tags: [先知ML]
+      summary: 单股翻倍概率预测 (需15维特征)
+      responses: {200: {description: OK}}
+
+  /api/prophet/batch:
+    post:
+      tags: [先知ML]
+      summary: 批量预测
+      responses: {200: {description: OK}}
+
+  # ─── 美股 HiTao ───
+  /api/us/indices:
+    get:
+      tags: [美股HiTao]
+      summary: 美股四大指数
+      responses: {200: {description: OK}}
+
+  /api/us/hot:
+    get:
+      tags: [美股HiTao]
+      summary: 热门美股
+      responses: {200: {description: OK}}
+
+  /api/us/adr:
+    get:
+      tags: [美股HiTao]
+      summary: 中概股
+      responses: {200: {description: OK}}
+
+  /api/us/dashboard:
+    get:
+      tags: [美股HiTao]
+      summary: 美股聚合首页
+      responses: {200: {description: OK}}
+
+  /api/us/advice:
+    get:
+      tags: [美股HiTao]
+      summary: 美股投资建议 (市场评估+策略+个股推荐)
+      responses: {200: {description: OK}}
+
+  /api/us/gold/pan:
+    get:
+      tags: [美股HiTao]
+      summary: 黄金挖掘
+      responses: {200: {description: OK}}
+
+  /api/us/review/daily:
+    get:
+      tags: [美股HiTao]
+      summary: 美股每日复盘
+      responses: {200: {description: OK}}
+
+  # ─── 美股 Magician ───
+  /api/magician/short/scan:
+    get:
+      tags: [美股Magician]
+      summary: 做空信号扫描
+      responses: {200: {description: OK}}
+
+  /api/magician/leveraged/scan:
+    get:
+      tags: [美股Magician]
+      summary: 杠杆ETF扫描
+      responses: {200: {description: OK}}
+
+  # ─── SSE实时推送 ───
+  /api/sse/stream:
+    get:
+      tags: [实时推送]
+      summary: SSE实时流 (告警+心跳+状态变更)
+      responses: {200: {description: text/event-stream}}
+
+  # ─── 1W实盘 ───
+  /api/plan-1w:
+    get:
+      tags: [账户交易]
+      summary: 1W实盘方案列表
+      responses: {200: {description: OK}}
+
+  /api/plan-1w/generate:
+    post:
+      tags: [账户交易]
+      summary: 基于推荐池生成1W方案
+      responses: {200: {description: OK}}
+
+  /api/plan-1w/summary:
+    get:
+      tags: [账户交易]
+      summary: 1W方案汇总
+      responses: {200: {description: OK}}
