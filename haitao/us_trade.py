@@ -19,11 +19,11 @@ bp = Blueprint("haitao_trade", __name__, url_prefix="/api/us")
 
 
 def _require_user():
-    from api.auth import require_user
+    from shared.auth import require_user
     return require_user()
 
 def _unauthorized():
-    from api.auth import unauthorized
+    from shared.auth import unauthorized
     return unauthorized()
 
 

@@ -1789,13 +1789,17 @@ function renderProphetPanel(prefix, data, market) {
   const totalEvents = data.total_events || 0;
   const scanTime = data.timestamp || '';
 
-  // 按市场+影响因子过滤: 相关性<0.15的直接排除
+  // 按市场+影响因子严格过滤
+  // A股面板: 纯A股信号 + 混合信号(影响因子≥0.5) / 排除纯美股
+  // 美股面板: 纯美股信号 + 混合信号(影响因子≥0.5) / 排除纯A股
   const signals = allSignals
     .filter(s => {
       const m = signalMarket(s);
-      return m === market || m === 'mixed';
+      const rel = marketRelevance(s, market);
+      if (m === market) return true;           // 纯A/纯美, 直接通过
+      if (m === 'mixed' && rel >= 0.5) return true; // 混合信号, 需要影响因子≥50%
+      return false;                            // 其他: 排除
     })
-    .filter(s => marketRelevance(s, market) >= 0.15)
     .sort((a, b) => {
       // 按调整后分数排序 = 原始分 × 影响因子
       var sa = a.score * marketRelevance(a, market);
