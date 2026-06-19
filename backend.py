@@ -209,9 +209,21 @@ def create_app():
 # 启动
 # ═══════════════════════════════════════════════
 if __name__ == "__main__":
+    import signal as _signal
+
     app = create_app()
     platform = get_platform()
-    startup_log("app", "ok", f"AStock平台已就绪")
+    startup_log("app", "ok", "AStock平台已就绪")
+
+    # 信号处理：确保 SIGTERM 时干净退出、释放端口
+    def _graceful_shutdown(signum, frame):
+        startup_log("app", "info", f"收到信号 {signum}，正在退出...")
+        # Flask dev server 在 signal handler 中 sys.exit 即可
+        import sys as _sys
+        _sys.exit(0)
+
+    _signal.signal(_signal.SIGTERM, _graceful_shutdown)
+    _signal.signal(_signal.SIGINT, _graceful_shutdown)
 
     print("🚀 拾米交易工作室 Backend 启动中...")
     print(f"   🏛️  http://localhost:{config.SERVER_PORT}")

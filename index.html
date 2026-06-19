@@ -462,6 +462,35 @@
     </div>
   </div>
 
+  <!-- 📰 市场事件总览 -->
+  <div class="row">
+    <div class="card" style="border-color: rgba(139,92,246,.3);">
+      <div class="card-header">
+        <span class="card-title">📰 市场事件总览</span>
+        <span class="badge badge-purple" id="marketEventsCount">加载中</span>
+        <span style="font-size:11px;color:var(--text-muted);margin-left:6px" id="marketEventsTime"></span>
+        <button onclick="loadMarketEvents(true)" style="margin-left:auto;padding:3px 10px;font-size:11px;cursor:pointer;border:1px solid var(--purple);border-radius:4px;background:rgba(139,92,246,.1);color:var(--purple)">🔄 刷新扫描</button>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">
+        观星台 · 巨潮资讯 + Finnhub + yfinance + 东方财富 → 事件归类 → 标的映射 → 多空信号
+      </div>
+      <!-- 汇总统计 -->
+      <div id="marketEventsSummary" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;padding:12px;background:rgba(139,92,246,.04);border-radius:10px;font-size:13px">
+        <div><span style="color:var(--text-muted)">总事件</span><br><b id="meTotal">--</b></div>
+        <div><span style="color:var(--text-muted)">受影响标的</span><br><b id="meAffected">--</b></div>
+        <div><span style="color:var(--text-muted)">📈做多</span><br><b id="meLong" style="color:var(--green)">--</b></div>
+        <div><span style="color:var(--text-muted)">📉做空</span><br><b id="meShort" style="color:var(--red)">--</b></div>
+        <div><span style="color:var(--text-muted)">扫描时间</span><br><b id="meTimestamp" style="font-size:12px;color:var(--text-secondary)">--</b></div>
+      </div>
+      <!-- 事件信号表 -->
+      <table><thead>
+        <tr><th>时间</th><th>类型</th><th>事件摘要</th><th>影响</th><th>方向</th><th>关联标的</th><th>持续</th></tr>
+      </thead><tbody id="marketEventsBody">
+        <tr><td colspan="7" style="text-align:center;color:var(--text-muted)">加载中...</td></tr>
+      </tbody></table>
+    </div>
+  </div>
+
   <!-- 操作建议 -->
   <div class="row">
     <div class="card" style="border-color: rgba(240,180,41,.3);">
@@ -842,6 +871,31 @@
         <button onclick="lookupUS()" style="padding:8px 16px;border:1px solid var(--gold);border-radius:6px;background:rgba(240,180,41,.1);color:var(--gold);cursor:pointer;font-weight:600">查询</button>
       </div>
       <div id="usQuoteResult" style="padding:0 12px 12px;display:none"></div>
+    </div>
+  </div>
+
+  <!-- 📰 市场事件总览 (美股) -->
+  <div class="row">
+    <div class="card" style="border-color: rgba(139,92,246,.3);">
+      <div class="card-header">
+        <span class="card-title">📰 市场事件总览</span>
+        <span class="badge badge-purple" id="usMarketEventsCount">加载中</span>
+        <button onclick="loadUSMarketEvents()" style="margin-left:auto;padding:3px 10px;font-size:11px;cursor:pointer;border:1px solid var(--purple);border-radius:4px;background:rgba(139,92,246,.1);color:var(--purple)">🔄 刷新</button>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">
+        观星台 · Finnhub + yfinance 财报日历 → 美股事件信号
+      </div>
+      <div id="usMarketEventsSummary" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;padding:12px;background:rgba(139,92,246,.04);border-radius:10px;font-size:13px">
+        <div><span style="color:var(--text-muted)">美股事件</span><br><b id="usMETotal">--</b></div>
+        <div><span style="color:var(--text-muted)">📈做多</span><br><b id="usMELong" style="color:var(--green)">--</b></div>
+        <div><span style="color:var(--text-muted)">📉做空</span><br><b id="usMEShort" style="color:var(--red)">--</b></div>
+        <div><span style="color:var(--text-muted)">财报日历</span><br><b id="usMEYf" style="color:var(--gold)">--</b></div>
+      </div>
+      <table><thead>
+        <tr><th>时间</th><th>类型</th><th>事件摘要</th><th>影响</th><th>方向</th><th>关联标的</th><th>持续</th></tr>
+      </thead><tbody id="usMarketEventsBody">
+        <tr><td colspan="7" style="text-align:center;color:var(--text-muted)">切换到美股自动加载...</td></tr>
+      </tbody></table>
     </div>
   </div>
 
@@ -1270,6 +1324,9 @@ async function loadDashboard() {
 
     // Load advice after dashboard data is in cache
     loadAdvice();
+
+    // Load observatory market events (non-blocking)
+    loadMarketEvents(false);
 
     // Load prophet signals - A股面板 (non-blocking)
     loadProphetSignals('ashare', false);
@@ -1834,6 +1891,81 @@ function renderProphetPanel(prefix, data, market) {
           '</div>';
       }).join('');
     }
+  }
+}
+
+// ===== 📰 市场事件总览 (观星台) =====
+async function loadMarketEvents(forceRefresh) {
+  try {
+    if (forceRefresh) {
+      $('marketEventsBody').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--gold)">⏳ 后台扫描中...</td></tr>';
+      $('marketEventsCount').textContent = '扫描中...';
+      await fetch('/api/market/events/refresh', {method:'POST'});
+      await new Promise(function(r) { setTimeout(r, 4000); });
+    }
+
+    var data = await fetchJSON('/api/market/events');
+
+    var s = data.summary || {};
+    $('meTotal').textContent = s.total_events || 0;
+    $('meAffected').textContent = s.affected_stocks || 0;
+    $('meLong').textContent = s.long_signals || 0;
+    $('meShort').textContent = s.short_signals || 0;
+    $('meTimestamp').textContent = data.timestamp || '--';
+    $('marketEventsCount').textContent = (s.total_events || 0) + '条事件';
+    $('marketEventsTime').textContent = data.timestamp ? data.timestamp.slice(5) : '';
+
+    var signals = data.signals || [];
+    var tbody = $('marketEventsBody');
+    if (!signals.length) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">暂无事件信号，点击"刷新扫描"触发后台抓取</td></tr>';
+      return;
+    }
+
+    var typeColors = {
+      '政策驱动': '#f0b429', '财报窗口': '#22c55e', '宏观数据': '#3b82f6',
+      '地缘事件': '#ef4444', '行业动态': '#8b5cf6', '商品价格': '#06b6d4'
+    };
+    var typeNames = {
+      'policy': '政策', 'earnings': '财报', 'macro': '宏观',
+      'geopolitical': '地缘', 'sector': '行业', 'commodity': '商品'
+    };
+
+    tbody.innerHTML = signals.map(function(sig) {
+      var evt = sig.event || {};
+      var stocks = sig.stocks || [];
+      var etype = evt.type || '其他';
+      var typeName = typeNames[etype] || etype;
+      var typeColor = typeColors[typeName] || '#8b5cf6';
+      var impact = evt.impact || 'medium';
+      var impColor = impact === 'high' ? 'var(--red)' : (impact === 'medium' ? 'var(--gold)' : 'var(--text-secondary)');
+      var impLabel = impact === 'high' ? '⚠高' : (impact === 'medium' ? '中' : '低');
+      var date = (evt.date || '').slice(5) || '--';
+      if (evt.time) date += ' ' + evt.time;  // HH:MM
+      var title = (evt.title || '--').slice(0, 55);
+      var stockText = stocks.slice(0, 4).map(function(st) {
+        var dir = st.direction === 'short' ? '📉' : '📈';
+        return '<span style="font-size:10px;margin-right:4px;white-space:nowrap">' + dir + ' ' + (st.code || st) + '</span>';
+      }).join('');
+      var dir = stocks[0] ? stocks[0].direction : 'long';
+      var dirIcon = dir === 'short' ? '📉' : '📈';
+      var dirColor = dir === 'short' ? 'var(--red)' : 'var(--green)';
+      var dirLabel = dir === 'short' ? '做空' : '做多';
+
+      return '<tr>' +
+        '<td style="font-size:11px;color:var(--text-muted);white-space:nowrap">' + date + '</td>' +
+        '<td><span style="font-size:10px;padding:1px 6px;border-radius:3px;background:' + typeColor + '15;color:' + typeColor + '">' + typeName + '</span></td>' +
+        '<td style="font-size:12px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + (evt.title||'').replace(/"/g,'&quot;') + '">' + title + '</td>' +
+        '<td><span style="color:' + impColor + ';font-weight:600;font-size:11px">' + impLabel + '</span></td>' +
+        '<td style="color:' + dirColor + ';font-size:11px;font-weight:600;white-space:nowrap">' + dirIcon + ' ' + dirLabel + '</td>' +
+        '<td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (stockText || '--') + '</td>' +
+        '<td style="font-size:11px;color:var(--text-muted)">' + (evt.duration_days || '?') + '天</td>' +
+        '</tr>';
+    }).join('');
+
+  } catch(e) {
+    $('marketEventsCount').textContent = '加载失败';
+    $('marketEventsBody').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--red)">⚠️ ' + e.message + '</td></tr>';
   }
 }
 
@@ -3196,6 +3328,8 @@ function switchMarket(target) {
     refreshHaitao();
     // Load US prophet signals when switching to US panel
     loadProphetSignals('us', false);
+    // Load market events for US panel
+    loadUSMarketEvents();
   } else {
     ashare.style.display = '';
     haitao.style.display = 'none';
@@ -3706,6 +3840,63 @@ async function closePlan(id) {
     // SSE not supported, fallback to polling
   }
 })();
+
+// ===== 📰 美股面板市场事件 =====
+async function loadUSMarketEvents() {
+  try {
+    var data = await fetchJSON('/api/market/events');
+    var usSignals = (data.signals || []).filter(function(s) {
+      return (s.event.market || '') === 'US' || (s.event.source || '') === 'yfinance';
+    });
+    var yf = (data.sources_status || {}).yfinance || {};
+    $('usMarketEventsCount').textContent = usSignals.length + '条美股信号';
+    $('usMETotal').textContent = usSignals.length;
+    $('usMELong').textContent = usSignals.filter(function(s) { return (s.stocks||[])[0] && s.stocks[0].direction === 'long'; }).length;
+    $('usMEShort').textContent = usSignals.filter(function(s) { return (s.stocks||[])[0] && s.stocks[0].direction === 'short'; }).length;
+    $('usMEYf').textContent = (yf.count || 0) + '条';
+    var tbody = $('usMarketEventsBody');
+    if (!usSignals.length) {
+      tbody.innerHTML = '<tr><td colspan=\"7\" style=\"text-align:center;color:var(--text-muted)\">暂无美股信号</td></tr>';
+    } else {
+      tbody.innerHTML = renderSignalRows(usSignals);
+    }
+  } catch(e) {
+    $('usMarketEventsCount').textContent = '加载失败';
+    $('usMarketEventsBody').innerHTML = '<tr><td colspan=\"7\" style=\"text-align:center;color:var(--red)\">?' + e.message + '</td></tr>';
+  }
+}
+
+// 提取复用：信号行渲染
+function renderSignalRows(signals) {
+  var tc = { '政策驱动':'#f0b429', '财报窗口':'#22c55e', '宏观数据':'#3b82f6', '地缘事件':'#ef4444', '行业动态':'#8b5cf6', '商品价格':'#06b6d4' };
+  var tn = { 'policy':'政策', 'earnings':'财报', 'macro':'宏观', 'geopolitical':'地缘', 'sector':'行业', 'commodity':'商品' };
+  return signals.map(function(sig) {
+    var evt = sig.event || {}, sts = sig.stocks || [];
+    var etype = evt.type || '其他', typeName = tn[etype] || etype;
+    var impact = evt.impact || 'medium';
+    var impColor = impact === 'high' ? 'var(--red)' : (impact === 'medium' ? 'var(--gold)' : 'var(--text-secondary)');
+    var impLabel = impact === 'high' ? '⚠高' : (impact === 'medium' ? '中' : '低');
+    var date = (evt.date || '').slice(5) || '--';
+    if (evt.time) date += ' ' + evt.time;
+    var title = (evt.title || '--').slice(0, 55);
+    var stockText = sts.slice(0, 3).map(function(st) {
+      var d = st.direction === 'short' ? '\ud83d\udcc9' : '\ud83d\udcc8';
+      return '<span style="font-size:10px;margin-right:4px">' + d + ' ' + (st.code || st) + '</span>';
+    }).join('');
+    var dir = sts[0] ? sts[0].direction : 'long';
+    var dirIcon = dir === 'short' ? '\u{1F4C9}' : '\u{1F4C8}';
+    var dirColor = dir === 'short' ? 'var(--red)' : 'var(--green)';
+    return '<tr>' +
+      '<td style="font-size:11px;color:var(--text-muted);white-space:nowrap">' + date + '</td>' +
+      '<td><span style=\"font-size:10px;padding:1px 6px;border-radius:3px;background:' + (tc[typeName]||'#8b5cf6') + '15;color:' + (tc[typeName]||'#8b5cf6') + '\">' + typeName + '</span></td>' +
+      '<td style="font-size:12px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + (evt.title||'').replace(/"/g,'&quot;') + '">' + title + '</td>' +
+      '<td><span style="color:' + impColor + ';font-weight:600;font-size:11px">' + impLabel + '</span></td>' +
+      '<td style=\"color:' + dirColor + ';font-size:11px;font-weight:600\">' + dirIcon + '</td>' +
+      '<td style=\"font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">' + (stockText || '--') + '</td>' +
+      '<td style="font-size:11px;color:var(--text-muted)">' + (evt.duration_days || '?') + '天</td>' +
+    '</tr>';
+  }).join('');
+}
 </script>
 </body>
 </html>
