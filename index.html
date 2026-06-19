@@ -682,6 +682,7 @@
         <button onclick="login()" style="padding:10px;border:none;border-radius:8px;background:var(--gold);color:#0b0e14;font-weight:700;cursor:pointer">登录</button>
         <div id="loginError" style="color:var(--red);font-size:12px;display:none"></div>
         <div style="text-align:center;font-size:12px;color:var(--text-muted);cursor:pointer" onclick="switchToRegister()">还没有账号？点击注册 →</div>
+        <div style="text-align:center;font-size:12px;color:var(--text-muted);cursor:pointer;margin-top:4px" onclick="switchToReset()">忘记密码？</div>
       </div>
     </div>
 
@@ -694,6 +695,21 @@
         <button onclick="register()" style="padding:10px;border:none;border-radius:8px;background:var(--green);color:#fff;font-weight:600;cursor:pointer">注册新账户</button>
         <div id="regError" style="color:var(--red);font-size:12px;display:none"></div>
         <div style="text-align:center;font-size:12px;color:var(--text-muted);cursor:pointer" onclick="switchToLogin()">已有账号？返回登录 ←</div>
+      </div>
+    </div>
+
+    <!-- 重置密码界面 -->
+    <div id="resetPanel" style="display:none">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <input id="resetUser" placeholder="用户名" style="padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-primary);color:var(--text-primary)">
+        <div style="display:flex;gap:8px">
+          <input id="resetCode" placeholder="验证码" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-primary);color:var(--text-primary)">
+          <button onclick="getResetCode()" style="padding:10px 14px;border:1px solid var(--gold);border-radius:8px;background:rgba(240,180,41,.1);color:var(--gold);cursor:pointer;font-size:12px;white-space:nowrap">获取验证码</button>
+        </div>
+        <input id="resetNewPass" type="password" placeholder="新密码（至少6位）" style="padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-primary);color:var(--text-primary)">
+        <button onclick="resetPassword()" style="padding:10px;border:none;border-radius:8px;background:var(--green);color:#fff;font-weight:600;cursor:pointer">重置密码</button>
+        <div id="resetError" style="color:var(--red);font-size:12px;display:none"></div>
+        <div style="text-align:center;font-size:12px;color:var(--text-muted);cursor:pointer" onclick="switchToLogin()">← 返回登录</div>
       </div>
     </div>
   </div>
@@ -2078,8 +2094,67 @@ function switchToRegister() {
 function switchToLogin() {
   document.getElementById('loginPanel').style.display = 'block';
   document.getElementById('registerPanel').style.display = 'none';
+  document.getElementById('resetPanel').style.display = 'none';
   document.getElementById('loginError').style.display = 'none';
   document.getElementById('regError').style.display = 'none';
+  document.getElementById('resetError').style.display = 'none';
+}
+
+function switchToReset() {
+  document.getElementById('loginPanel').style.display = 'none';
+  document.getElementById('registerPanel').style.display = 'none';
+  document.getElementById('resetPanel').style.display = 'block';
+  document.getElementById('loginError').style.display = 'none';
+  document.getElementById('resetError').style.display = 'none';
+}
+
+async function getResetCode() {
+  const user = document.getElementById('resetUser').value.trim();
+  if (!user) { showResetError('请输入用户名'); return; }
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '发送中...';
+  try {
+    const r = await fetch('/api/auth/reset-code', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username: user})
+    });
+    const d = await r.json();
+    if (d.code) {
+      showResetError('验证码: ' + d.code + ' (有效期10分钟)', 'green');
+      document.getElementById('resetCode').value = d.code;
+    } else {
+      showResetError(d.message || '发送失败');
+    }
+  } catch(e) { showResetError('网络错误'); }
+  btn.disabled = false; btn.textContent = '获取验证码';
+}
+
+async function resetPassword() {
+  const user = document.getElementById('resetUser').value.trim();
+  const code = document.getElementById('resetCode').value.trim();
+  const pass = document.getElementById('resetNewPass').value;
+  if (!user || !code || !pass) { showResetError('请填写完整信息'); return; }
+  if (pass.length < 6) { showResetError('新密码至少6位'); return; }
+  try {
+    const r = await fetch('/api/auth/reset-password', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username: user, code: code, new_password: pass})
+    });
+    const d = await r.json();
+    if (d.message && d.message.includes('成功')) {
+      alert('✅ 密码重置成功！请登录');
+      document.getElementById('loginUser').value = user;
+      switchToLogin();
+    } else {
+      showResetError(d.error || '重置失败');
+    }
+  } catch(e) { showResetError('网络错误'); }
+}
+
+function showResetError(msg, color) {
+  const el = document.getElementById('resetError');
+  el.textContent = msg; el.style.display = 'block';
+  el.style.color = color === 'green' ? 'var(--green)' : 'var(--red)';
 }
 
 async function login() {

@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify, request
 from db import (
     login_user, verify_token, register_user, list_users,
     add_trade, update_trade, delete_trade, get_trades, get_trade_summary,
+    get_db,
 )
 from .auth import require_user, unauthorized
 
@@ -197,7 +198,79 @@ def api_delete_trade(trade_id):
     return jsonify(result)
 
 
-# ─── 实时行情 ─────────────────────────────────
+# ─── 密码重置 ─────────────────────────────────
+
+@bp.route("/auth/reset-code", methods=["POST"])
+def api_reset_code():
+    """生成密码重置验证码 (发送给用户, 有效期10分钟)"""
+    from flask import request
+    import hashlib, secrets, time as _time
+    data = request.get_json(force=True, silent=True) or {}
+    username = data.get("username", "").strip()
+    if not username:
+        return jsonify({"error": "请输入用户名"}), 400
+    
+    conn = get_db()
+    try:
+        user = conn.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
+        if not user:
+            return jsonify({"message": "如该用户存在，验证码已生成"})  # 不泄露用户存在性
+        
+        code = secrets.token_hex(3)  # 6位验证码
+        expires = int(_time.time()) + 600  # 10分钟
+        
+        conn.execute("DELETE FROM reset_codes WHERE user_id=?", (user["id"],))
+        conn.execute("INSERT INTO reset_codes (user_id, code, expires_at) VALUES (?, ?, ?)",
+                    (user["id"], code, expires))
+        conn.commit()
+        
+        print(f"[密码重置] {username} 验证码: {code}")  # 实际应发送邮件/微信, 此处日志输出
+        
+        return jsonify({"message": "验证码已生成", "code": code})  # 开发阶段直接返回, 生产需改为邮件/微信发送
+    finally:
+        conn.close()
+
+
+@bp.route("/auth/reset-password", methods=["POST"])
+def api_reset_password():
+    """使用验证码重置密码"""
+    import hashlib, time as _time
+    data = request.get_json(force=True, silent=True) or {}
+    username = data.get("username", "").strip()
+    code = data.get("code", "").strip()
+    new_password = data.get("new_password", "")
+    
+    if not all([username, code, new_password]):
+        return jsonify({"error": "请填写完整信息"}), 400
+    if len(new_password) < 6:
+        return jsonify({"error": "密码至少6位"}), 400
+    
+    conn = get_db()
+    try:
+        user = conn.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
+        if not user:
+            return jsonify({"error": "用户名或验证码错误"}), 400
+        
+        row = conn.execute(
+            "SELECT code, expires_at FROM reset_codes WHERE user_id=? ORDER BY id DESC LIMIT 1",
+            (user["id"],)
+        ).fetchone()
+        
+        if not row:
+            return jsonify({"error": "请先生成验证码"}), 400
+        if int(_time.time()) > row["expires_at"]:
+            return jsonify({"error": "验证码已过期，请重新获取"}), 400
+        if row["code"] != code:
+            return jsonify({"error": "验证码错误"}), 400
+        
+        pw_hash = hashlib.sha256(new_password.encode()).hexdigest()
+        conn.execute("UPDATE users SET password=? WHERE id=?", (pw_hash, user["id"]))
+        conn.execute("DELETE FROM reset_codes WHERE user_id=?", (user["id"],))
+        conn.commit()
+        
+        return jsonify({"message": "密码重置成功，请登录"})
+    finally:
+        conn.close()
 
 @bp.route("/positions/realtime", methods=["POST"])
 def api_positions_realtime():
