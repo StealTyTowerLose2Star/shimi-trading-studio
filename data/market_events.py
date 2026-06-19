@@ -153,14 +153,15 @@ def fetch_cn_events() -> List[Dict]:
                     # 补全6位代码格式
                     if len(code) == 5:
                         code = "0" + code
+                    cninfo_type = item.get("type", "")
                     events.append({
                         "date": item.get("date", today),
                         "market": "A",
-                        "type": _cninfo_type_to_event_type(item.get("type", "")),
+                        "type": _cninfo_type_to_event_type(cninfo_type),
                         "title": item.get("title", "公告事件"),
                         "code": code,
                         "source": "cninfo",
-                        "impact": "medium",
+                        "impact": "high" if cninfo_type == "C8_ST摘帽" else "medium",
                     })
     except Exception:
         pass
@@ -173,6 +174,7 @@ def _cninfo_type_to_event_type(cninfo_type: str) -> str:
         "C3_重大合同": "earnings",
         "C5_资产重组": "earnings",
         "C7_业绩超预期": "earnings",
+        "C8_ST摘帽": "earnings",   # 摘帽=重大利好
     }
     return mapping.get(cninfo_type, "sector")
 
@@ -472,26 +474,26 @@ def map_events_to_stocks(events: List[Dict]) -> List[Dict]:
                 "reason": f"{EVENT_TYPES.get(etype, {}).get('name', etype)}事件",
             })
 
-        # 2. 行业映射（中英文关键词 → 板块 → 股票）
+        # 2. 行业映射：事件文本中含行业名才映射（不用全局事件类型关键词，防交叉污染）
         for sector, codes in SECTOR_STOCK_MAP.items():
             matched = False
-            # 中文: 板块名 or 事件类型关键词
-            if sector in text or any(kw in text for kw in EVENT_TYPES.get(etype, {}).get("keywords", [])):
+            # 中文: 行业名本身出现在事件文本中
+            if sector in text:
                 matched = True
-            # 英文: EN_SECTOR_MAP 词边界匹配
+            # 英文: EN_SECTOR_MAP 词边界 → 对应行业名
             if not matched:
                 for en_kw, cn_sector in EN_SECTOR_MAP.items():
                     if _en_word_match(en_kw, text) and cn_sector == sector:
                         matched = True
                         break
             if matched:
-                for code in codes[:3]:  # 每行业最多3只
+                for code in codes[:2]:  # 每行业最多2只（更精准）
                     if code not in [s["code"] for s in affected_stocks]:
                         affected_stocks.append({
                             "code": code,
                             "name": "",
                             "direction": _infer_direction(etype, text),
-                            "reason": f"{sector}{'利好' if '利好' in title or 'gain' in text or 'rise' in text else '影响'}",
+                            "reason": f"{sector}关联",
                         })
 
         # 3. Finnhub related stocks
@@ -670,12 +672,19 @@ def scan_market_events() -> Dict:
             sig["event"]["source"] = original.get("source", "")
             sig["event"]["time"] = original.get("time", "")
 
-    # 前端展示：CN巨潮8 + 东财4 + US新闻4 + 财报4（确保四大数据源都有露出）
+    # 前端展示：CN巨潮8（高影响优先，摘帽事件至少2个槽位）+ 东财4 + US新闻4 + 财报4
     cn_signals = [s for s in signals if s["event"].get("source") in (None, "", "cninfo")]
+    # 高影响优先排序
+    cn_signals.sort(key=lambda s: (0 if s["event"].get("impact") == "high" else 1,
+                                    s["event"].get("title", "")))
+    # 摘帽事件确保露出
+    st_signals = [s for s in cn_signals if "撤销" in s["event"].get("title", "") or "摘帽" in s["event"].get("title", "")]
+    other_cn = [s for s in cn_signals if s not in st_signals]
+    cn_display = st_signals[:2] + other_cn[:6]
     em_signals = [s for s in signals if s["event"].get("source") == "eastmoney"]
     us_signals = [s for s in signals if s["event"].get("market") == "US" and s["event"].get("source") != "yfinance"]
     yf_signals = [s for s in signals if s["event"].get("source") == "yfinance"]
-    display_signals = cn_signals[:8] + em_signals[:4] + us_signals[:4] + yf_signals[:4]
+    display_signals = cn_display + em_signals[:4] + us_signals[:4] + yf_signals[:4]
 
     # 统计
     long_count = sum(1 for s in signals for st in s["stocks"] if st["direction"] == "long")

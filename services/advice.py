@@ -125,6 +125,26 @@ def generate_advice():
     hybrid_map = {k: v for k, v in hybrid_map.items() if k in all_codes}
     dragon_map = {k: v for k, v in dragon_map.items() if k in all_codes}
 
+    # ─── 事件信号作为第五维度共振 ──────
+    event_map = {}
+    try:
+        import json, os
+        cache_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "market_events.json")
+        if os.path.exists(cache_path):
+            with open(cache_path) as f:
+                events_data = json.load(f)
+            for sig in events_data.get("signals", []):
+                for st in sig.get("stocks", []):
+                    code = st.get("code", "")
+                    if code and code.isdigit() and len(code) == 6:
+                        event_map[code] = {
+                            "direction": st.get("direction", "long"),
+                            "event": sig["event"].get("title", "")[:40],
+                            "impact": sig["event"].get("impact", "medium"),
+                        }
+    except Exception:
+        pass
+
     # 动态仓位计算
     market_phase = sentiment.get("phase", "未知")
     market_factor = {
@@ -156,11 +176,14 @@ def generate_advice():
         if code in hybrid_map: strategies.append("混合")
         if code in dragon_map: strategies.append("龙头")
         if code in kline_map:  strategies.append("K线形态")
+        if code in event_map and event_map[code]["direction"] == "long":
+            strategies.append("事件")
 
         consensus = len(strategies)
-        # K线形态仅作为加分维度，不单独推荐（除非评分极高）
+        # K线形态/事件仅作为加分维度，不单独推荐
         is_kline_only = consensus == 1 and code in kline_map
-        if consensus < 2 and not is_kline_only:
+        is_event_only = consensus == 1 and code in event_map
+        if consensus < 2 and not is_kline_only and not is_event_only:
             continue
 
         kp_info = kline_map.get(code, {})
@@ -253,6 +276,7 @@ def generate_advice():
         if _ma_score: sort_score += _ma_score["score"] * 0.3
         if _macd: sort_score += _macd["score"] * 0.3
         if _kline_patterns: sort_score += _kline_patterns["score"] * 0.25
+        if "事件" in strategies: sort_score += 15  # 事件信号加分
 
         reasons = []
         if "趋势" in strategies:
@@ -264,6 +288,10 @@ def generate_advice():
         if "龙头" in strategies:
             s = dragon_map[code]
             reasons.append(f"龙头{s.get('leader_score','?')}分·{s.get('grade','?')}")
+        if "事件" in strategies:
+            ev_info = event_map.get(code, {})
+            ev_dir = "📈" if ev_info.get("direction") == "long" else "📉"
+            reasons.append(f"事件{ev_dir}{ev_info.get('event','?')}")
         if _ma_score:
             reasons.insert(1, f"均线:{_ma_score['detail']}")
         if _macd:
@@ -299,6 +327,9 @@ def generate_advice():
             "macd_score": _macd["score"] if _macd else None,
             "kline_patterns": (_kline_patterns["patterns"] if _kline_patterns else None),
             "kline_score": (_kline_patterns["score"] if _kline_patterns else None),
+            "event_direction": event_map[code]["direction"] if code in event_map else None,
+            "event_title": event_map[code]["event"] if code in event_map else None,
+            "event_impact": event_map[code]["impact"] if code in event_map else None,
             "reason": " | ".join(reasons),
         })
 
