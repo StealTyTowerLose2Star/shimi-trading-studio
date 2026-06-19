@@ -240,72 +240,6 @@
   /* ===== 1W实盘追踪 ===== */
   .pnl-positive { color: var(--green) !important; font-weight: 700; }
   .pnl-negative { color: var(--red) !important; font-weight: 700; }
-  .plan1w-summary {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 12px;
-    margin-bottom: 16px;
-  }
-  .plan1w-summary-item {
-    background: rgba(255,255,255,.03);
-    border-radius: 10px;
-    padding: 14px 16px;
-    text-align: center;
-  }
-  .plan1w-summary-item .label {
-    font-size: 11px;
-    color: var(--text-muted);
-    margin-bottom: 4px;
-  }
-  .plan1w-summary-item .value {
-    font-size: 20px;
-    font-weight: 700;
-  }
-  .plan1w-summary-item .sub {
-    font-size: 12px;
-    color: var(--text-secondary);
-    margin-top: 2px;
-  }
-  .plan1w-actions {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 14px;
-    flex-wrap: wrap;
-  }
-  .plan1w-btn {
-    padding: 6px 16px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    background: var(--bg-card-hover);
-    color: var(--text-secondary);
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 600;
-    transition: all .15s;
-  }
-  .plan1w-btn:hover { background: rgba(240,180,41,.08); border-color: var(--gold); color: var(--gold); }
-  .plan1w-btn.primary {
-    border: 1px solid var(--gold);
-    background: rgba(240,180,41,.1);
-    color: var(--gold);
-  }
-  .plan1w-btn.primary:hover { background: rgba(240,180,41,.2); }
-  .plan1w-btn.danger {
-    border: 1px solid var(--red);
-    background: rgba(239,68,68,.1);
-    color: var(--red);
-  }
-  .plan1w-section-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-muted);
-    margin-bottom: 8px;
-    text-transform: uppercase;
-    letter-spacing: .5px;
-  }
-  @media (max-width: 768px) {
-    .plan1w-summary { grid-template-columns: 1fr; }
-  }
 </style>
 </head>
 <body>
@@ -431,7 +365,7 @@
         10维评分(量化6维+催化剂4维) · C1政策/C2商品/C3合同/C5重组/C7业绩
       </div>
       <!-- 排行表格 -->
-      <table><thead><tr><th>#</th><th>代码</th><th>名称</th><th>现价</th><th>买入参考</th><th>翻倍目标</th><th>行业</th><th>市值</th><th>本月涨</th><th>潜力</th><th>催化剂</th><th>操作</th></tr></thead><tbody id="doublerBody"></tbody></table>
+      <table><thead><tr><th>#</th><th>代码</th><th>名称</th><th>现价</th><th style="color:var(--gold)">入场价</th><th style="color:#22c55e">止盈</th><th style="color:#ef4444">止损</th><th>行业</th><th>市值</th><th>本月涨</th><th>潜力</th><th>催化剂</th><th>操作</th></tr></thead><tbody id="doublerBody"></tbody></table>
       <!-- 仓位方案卡片 -->
       <div id="doublerPlanArea" style="margin-top:14px;padding:12px;background:rgba(34,197,94,.04);border:1px solid rgba(34,197,94,.12);border-radius:8px;display:none">
         <div style="font-size:13px;font-weight:700;margin-bottom:8px">💰 买入方案 <span id="doublerPlanCapital" style="font-weight:400;font-size:12px;color:var(--text-secondary)"></span></div>
@@ -1006,8 +940,8 @@ async function loadKlineData(code, containerId, days) {
     });
     window.addEventListener('resize', function() { chart.resize(); });
   } catch(e) {
-    loading.textContent = '加载失败: ' + e.message;
-    loading.style.color = 'var(--red)';
+    loading.textContent = '⏳ K线数据获取中…';
+    loading.style.color = '#f0b429';
   }
 }
 
@@ -1227,7 +1161,7 @@ async function loadDashboard() {
     console.error('Dashboard load error:', err);
     document.querySelectorAll('.card tbody').forEach(tbody => {
       if (tbody.children.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--red)">⚠️ 数据加载失败：' + err.message + '</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#f0b429">⏳ 数据扫描中…</td></tr>';
       }
     });
   }
@@ -1379,7 +1313,7 @@ async function loadDoublerPanel() {
       fetchJSON('/api/doubler/plan/10k'),
     ]);
 
-    if (!rec || rec.error) { tbody.innerHTML = '<tr><td colspan="12">数据加载失败</td></tr>'; return; }
+    if (!rec || rec.error) { tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:#f0b429">⏳ 翻倍数据扫描中…</td></tr>'; return; }
 
     dateEl.textContent = '📅 ' + (rec.trade_date || '');
     let picks = (rec.elite_picks || []).slice(0, 12);
@@ -1396,15 +1330,17 @@ async function loadDoublerPanel() {
         ? `<span style="font-size:10px;padding:1px 4px;border-radius:3px;background:rgba(255,107,53,.12);color:#ff6b35">${catType}+${p.catalyst_d7||0}</span>`
         : '<span style="color:var(--text-muted)">—</span>';
       const mtmClr = p.mtm_gain >= 20 ? '#ff6b35' : p.mtm_gain >= 0 ? '#22c55e' : '#ef4444';
-      const buyRef = p.close;                // 买入参考 = 现价
-      const doubleTarget = +(p.close * 2).toFixed(2); // 翻倍目标 = 2×参考价
+      const buyRef = p.close;                // 入场价 = 现价
+      const tpPrice = +(p.close * 1.40).toFixed(2); // 止盈 +40%
+      const slPrice = +(p.close * 0.93).toFixed(2); // 止损 -7%
       return `<tr>
         <td>${i+1}</td>
         <td><b>${p.code}</b></td>
         <td>${p.name}</td>
         <td>¥${p.close}</td>
-        <td style="color:#f0b429">¥${buyRef}</td>
-        <td style="color:#22c55e;font-weight:700">¥${doubleTarget}</td>
+        <td style="color:var(--gold)">¥${buyRef}</td>
+        <td style="color:#22c55e;font-weight:600">¥${tpPrice}</td>
+        <td style="color:#ef4444;font-weight:600">¥${slPrice}</td>
         <td style="font-size:11px;color:var(--text-muted)">${p.industry}</td>
         <td>${fmtMv(p.circ_mv_yi)}</td>
         <td style="color:${mtmClr}">${p.mtm_gain > 0 ? '+' : ''}${p.mtm_gain}%</td>
@@ -1437,7 +1373,7 @@ async function loadDoublerPanel() {
       }
     }
   } catch(e) {
-    tbody.innerHTML = '<tr><td colspan="12">加载异常: ' + e.message + '</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:#f0b429">⏳ 翻倍数据扫描中…</td></tr>';
   }
 }
 
@@ -1489,9 +1425,9 @@ async function loadCacheStatus() {
     recCount.style.background = 'rgba(34,197,94,.15)';
     recCount.style.color = 'var(--green)';
   } catch(e) {
-    recCount.textContent = '加载失败';
-    recCount.style.background = 'rgba(239,68,68,.15)';
-    recCount.style.color = 'var(--red)';
+    recCount.textContent = '扫描中';
+    recCount.style.background = 'rgba(240,180,41,.12)';
+    recCount.style.color = '#f0b429';
   }
 }
 
@@ -1715,8 +1651,8 @@ async function loadProphetSignals(market, forceScan) {
 
   } catch (err) {
     console.error('Prophet load error:', err);
-    $(prefix + 'SigCount').textContent = '加载失败';
-    $(prefix + 'SignalsBody').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--red)">⚠️ ' + err.message + '</td></tr>';
+    $(prefix + 'SigCount').textContent = '扫描中';
+    $(prefix + 'SignalsBody').innerHTML = '<tr><td colspan="6" style="text-align:center;color:#f0b429">⏳ 信号数据扫描中…</td></tr>';
   }
 }
 
@@ -1870,8 +1806,8 @@ async function loadMarketEvents(forceRefresh) {
     }).join('');
 
   } catch(e) {
-    $('marketEventsCount').textContent = '加载失败';
-    $('marketEventsBody').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--red)">⚠️ ' + e.message + '</td></tr>';
+    $('marketEventsCount').textContent = '扫描中';
+    $('marketEventsBody').innerHTML = '<tr><td colspan="7" style="text-align:center;color:#f0b429">⏳ 事件数据扫描中…</td></tr>';
   }
 }
 
@@ -2418,7 +2354,7 @@ async function loadTradesFromServer() {
     serverSummary = d.summary || {};
     renderServerTrades();
   } catch(e) {
-    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;color:var(--red)">加载失败</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;color:#f0b429">⏳ 交易数据扫描中…</td></tr>';
   }
 }
 
@@ -3007,7 +2943,7 @@ async function loadPortfolioAdvice() {
       </tr>`;
     }).join('');
   } catch(e) {
-    tbody.innerHTML = '<tr><td colspan="12" style="color:var(--red)">加载失败: ' + e.message + '</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:#f0b429">⏳ 美股数据扫描中…</td></tr>';
   }
 }
 
@@ -3033,7 +2969,7 @@ async function loadPnLReport(period) {
       </tr>`;
     }).join('');
   } catch(e) {
-    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--red)">加载失败</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#f0b429">⏳ 数据扫描中…</td></tr>';
   }
 }
 
@@ -3073,7 +3009,7 @@ async function loadReview(type) {
     if (d.error) { el.innerHTML = '<div style="color:var(--text-muted);padding:20px">暂无复盘报告，点击上方按钮生成</div>'; return; }
     el.innerHTML = renderReviewContent(d);
   } catch(e) {
-    el.innerHTML = '<div style="color:var(--red);padding:20px">加载失败: ' + e.message + '</div>';
+    el.innerHTML = '<div style="color:#f0b429;padding:20px">⏳ 复盘数据扫描中…</div>';
   }
 }
 
@@ -3186,7 +3122,7 @@ async function loadMarginData(code) {
       '</tr>';
     }).join('');
   } catch(e) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--red)">加载失败: ' + e.message + '</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#f0b429">⏳ US数据扫描中…</td></tr>';
   }
 }
 
@@ -3414,7 +3350,7 @@ async function scanUS(mode) {
         '</tr>';
     }).join('');
   } catch(e) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--red)">加载失败</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#f0b429">⏳ 先知信号扫描中…</td></tr>';
   }
 }
 
@@ -3541,7 +3477,7 @@ async function loadDoublerDiscovery() {
         '<td class="code-num">$' + fmt(price, 2) + '</td></tr>';
     }).join('');
   } catch(e) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--red)">加载失败</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#f0b429">⏳ 美股扫描中…</td></tr>';
   }
 }
 
@@ -3809,8 +3745,8 @@ async function loadUSMarketEvents() {
       tbody.innerHTML = renderSignalRows(usSignals);
     }
   } catch(e) {
-    $('usMarketEventsCount').textContent = '加载失败';
-    $('usMarketEventsBody').innerHTML = '<tr><td colspan=\"7\" style=\"text-align:center;color:var(--red)\">?' + e.message + '</td></tr>';
+    $('usMarketEventsCount').textContent = '扫描中';
+    $('usMarketEventsBody').innerHTML = '<tr><td colspan="7" style="text-align:center;color:#f0b429">⏳ 美股事件扫描中…</td></tr>';
   }
 }
 

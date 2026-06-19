@@ -778,7 +778,7 @@ def recommend_current_month():
     # 行业热度
     industry_heat = defaultdict(lambda: {"count": 0, "top_stocks": []})
     for c in top30:
-        ind = c["industry"]
+        ind = c.get("industry") or "未知"  # 行业为空→"未知"
         industry_heat[ind]["count"] += 1
         if len(industry_heat[ind]["top_stocks"]) < 2:
             industry_heat[ind]["top_stocks"].append(
@@ -904,16 +904,14 @@ def position_plan_10k(elite_picks):
         dict: {plan: list, total_allocated, remaining, rules}
     """
     capital = 10000
-    # 过滤买得起的 (单价 ≤ ¥25 才能买至少100股)
-    affordable = [c for c in elite_picks if c["close"] <= 25]
-    if len(affordable) < 3:
-        affordable = elite_picks[:3]
+    # 直接取排名前3 (不按价格过滤)
+    top3 = elite_picks[:3]
 
     plan = []
     total_cost = 0
     allocs = [4000, 3000, 3000]
 
-    for i, c in enumerate(affordable[:3]):
+    for i, c in enumerate(top3):
         alloc = allocs[i]
         shares = int(alloc / c["close"] / 100) * 100
         actual = shares * c["close"]
@@ -938,7 +936,7 @@ def position_plan_10k(elite_picks):
         "allocated_pct": f"{total_cost/capital*100:.0f}%",
         "remaining": round(capital - total_cost, 2),
         "remaining_pct": f"{(capital - total_cost)/capital*100:.0f}%",
-        "watchlist": affordable[3:6],
+        "watchlist": top3[3:6] if len(top3) > 3 else [],
         "rules": {
             "max_loss_per_stock": "8%",
             "max_drawdown_total": "15% (¥1,500)",

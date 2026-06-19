@@ -383,20 +383,19 @@ def generate_from_doubler():
     today = datetime.now().strftime("%Y-%m-%d")
     trade_date = data.get("trade_date", today)
 
-    # 过滤: 排除ST + 排除北交所流动性不足的 + 单价≤25
+    # 过滤: 排除ST + 排除北交所代码
     picks = []
     for c in top30:
         if "ST" in c.get("name", ""):
             continue
-        if c.get("code", "").startswith("9") and c.get("turnover", 0) < 5:
+        if c.get("code", "").startswith("9"):
             continue
         # 提取催化剂信息 (从嵌套结构展平)
         cat = c.get("catalyst", {})
         c["early_pattern"] = cat.get("early_pattern", "")
         c["early_reason"] = cat.get("early_reason", "")
         c["score"] = c.get("score", 0)
-        if c.get("close", 999) <= 25:
-            picks.append(c)
+        picks.append(c)
 
     if len(picks) < 3:
         picks = [c for c in top30 if "ST" not in c.get("name", "")][:3]
