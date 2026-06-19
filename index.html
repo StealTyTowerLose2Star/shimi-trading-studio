@@ -3430,6 +3430,34 @@ async function closePlan(id) {
   } catch(e) {
     alert('❌ 平仓失败: ' + e.message);
   }
-}\n\n// ─── SSE 实时推送 ─────────────────────────────\n(function() {\n  try {\n    const es = new EventSource('/api/sse/stream');\n    es.onmessage = function(e) {\n      try {\n        const msg = JSON.parse(e.data);\n        if (msg.type === 'alert') {\n          showToast(msg.data.message || '系统告警', msg.data.level || 'warning');\n        } else if (msg.type === 'health_update') {\n          const deps = msg.data.deps || {};\n          const status = deps.overall === 'healthy' ? '✅' : deps.overall === 'degraded' ? '⚠️' : '❌';\n          const el = document.getElementById('dataSourceLabel');\n          if (el && !el.textContent.startsWith('A') && !el.textContent.startsWith('🌊')) {\n            // Only update if not showing A-stock/US label\n          }\n        }\n      } catch(_) {}\n    };\n    es.onerror = function() {\n      // 连接断开,30s后自动重连 (EventSource默认行为)\n    };\n  } catch(_) {\n    // SSE not supported, fallback to polling\n  }\n})();\n\n</script>
+}
+// ─── SSE 实时推送 ─────────────────────────────
+(function() {
+  try {
+    const es = new EventSource('/api/sse/stream');
+    es.onmessage = function(e) {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'alert') {
+          showToast(msg.data.message || '系统告警', msg.data.level || 'warning');
+        } else if (msg.type === 'health_update') {
+          const deps = msg.data.deps || {};
+          const status = deps.overall === 'healthy' ? '✅' : deps.overall === 'degraded' ? '⚠️' : '❌';
+          const el = document.getElementById('dataSourceLabel');
+          if (el && !el.textContent.startsWith('A') && !el.textContent.startsWith('🌊')) {
+            // Only update if not showing A-stock/US label
+          }
+        }
+      } catch(_) {}
+    };
+    es.onerror = function() {
+      // 连接断开,30s后自动重连 (EventSource默认行为)
+    };
+  } catch(_) {
+    // SSE not supported, fallback to polling
+  }
+})();
+
+</script>
 </body>
 </html>
