@@ -2017,24 +2017,16 @@ function loadAuth() {
     if (saved && saved.token) {
       fetch('/api/auth/me', {headers: {'Authorization': 'Bearer ' + saved.token}})
         .then(r => r.json()).then(d => {
-          if (d.user) { setUser(d.user, saved.token); }
-          else { tryLocalToken(); }
-        }).catch(() => tryLocalToken());
+          if (d.user) { setUser(d.user, saved.token); loadTradesFromServer(); loadCacheStatus(); }
+          else { showLoginPrompt(); }
+        }).catch(() => showLoginPrompt());
     } else {
-      tryLocalToken();
+      showLoginPrompt();
     }
-  } catch(e) { tryLocalToken(); }
+  } catch(e) { showLoginPrompt(); }
 }
 
-function tryLocalToken() {
-  fetch('/api/auth/me', {headers: {'Authorization': 'Bearer local_token'}})
-    .then(r => r.json()).then(d => {
-      if (d.user) { setUser(d.user, 'local_token'); loadTradesFromServer(); loadCacheStatus(); }
-      else { showLoginPrompt(); }
-    }).catch(() => showLoginPrompt());
-}
-
-// tryLocalToken 已移除 — 安全: 禁止自动登录未认证访客
+// tryLocalToken 已彻底移除 — 安全: 禁止绕过认证
 
 function showLoginPrompt() {
   document.getElementById('tradeJournalBody').innerHTML =
