@@ -431,7 +431,7 @@
         10维评分(量化6维+催化剂4维) · C1政策/C2商品/C3合同/C5重组/C7业绩
       </div>
       <!-- 排行表格 -->
-      <table><thead><tr><th>#</th><th>代码</th><th>名称</th><th>现价</th><th>行业</th><th>市值</th><th>本月涨</th><th>翻倍潜力</th><th>催化剂</th><th>操作</th></tr></thead><tbody id="doublerBody"></tbody></table>
+      <table><thead><tr><th>#</th><th>代码</th><th>名称</th><th>现价</th><th>买入参考</th><th>翻倍目标</th><th>行业</th><th>市值</th><th>本月涨</th><th>潜力</th><th>催化剂</th><th>操作</th></tr></thead><tbody id="doublerBody"></tbody></table>
       <!-- 仓位方案卡片 -->
       <div id="doublerPlanArea" style="margin-top:14px;padding:12px;background:rgba(34,197,94,.04);border:1px solid rgba(34,197,94,.12);border-radius:8px;display:none">
         <div style="font-size:13px;font-weight:700;margin-bottom:8px">💰 买入方案 <span id="doublerPlanCapital" style="font-weight:400;font-size:12px;color:var(--text-secondary)"></span></div>
@@ -1379,7 +1379,7 @@ async function loadDoublerPanel() {
       fetchJSON('/api/doubler/plan/10k'),
     ]);
 
-    if (!rec || rec.error) { tbody.innerHTML = '<tr><td colspan="10">数据加载失败</td></tr>'; return; }
+    if (!rec || rec.error) { tbody.innerHTML = '<tr><td colspan="12">数据加载失败</td></tr>'; return; }
 
     dateEl.textContent = '📅 ' + (rec.trade_date || '');
     let picks = (rec.elite_picks || []).slice(0, 12);
@@ -1396,11 +1396,15 @@ async function loadDoublerPanel() {
         ? `<span style="font-size:10px;padding:1px 4px;border-radius:3px;background:rgba(255,107,53,.12);color:#ff6b35">${catType}+${p.catalyst_d7||0}</span>`
         : '<span style="color:var(--text-muted)">—</span>';
       const mtmClr = p.mtm_gain >= 20 ? '#ff6b35' : p.mtm_gain >= 0 ? '#22c55e' : '#ef4444';
+      const buyRef = p.close;                // 买入参考 = 现价
+      const doubleTarget = +(p.close * 2).toFixed(2); // 翻倍目标 = 2×参考价
       return `<tr>
         <td>${i+1}</td>
         <td><b>${p.code}</b></td>
         <td>${p.name}</td>
         <td>¥${p.close}</td>
+        <td style="color:#f0b429">¥${buyRef}</td>
+        <td style="color:#22c55e;font-weight:700">¥${doubleTarget}</td>
         <td style="font-size:11px;color:var(--text-muted)">${p.industry}</td>
         <td>${fmtMv(p.circ_mv_yi)}</td>
         <td style="color:${mtmClr}">${p.mtm_gain > 0 ? '+' : ''}${p.mtm_gain}%</td>
@@ -1414,20 +1418,26 @@ async function loadDoublerPanel() {
     if (plan && plan.plan && plan.plan.length > 0) {
       planArea.style.display = 'block';
       planCap.textContent = `已分配 ¥${plan.total_allocated} | 预留 ¥${plan.remaining}`;
-      planCards.innerHTML = plan.plan.map(p => `
-        <div style="flex:1;min-width:180px;padding:10px 12px;background:rgba(34,197,94,.06);border-radius:8px;border:1px solid rgba(34,197,94,.15)">
+      planCards.innerHTML = plan.plan.map(p => {
+        const dbl = +(p.price * 2).toFixed(2);
+        return `
+        <div style="flex:1;min-width:200px;padding:10px 12px;background:rgba(34,197,94,.06);border-radius:8px;border:1px solid rgba(34,197,94,.15)">
           <div style="font-size:14px;font-weight:700;margin-bottom:3px">#${p.rank} ${p.code} ${p.name}</div>
           <div style="font-size:12px;color:var(--text-secondary)">¥${p.price} × <b>${p.shares}股</b> = ¥${p.cost} (${p.pct})</div>
+          <div style="font-size:11px;margin-top:3px;display:flex;gap:10px">
+            <span style="color:#f0b429">买入 ¥${p.price}</span>
+            <span style="color:#22c55e">→ 目标 ¥${dbl}</span>
+          </div>
           <div style="font-size:10px;color:var(--text-muted);margin-top:3px">${p.reason}</div>
         </div>
-      `).join('');
+      `;}).join('');
 
       if (plan.watchlist && plan.watchlist.length > 0) {
         watchEl.textContent = '📋 备选: ' + plan.watchlist.map(w => `${w.code} ${w.name}(¥${w.close})`).join(' / ');
       }
     }
   } catch(e) {
-    tbody.innerHTML = '<tr><td colspan="10">加载异常: ' + e.message + '</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12">加载异常: ' + e.message + '</td></tr>';
   }
 }
 
