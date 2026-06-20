@@ -674,6 +674,9 @@ def scan_and_predict(pages: int = 3) -> Dict:
 
     signals = []
 
+    # 全局去重计数器: 每个标的在整个扫描中最多出现3次
+    _stock_usage: Dict[str, int] = {}
+
     for e in events:
         title = e["title"]
         content = e.get("content", "")
@@ -694,22 +697,28 @@ def scan_and_predict(pages: int = 3) -> Dict:
         # 标的映射
         stocks = map_title_to_stocks(title)
 
-        # 补充: Finnhub codes 直接注入
+        # Finnhub codes
         codes_raw = e.get("codes", "")
         if codes_raw:
             for ticker in codes_raw.split(","):
                 ticker = ticker.strip().upper()
                 if ticker and len(ticker) >= 1:
-                    # Check if not already in stocks
                     if not any(s["code"] == ticker for s in stocks):
                         stocks.append({"code": ticker, "prob": 0.85, "name": ticker})
 
-        # 跳过无映射标的
+        # ─── 去重: 过滤已超量使用的标的 (每标的全扫描最多3次) ───
+        direction = "long" if sentiment > 0 else "short"
+        filtered = []
+        for st in stocks:
+            key = st["code"]
+            used = _stock_usage.get(key, 0)
+            if used < 3:
+                filtered.append(st)
+                _stock_usage[key] = used + 1
+        stocks = filtered
+
         if not stocks:
             continue
-
-        # 方向
-        direction = "long" if sentiment > 0 else "short"
 
         # 置信度
         abs_sent = abs(sentiment)

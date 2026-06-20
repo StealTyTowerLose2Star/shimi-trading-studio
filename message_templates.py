@@ -1,85 +1,109 @@
 #!/usr/bin/env python3
-"""
-拾米交易工作室 - 通讯员 · 消息模板
-提供统一的消息格式化函数
-"""
+"""拾米交易工作室 - 通讯员 · 消息模板"""
+from datetime import date
 
 
-def format_daily_digest(market_data: dict) -> str:
-    """生成微信友好的收盘摘要 —— 精简、可扫读"""
-    from datetime import date
+def _short_idx(name: str) -> str:
+    return name.replace("上证指数","上证").replace("深证成指","深证")\
+               .replace("创业板指","创业板").replace("科创50","科创")
 
+
+def format_daily_digest(m: dict) -> str:
     today = date.today().strftime("%m-%d")
-    lines = [f"📊 拾米收盘 {today}"]
-    a = market_data.get("a_stock", {})
+    a = m.get("a_stock", {})
+    trades = m.get("trades", [])
+    events = m.get("events", [])
+    out = [f"📊 拾米日报 {today}", ""]
 
-    # ─── 指数行情 ───
+    # ═══ 市场 ═══ header standalone, content on next lines
+    out.append("── 市场 ──")
+
     indices = a.get("indices", [])
-    if indices:
-        idx_parts = []
-        for i in indices:
-            name = i.get("name", "?")
-            chg = i.get("change", 0)
-            arrow = "↑" if chg > 0 else "↓" if chg < 0 else "→"
-            idx_parts.append(f"{name} {chg:+.2f}%{arrow}")
-        lines.append("  ".join(idx_parts))
-    else:
-        lines.append(f"A股 {a.get('phase', '—')}")
+    idx_strs = []
+    for i in indices:
+        chg = i.get("change", 0)
+        arrow = "↑" if chg > 0 else "↓" if chg < 0 else "→"
+        idx_strs.append(f"{_short_idx(i.get('name','?'))} {chg:+.2f}%{arrow}")
 
-    # ─── 市场情绪 ───
     total = a.get("total", 0)
-    up = a.get("up", 0)
-    down = a.get("down", 0)
-    lu = a.get("limit_up", 0)
-    ld = a.get("limit_down", 0)
-    vol = a.get("volume_ratio", 1.0)
-    pos = a.get("position_ratio", 50)
-
+    mood_s = ""
     if total > 0:
+        up, down = a.get("up", 0), a.get("down", 0)
         ratio = up / total * 100 if total else 0
         mood = "🔥" if ratio > 60 else "😐" if ratio > 35 else "❄️"
-        lines.append(
-            f"{mood} 涨跌: {up}↑ / {down}↓ ({ratio:.0f}%)  "
-            f"涨停{lu} 跌停{ld}  "
-            f"量比{vol:.2f}  "
-            f"仓位{pos:.0f}%"
+        mood_s = f" {mood} {up}↑/{down}↓ ({ratio:.0f}%)"
+
+    line1 = "  ".join(idx_strs) + mood_s
+    out.append(line1)
+
+    if total > 0:
+        line2 = f"涨停{a.get('limit_up',0)} 跌停{a.get('limit_down',0)} 量{a.get('volume_ratio',1):.2f} 仓{a.get('position_ratio',50):.0f}%"
+        phase = a.get("phase","")
+        if phase:
+            line2 += f" · {phase}"
+        out.append(line2)
+
+    sectors = m.get("sectors", [])
+    if sectors:
+        out.append("🔥 " + "  ".join(
+            f"{s.get('name','?')}{s.get('change',0):+.1f}%"
+            for s in sectors[:3]))
+
+    # ═══ 交易 ═══ header+stats inline, trades on next line
+    if trades:
+        out.append("")
+        active = [t for t in trades if t.get("exit_price") is None]
+        closed = [t for t in trades if t.get("exit_price") is not None]
+
+        total_pnl = sum(
+            (t["exit_price"] - t["entry_price"]) * t["qty"]
+            for t in closed if t.get("exit_price") and t.get("entry_price")
         )
 
-    # ─── 翻倍股 ───
-    doubler = market_data.get("doubler", {})
+        stats = []
+        if active:
+            stats.append(f"持仓 {len(active)}只")
+        if total_pnl:
+            pnl_s = f"+{total_pnl:,.0f}" if total_pnl >= 0 else f"{total_pnl:,.0f}"
+            stats.append(f"累计盈亏 ¥{pnl_s}")
+
+        out.append(f"── 交易 ── {' | '.join(stats)}")
+        if active:
+            out.append("")
+            for t in active:
+                out.append(f"{t['code']} {t['name']} | 成本¥{t['entry_price']:.2f} | {t['qty']}股")
+
+    # ═══ 翻倍股 ═══ header standalone, content on next lines
+    doubler = m.get("doubler", {})
     top5 = doubler.get("top5", [])
     if top5:
-        dp = []
+        out.append("")
+        out.append("── 翻倍股 ──")
         for p in top5[:5]:
-            dp.append(f"{p['code']} {p['name']} {p['score']:.0f}分")
-        lines.append(f"🚀 翻倍股: {' | '.join(dp)}")
+            stars = "⭐" * min(5, max(1, int(p['score'] / 20)))
+            pat = p.get("pattern", "")
+            line = f"{p['code']} {p['name']} {p['score']:.0f} {stars}"
+            if pat:
+                line += f" · {pat}"
+            out.append(line)
 
-    # ─── 美股 ───
-    us = market_data.get("us", {})
-    sp500 = us.get("sp500_change")
-    vix = us.get("vix")
-    if sp500 is not None:
-        emoji = "🟢" if sp500 > 0 else "🔴" if sp500 < 0 else "⚪"
-        lines.append(f"🇺🇸 标普 {emoji}{sp500:+.2f}%  VIX {vix or '—'}")
+    # ═══ 事件 ═══ header standalone, content on next lines
+    if events:
+        out.append("")
+        out.append("── 事件 ──")
+        for e in events[:5]:
+            code = e.get("code", "")
+            title = e.get("title", "")
+            imp = e.get("impact", "")
+            tag = "🔴" if imp == "high" else "📰"
+            if len(title) > 42:
+                title = title[:40] + "…"
+            out.append(f"{tag} {code} {title}")
 
-    # ─── 告警 ───
-    alerts = market_data.get("alerts", [])
-    for a in alerts:
-        if a.get("type") == "strategy_signal":
-            lines.append(f"🔔 {a.get('message','')[:80]}")
-            break
-
-    # ─── 磁盘 ───
-    storage = market_data.get("storage", {})
-    disk = storage.get("disk_usage_pct", 0)
-    if disk > 70:
-        lines.append(f"💾 磁盘 {disk}%")
-
-    return "\n".join(lines)
+    return "\n".join(out)
 
 
 def format_alert(alert_type: str, message: str, severity: str = "warning") -> str:
-    """格式化系统告警消息"""
     from datetime import datetime
     return (
         f"🚨 拾米系统告警\n"
@@ -94,7 +118,6 @@ def format_alert(alert_type: str, message: str, severity: str = "warning") -> st
 
 
 def format_doubler_signal(code: str, name: str, score: float, pattern: str, price: float) -> str:
-    """格式化翻倍股信号消息"""
     return (
         f"🚀 翻倍股信号\n"
         f"━━━━━━━━━━━━━━━━\n"
