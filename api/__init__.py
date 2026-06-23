@@ -9,7 +9,7 @@ def register_blueprints(app: Flask):
     """注册所有 API 蓝图到 Flask 应用
 
     蓝图清单 (按角色):
-      拾米A股: market, strategy, advice, trade, review, margin, alert, a_stock_cache
+      拾米A股: market, strategy, advice, trade, review, margin, alert, a_stock_cache, stock_radar
       魔法师:   doubler
       建筑师:   monitor
       HiTao:    haitao
@@ -29,6 +29,7 @@ def register_blueprints(app: Flask):
     from .prophet_event import bp as prophet_event_bp
     from .prophet import bp as prophet_bp
     from .sse import bp as sse_bp
+    from .stock_radar_bp import bp as stock_radar_bp
 
     app.register_blueprint(market_bp)
     app.register_blueprint(strategy_bp)
@@ -45,6 +46,7 @@ def register_blueprints(app: Flask):
     app.register_blueprint(prophet_event_bp)
     app.register_blueprint(prophet_bp)
     app.register_blueprint(sse_bp)
+    app.register_blueprint(stock_radar_bp)
 
     # ─── 海淘美股模块 (4个蓝图: 业务逻辑层) ──────────
     # Magician 翻倍/做空/杠杆ETF蓝图 → /api/magician/* (独立模块)
