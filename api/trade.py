@@ -322,30 +322,135 @@ def api_positions_realtime():
         return jsonify({"prices": {}})
 
     import time as _time
+    raw = None
+    # 尝试东方财富 API
     try:
         from curl_cffi import requests as cffi_requests
         url = "http://80.push2.eastmoney.com/api/qt/ulist.np/get?fields=f2,f3,f12,f14&secids=" + ",".join(secids)
         r = cffi_requests.get(url, timeout=5)
-        if r.status_code != 200:
-            return jsonify({"prices": {}, "error": f"HTTP {r.status_code}"})
-        raw = r.json()
-    except ImportError:
-        import requests as std_requests
-        url = "http://80.push2.eastmoney.com/api/qt/ulist.np/get?fields=f2,f3,f12,f14&secids=" + ",".join(secids)
-        r = std_requests.get(url, timeout=5)
-        if r.status_code != 200:
-            return jsonify({"prices": {}, "error": f"HTTP {r.status_code}"})
-        raw = r.json()
+        if r.status_code == 200:
+            raw = r.json()
+    except Exception:
+        pass
+
+    if raw is None:
+        try:
+            import requests as std_requests
+            url = "http://80.push2.eastmoney.com/api/qt/ulist.np/get?fields=f2,f3,f12,f14&secids=" + ",".join(secids)
+            r = std_requests.get(url, timeout=5)
+            if r.status_code == 200:
+                raw = r.json()
+        except Exception:
+            pass
+
+    # 新浪财经作为第二备选（盘中实时数据）
+    if raw is None:
+        try:
+            import requests as _rq
+            sina_codes = []
+            for code in codes:
+                c = code.strip()
+                if c.startswith("6"):
+                    sina_codes.append("sh" + c)
+                elif c.startswith(("0", "3")):
+                    sina_codes.append("sz" + c)
+            if sina_codes:
+                sina_url = "http://hq.sinajs.cn/list=" + ",".join(sina_codes)
+                resp = _rq.get(sina_url, headers={"Referer": "http://finance.sina.com.cn"}, timeout=5)
+                if resp.status_code == 200 and "Forbidden" not in resp.text:
+                    raw = {"_source": "sina", "_codes": sina_codes, "_text": resp.text}
+        except Exception:
+            pass
+
+    # 腾讯财经作为第三备选
+    if raw is None:
+        try:
+            import requests as _rq
+            tencent_codes = []
+            for code in codes:
+                c = code.strip()
+                if c.startswith("6"):
+                    tencent_codes.append("sh" + c)
+                elif c.startswith(("0", "3")):
+                    tencent_codes.append("sz" + c)
+            if tencent_codes:
+                tencent_url = "http://qt.gtimg.cn/q=" + ",".join(tencent_codes)
+                resp = _rq.get(tencent_url, timeout=5)
+                if resp.status_code == 200:
+                    raw = {"_source": "tencent", "_codes": tencent_codes, "_text": resp.text}
+        except Exception:
+            pass
 
     prices = {}
-    for item in raw.get("data", {}).get("diff", []):
-        raw_price = item.get("f2")
-        raw_pct = item.get("f3")
-        prices[item["f12"]] = {
-            "price": round(raw_price / 100, 2) if raw_price else None,
-            "change_pct": round(raw_pct / 100, 2) if raw_pct else None,
-            "name": item.get("f14", ""),
-        }
+    if raw and raw.get("data", {}).get("diff"):
+        for item in raw["data"]["diff"]:
+            raw_price = item.get("f2")
+            raw_pct = item.get("f3")
+            prices[item["f12"]] = {
+                "price": round(raw_price / 100, 2) if raw_price else None,
+                "change_pct": round(raw_pct / 100, 2) if raw_pct else None,
+                "name": item.get("f14", ""),
+            }
+    elif raw and raw.get("_source") == "tencent":
+        # 解析腾讯实时行情: v_sz001239="51~永达股份~001239~14.77~昨收~今开~..."
+        import re
+        for code in codes:
+            c = code.strip()
+            prefix = "sh" if c.startswith("6") else ("sz" if c.startswith(("0", "3")) else None)
+            if not prefix:
+                continue
+            try:
+                pattern = rf"v_{prefix}{c}=\"([^\"]+)\""
+                m = re.search(pattern, raw["_text"])
+                if m:
+                    fields = m.group(1).split("~")
+                    if len(fields) >= 33:
+                        prices[c] = {
+                            "price": float(fields[3]) if fields[3] else None,
+                            "change_pct": float(fields[32]) if fields[32] else None,
+                            "name": fields[1],
+                            "source": "tencent",
+                        }
+            except Exception:
+                pass
+    elif raw and raw.get("_source") == "sina":
+        # 解析新浪实时行情: var hq_str_sh600519="名称,今开,昨收,现价,最高,最低,..."
+        import re
+        for code in codes:
+            c = code.strip()
+            prefix = "sh" if c.startswith("6") else ("sz" if c.startswith(("0", "3")) else None)
+            if not prefix:
+                continue
+            try:
+                pattern = rf"hq_str_{prefix}{c}=\"([^\"]+)\""
+                m = re.search(pattern, raw["_text"])
+                if m:
+                    fields = m.group(1).split(",")
+                    if len(fields) >= 4:
+                        prices[c] = {
+                            "price": float(fields[3]) if fields[3] else None,
+                            "change_pct": None,
+                            "name": fields[0],
+                            "source": "sina",
+                        }
+            except Exception:
+                pass
+    else:
+        # 全部不可达 → 回退到 Tushare 最新日线收盘价
+        from realtime_scorer import get_kline
+        for code in codes:
+            c = code.strip()
+            try:
+                df = get_kline(c, days=2)
+                if df is not None and len(df) > 0:
+                    prices[c] = {
+                        "price": round(float(df["close"].iloc[-1]), 2),
+                        "change_pct": None,
+                        "name": "",
+                        "source": "tushare",
+                    }
+            except Exception:
+                pass
 
     return jsonify({"prices": prices, "timestamp": _time.strftime("%H:%M:%S")})
 

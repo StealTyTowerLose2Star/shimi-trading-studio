@@ -320,9 +320,17 @@ def ma_convergence_score(code: str) -> dict:
     slp5 = _ma_slope(ma5s)
     slp10 = _ma_slope(ma10s)
     slp20 = _ma_slope(ma20s)
-    slopes = [slp5, slp10, slp20]
-    all_up = all(s > 0.1 for s in slopes)
-    avg_slope = sum(slopes) / len(slopes)
+    slp60 = _ma_slope(ma60s, period=10)
+    slopes = [slp5, slp10, slp20, slp60]
+    all_up = all(s > 0.1 for s in slopes[:3])  # MA5/10/20 同频向上
+    ma60_up = slp60 > 0.1                      # MA60 长期趋势向上
+    all_ma_up = all_up and ma60_up              # 全部MA向上
+    avg_slope = sum(slopes[:3]) / 3
+
+    # 下降趋势检测: 如果MA20 / MA60 明显向下, 说明中期/长期趋势走坏
+    midterm_down = slp20 < -0.5   # MA20 明显下降
+    longterm_down = slp60 < -1.0  # MA60 明显下降
+    trend_down = midterm_down or longterm_down
 
     score = 0
     parts = []
@@ -348,7 +356,17 @@ def ma_convergence_score(code: str) -> dict:
     else:
         parts.append("MA向下")
 
-    if gap_narrowing and all_up:
+    # 长期趋势方向
+    if ma60_up:
+        score += 10
+        parts.append("MA60趋势向上")
+    elif trend_down:
+        score -= 40
+        parts.append("⚠️中/长期趋势向下")
+    elif slp60 < 0:
+        parts.append("MA60走平偏弱")
+
+    if gap_narrowing and all_ma_up:
         score += 25
         parts.append("收敛+同频↑最优形态")
     elif gap_narrowing:
@@ -358,9 +376,11 @@ def ma_convergence_score(code: str) -> dict:
 
     return {
         "score": score,
-        "converged": gap_stable and all_up,
+        "converged": gap_stable and all_ma_up,
         "converging": gap_narrowing,
         "all_up": all_up,
+        "ma60_up": ma60_up,
+        "trend_down": trend_down,
         "avg_slope": round(avg_slope, 2),
         "gap_pct": round(avg_gap, 2),
         "gap_trend": "收敛" if gap_narrowing else ("发散" if avg_gap > avg_gap_prev * 1.1 else "持平"),

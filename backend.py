@@ -45,7 +45,11 @@ def create_app():
             if isinstance(obj, (np.integer,)):
                 return int(obj)
             if isinstance(obj, (np.floating,)):
-                return float(obj)
+                v = float(obj)
+                import math
+                if math.isnan(v) or math.isinf(v):
+                    return None
+                return v
             if isinstance(obj, (np.bool_,)):
                 return bool(obj)
             if isinstance(obj, (np.ndarray,)):
@@ -54,6 +58,28 @@ def create_app():
 
     app = Flask(__name__)
     app.json = NumpyJSONProvider(app)
+
+    # 全局 NaN/Inf 安全处理: Python 原生 float NaN → null
+    import json as _json
+    _orig_dumps = _json.dumps
+    def _safe_dumps(*args, **kwargs):
+        kwargs.setdefault('allow_nan', False)
+        try:
+            return _orig_dumps(*args, **kwargs)
+        except (ValueError, TypeError):
+            # 回退: 手动处理 NaN
+            import math
+            def _fix(obj):
+                if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+                    return None
+                if isinstance(obj, dict):
+                    return {k: _fix(v) for k, v in obj.items()}
+                if isinstance(obj, list):
+                    return [_fix(v) for v in obj]
+                return obj
+            return _orig_dumps(_fix(args[0]), **{k:v for k,v in kwargs.items() if k != 'allow_nan'})
+    _json.dumps = _safe_dumps
+
     app.static_folder = os.path.dirname(os.path.abspath(__file__))
     app.static_url_path = ""
     CORS(app)

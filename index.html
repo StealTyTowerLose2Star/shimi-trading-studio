@@ -272,6 +272,7 @@
         style="width:130px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:rgba(255,255,255,.03);color:var(--text-primary);font-size:12px"
         oninput="searchStocks()" onfocus="searchStocks()"
         onkeydown="if(event.key==='Escape'){document.getElementById('stockDropdown').style.display='none';this.value=''}">
+      <button onclick="searchStocks()" style="padding:4px 10px;border:1px solid var(--gold);border-radius:6px;background:rgba(240,180,41,.1);color:var(--gold);cursor:pointer;font-size:12px;margin-left:4px">搜索</button>
       <div id="stockDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;max-height:200px;overflow-y:auto;z-index:1000;font-size:12px;margin-top:2px"></div>
     </span>
     <button class="btn-refresh" onclick="refreshAll()">🔄 刷新数据</button>
@@ -1110,6 +1111,37 @@ document.addEventListener('click', function(e) {
   if (e.target.textContent && /^\d{6}$/.test(e.target.textContent.trim())) {
     showKlineChart(e.target.textContent.trim(), '');
   }
+});
+
+// 个股搜索
+async function searchStocks() {
+  var q = document.getElementById('stockSearch').value.trim();
+  var dd = document.getElementById('stockDropdown');
+  if (q.length < 1) { dd.style.display = 'none'; return; }
+  try {
+    var r = await fetch('/api/stock/lookup?q=' + encodeURIComponent(q));
+    var items = await r.json();
+    if (!items || items.length === 0) {
+      dd.innerHTML = '<div style="padding:8px;color:var(--text-muted)">无结果</div>';
+      dd.style.display = 'block';
+      return;
+    }
+    dd.innerHTML = items.map(function(s) {
+      return '<div style="padding:6px 10px;cursor:pointer;border-bottom:1px solid var(--border)" ' +
+        'onmousedown="showKlineChart(\'' + s.code + '\',\'' + (s.name||'') + '\');document.getElementById(\'stockDropdown\').style.display=\'none\'" ' +
+        'onmouseover="this.style.background=\'rgba(240,180,41,.08)\'" onmouseout="this.style.background=\'transparent\'">' +
+        '<span style="color:var(--gold);font-weight:600">' + s.code + '</span> ' +
+        '<span style="color:var(--text-secondary)">' + (s.name||'') + '</span>' +
+        '</div>';
+    }).join('');
+    dd.style.display = 'block';
+  } catch(e) { dd.innerHTML = '<div style="padding:8px;color:var(--red)">搜索失败</div>'; dd.style.display = 'block'; }
+}
+// 点击其他地方关闭下拉
+document.addEventListener('click', function(e) {
+  var dd = document.getElementById('stockDropdown');
+  var inp = document.getElementById('stockSearch');
+  if (dd && inp && e.target !== inp && !dd.contains(e.target)) dd.style.display = 'none';
 });
 </script>
 <script>

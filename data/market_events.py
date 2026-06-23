@@ -507,16 +507,24 @@ def map_events_to_stocks(events: List[Dict]) -> List[Dict]:
                 })
 
         if affected_stocks:
+            # 内部去重：同一事件中同一代码只保留一次
+            seen_codes = set()
+            unique_stocks = []
+            for st in affected_stocks:
+                if st["code"] not in seen_codes:
+                    seen_codes.add(st["code"])
+                    unique_stocks.append(st)
+
             signals.append({
                 "event": {
                     "date": event.get("date"),
-                    "time": event.get("time", ""),  # HH:MM, 东方财富精确到分钟
+                    "time": event.get("time", ""),
                     "type": etype,
                     "title": title[:80],
                     "impact": event.get("impact", "medium"),
                     "duration_days": EVENT_TYPES.get(etype, {}).get("duration_days", 7),
                 },
-                "stocks": affected_stocks[:5],
+                "stocks": unique_stocks[:5],
             })
 
     return signals
@@ -672,15 +680,79 @@ def scan_market_events() -> Dict:
             sig["event"]["source"] = original.get("source", "")
             sig["event"]["time"] = original.get("time", "")
 
-    # 前端展示：CN巨潮8（高影响优先，摘帽事件至少2个槽位）+ 东财4 + US新闻4 + 财报4
+    # ── 跨事件热度统计 + 结论生成 ──
+    code_event_count = {}
+    code_event_types = {}  # {code: {etype: count, direction: "long"/"short"}}
+    # 生成结论文本
+    def _type_label_from_title(title: str, sig_type: str) -> str:
+        """从标题关键词推断更精细的类型标签"""
+        if "摘帽" in title or "撤销" in title:
+            return "摘帽"
+        if any(k in title for k in ["重组", "收购", "并购", "购买资产"]):
+            return "重组"
+        if any(k in title for k in ["中标", "合同", "签订"]):
+            return "合同"
+        if any(k in title for k in ["业绩", "预告", "快报", "年报", "季报", "扭亏"]):
+            return "业绩"
+        if any(k in title for k in ["监管", "问询", "处罚", "诉讼"]):
+            return "监管"
+        return {"earnings": "财报", "policy": "政策", "geopolitical": "地缘",
+                "sector": "行业", "macro": "宏观", "commodity": "商品"}.get(sig_type, sig_type)
+
+    for sig in signals:
+        evt_type = sig["event"].get("type", "其他")
+        evt_title = sig["event"].get("title", "")
+        type_label = _type_label_from_title(evt_title, evt_type)
+        direction = sig["stocks"][0]["direction"] if sig.get("stocks") else "long"
+        for st in sig.get("stocks", []):
+            code = st.get("code", "")
+            code_event_count[code] = code_event_count.get(code, 0) + 1
+            if code not in code_event_types:
+                code_event_types[code] = {"types": {}, "long": 0, "short": 0}
+            code_event_types[code]["types"][type_label] = code_event_types[code]["types"].get(type_label, 0) + 1
+            code_event_types[code][direction] = code_event_types[code].get(direction, 0) + 1
+
+    # 生成结论文本
+    def _build_conclusion(et: dict) -> str:
+        types = et.get("types", {})
+        long_n = et.get("long", 0)
+        short_n = et.get("short", 0)
+        # 事件类型排行
+        type_items = sorted(types.items(), key=lambda x: -x[1])[:3]
+        type_str = " ".join(f"{t}×{c}" for t, c in type_items)
+        # 方向结论
+        if long_n > short_n * 2:
+            dir_str = "强做多"
+        elif long_n > short_n:
+            dir_str = "偏多"
+        elif short_n > long_n * 2:
+            dir_str = "强做空"
+        elif short_n > long_n:
+            dir_str = "偏空"
+        else:
+            dir_str = "中性"
+        return f"{type_str} → {dir_str}"
+
+    for sig in signals:
+        for st in sig.get("stocks", []):
+            code = st["code"]
+            st["hit_count"] = code_event_count.get(code, 1)
+            st["conclusion"] = _build_conclusion(code_event_types.get(code, {"types": {}, "long": 0, "short": 0}))
+    # 热点标的摘要 (≥2事件)
+    hot_stocks = [(c, n) for c, n in code_event_count.items() if n >= 2]
+    hot_stocks.sort(key=lambda x: -x[1])
+
+    # 前端展示：摘帽(2) + 热点标的(2) + 其他cn(4) + 东财(4) + US(4) + 财报(4)
     cn_signals = [s for s in signals if s["event"].get("source") in (None, "", "cninfo")]
-    # 高影响优先排序
-    cn_signals.sort(key=lambda s: (0 if s["event"].get("impact") == "high" else 1,
-                                    s["event"].get("title", "")))
-    # 摘帽事件确保露出
+    cn_signals.sort(key=lambda s: (0 if s["event"].get("impact") == "high" else 1, s["event"].get("title", "")))
+    # 摘帽事件
     st_signals = [s for s in cn_signals if "撤销" in s["event"].get("title", "") or "摘帽" in s["event"].get("title", "")]
-    other_cn = [s for s in cn_signals if s not in st_signals]
-    cn_display = st_signals[:2] + other_cn[:6]
+    # 热点标的（≥3事件）信号优先
+    hot_codes = set(c for c, n in hot_stocks[:5])
+    hot_signals = [s for s in cn_signals if s not in st_signals and any(
+        st.get("code") in hot_codes for st in s.get("stocks", []))]
+    other_cn = [s for s in cn_signals if s not in st_signals and s not in hot_signals]
+    cn_display = st_signals[:2] + hot_signals[:2] + other_cn[:4]
     em_signals = [s for s in signals if s["event"].get("source") == "eastmoney"]
     us_signals = [s for s in signals if s["event"].get("market") == "US" and s["event"].get("source") != "yfinance"]
     yf_signals = [s for s in signals if s["event"].get("source") == "yfinance"]
@@ -699,6 +771,7 @@ def scan_market_events() -> Dict:
         "events": unique[:20],
         "signals": display_signals,
         "sources_status": sources_status,
+        "hot_stocks": [{"code": c, "count": n} for c, n in hot_stocks[:8]],
         "summary": {
             "total_events": len(unique),
             "affected_stocks": len(signals),

@@ -564,6 +564,14 @@ def recommend_current_month():
 
     pro = _get_pro()
     today = get_latest_date()
+    # 兜底: today为None或异常时用最新交易日
+    if not today or not isinstance(today, str) or len(today) < 8:
+        try:
+            from datetime import datetime as _dt
+            today = _dt.now().strftime("%Y%m%d")
+        except Exception:
+            today = datetime.now().strftime("%Y%m%d")
+    today = str(today)[:8]  # 保证是8位日期字符串
 
     daily = get_daily()
     if daily is None or isinstance(daily, (dict, str)) or len(daily) == 0:
@@ -790,21 +798,78 @@ def recommend_current_month():
     if len(elite) < 5:
         elite = clean[:8]
 
-    # 魔法师 → 拾米A股: 自动推送 Top 推荐到预警消息队列
-    push_doubler_picks_to_alerts({
-        "trade_date": today,
-        "top30": top30,
-        "scan_time": datetime.now().isoformat(),
-    })
+    # ─── 月度锁定 + 版本保存 + 时间窗口 ───
+    now = datetime.now()
+    month_key = now.strftime("%Y%m")  # 202606
+    version_path = os.path.join(os.path.dirname(__file__), "..", f"picks_{month_key}.json")
+    current_path = os.path.join(os.path.dirname(__file__), "..", "current_month_picks_v2.json")
 
-    return {
+    # 检测本月是否已锁定
+    locked = False
+    if os.path.exists(current_path):
+        try:
+            with open(current_path) as f:
+                prev = json.load(f)
+            prev_month = prev.get("month_key", "")
+            if prev_month == month_key and prev.get("locked"):
+                locked = True
+                top30 = prev["top30"]
+                elite = prev.get("elite_picks", top30[:10])
+        except Exception:
+            pass
+
+    # 时间窗口预估 (基于113只历史翻倍股: 涨幅中位数119%, 月内完成)
+    time_window = {
+        "typical": "20±5个交易日",
+        "early": "0-10天(启动前)→观察期",
+        "acceleration": "11-20天(加速)→第一目标+40%",
+        "doubling": "15-25天→翻倍位",
+        "note": "历史翻倍股均在月内完成, 首月未达目标则重新评估",
+    }
+
+    result = {
+        "month_key": month_key,
+        "locked": locked,
+        "trade_date": today,
         "top30": top30,
         "elite_picks": elite,
         "industry_heat": {ind: {"count": d["count"], "stocks": d["top_stocks"]}
                          for ind, d in sorted(industry_heat.items(),
                                              key=lambda x: -x[1]["count"])[:10]},
         "scan_time": datetime.now().isoformat(),
+        "time_window": time_window,
     }
+
+    # 保存: 版本文件 (每月一份) + 当前文件 (锁定用)
+    for path in [version_path, current_path]:
+        try:
+            with open(path, "w") as f:
+                json.dump(result, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+    # 魔法师 → 拾米A股: 自动推送
+    push_doubler_picks_to_alerts({
+        "trade_date": today,
+        "top30": top30,
+        "scan_time": datetime.now().isoformat(),
+    })
+
+    # 首次锁定时自动生成1W方案
+    if not locked and len(elite) >= 3:
+        try:
+            from services.plan_1w import create_plan
+            plan_date = now.strftime("%Y-%m-%d")
+            # 展平catalyst字段
+            for c in elite:
+                cat = c.get("catalyst", {})
+                c["early_pattern"] = cat.get("early_pattern", "")
+                c["early_reason"] = cat.get("early_reason", "")
+            create_plan(plan_date, elite[:3], today)
+        except Exception:
+            pass
+
+    return result
 
 
 # ============================================================
