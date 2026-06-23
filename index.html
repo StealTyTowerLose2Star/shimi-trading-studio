@@ -267,6 +267,13 @@
     <button id="loginBtn" class="btn-icon" onclick="showLoginModal()" title="登录">👤</button>
     <button id="logoutBtn" class="btn-icon" style="display:none" onclick="logout()" title="退出">🚪</button>
     <button class="btn-icon" onclick="showMonitorModal()" title="服务器状态">📊</button>
+    <span style="position:relative;margin-left:6px">
+      <input id="stockSearch" placeholder="🔍 搜个股..." autocomplete="off"
+        style="width:130px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:rgba(255,255,255,.03);color:var(--text-primary);font-size:12px"
+        oninput="searchStocks()" onfocus="searchStocks()"
+        onkeydown="if(event.key==='Escape'){document.getElementById('stockDropdown').style.display='none';this.value=''}">
+      <div id="stockDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;max-height:200px;overflow-y:auto;z-index:1000;font-size:12px;margin-top:2px"></div>
+    </span>
     <button class="btn-refresh" onclick="refreshAll()">🔄 刷新数据</button>
   </div>
 </header>
@@ -493,9 +500,9 @@
 
       <!-- 交易记录表 -->
       <table style="font-size:12px"><thead>
-        <tr><th>日期</th><th>代码</th><th>名称</th><th>方向</th><th>入场价</th><th>数量</th><th>当前价</th><th>动态止损</th><th>目标1</th><th>目标2</th><th>目标3</th><th>浮动</th><th>浮盈</th><th>盈亏%</th><th></th></tr>
+        <tr><th>日期</th><th>代码</th><th>名称</th><th>方向</th><th>入场价</th><th>数量</th><th>当前价</th><th>动态止损</th><th>目标1</th><th>目标2</th><th>目标3</th><th>浮动盈亏</th><th></th></tr>
       </thead><tbody id="tradeJournalBody">
-        <tr><td colspan="15" style="text-align:center;color:var(--text-muted)">暂无交易记录，点击上方"+ 记录交易"开始</td></tr>
+        <tr><td colspan="13" style="text-align:center;color:var(--text-muted)">暂无交易记录，点击上方"+ 记录交易"开始</td></tr>
       </tbody></table>
     </div>
   </div>
@@ -2051,7 +2058,7 @@ function renderTradeJournal() {
   function renderJournalTable() {
     const allTrades = [...openTrades, ...closedTrades.reverse()];
     if (allTrades.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;color:var(--text-muted)">暂无交易记录</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--text-muted)">暂无交易记录</td></tr>';
       updateTradeStats(trades);
       return;
     }
@@ -2095,7 +2102,6 @@ function renderTradeJournal() {
         <td class="code-num" style="color:var(--purple);font-size:11px">${t3}</td>
         <td style="font-size:11px;color:var(--gold)">${trailLvl}</td>
         <td class="code-num ${pnlCls}" style="font-weight:600">${isOpen ? ('¥' + (typeof pnl === 'number' ? pnl.toFixed(2) : pnl)) : '¥' + (typeof pnl === 'number' ? pnl.toFixed(2) : pnl)}</td>
-        <td class="code-num ${pnlCls}" style="font-weight:600">${pnlPct}</td>
         <td>
           <button onclick="deleteTrade(${realIdx})" style="padding:2px 6px;border:none;border-radius:3px;background:transparent;color:var(--red);cursor:pointer;font-size:11px" title="删除">✕</button>
           ${isOpen ? `<button onclick="closeTrade(${realIdx})" style="padding:2px 6px;border:1px solid var(--gold);border-radius:3px;background:transparent;color:var(--gold);cursor:pointer;font-size:11px;margin-left:2px" title="平仓">平</button>` : ''}
@@ -2110,7 +2116,7 @@ function renderTradeJournal() {
   if (openTrades.length === 0) {
     renderJournalTable();
   } else {
-    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;color:var(--text-muted)">正在评估持仓...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--text-muted)">正在评估持仓...</td></tr>';
     updateTradeStats(trades);
   }
 }
@@ -2307,7 +2313,7 @@ function loadAuth() {
 
 function showLoginPrompt() {
   document.getElementById('tradeJournalBody').innerHTML =
-    '<tr><td colspan="15" style="text-align:center;color:var(--text-muted);padding:20px">点击右上角 👤 登录后查看和记录交易</td></tr>';
+    '<tr><td colspan="13" style="text-align:center;color:var(--text-muted);padding:20px">点击右上角 👤 登录后查看和记录交易</td></tr>';
   document.getElementById('tjTotal').textContent = '0';
   document.getElementById('tjWinRate').textContent = '0%';
   document.getElementById('tjPnl').textContent = '¥0';
@@ -2495,14 +2501,14 @@ async function loadTradesFromServer() {
   const tbody = document.getElementById('tradeJournalBody');
   if (!currentUser) { renderTradeJournal(); return; }
   try {
-    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;color:var(--text-muted)">加载中...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--text-muted)">加载中...</td></tr>';
     const r = await fetch('/api/trades', {headers: apiHeaders()});
     const d = await r.json();
     serverTrades = d.trades || [];
     serverSummary = d.summary || {};
     renderServerTrades();
   } catch(e) {
-    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;color:#f0b429">⏳ 交易数据扫描中…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#f0b429">⏳ 交易数据扫描中…</td></tr>';
   }
 }
 
@@ -2513,7 +2519,7 @@ function renderServerTrades() {
   const tbody = document.getElementById('tradeJournalBody');
   const trades = serverTrades;
   if (trades.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;color:var(--text-muted)">暂无交易记录</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--text-muted)">暂无交易记录</td></tr>';
     updateServerStats();
     return;
   }
@@ -2607,7 +2613,6 @@ function renderServerTrades() {
         <td class="code-num" style="color:var(--purple);font-size:11px">${t3}</td>
         <td style="font-size:11px;color:var(--gold)">${trailLvl}</td>
         <td class="code-num ${pnlCls}" style="font-weight:700">${pnlDisplay}</td>
-        <td class="code-num ${pnlCls}" style="font-weight:700">${pnlPct}</td>
         <td>
           <button onclick="showSplitTrades('${p.code}')" style="padding:2px 6px;border:1px solid var(--text-muted);border-radius:3px;background:transparent;color:var(--text-muted);cursor:pointer;font-size:10px" title="展开明细">📋</button>
           <button onclick="closeAllByCode('${p.code}')" style="padding:2px 6px;border:1px solid var(--gold);border-radius:3px;background:transparent;color:var(--gold);cursor:pointer;font-size:11px;margin-left:2px" title="平仓">平</button>
@@ -2634,7 +2639,6 @@ function renderServerTrades() {
         <td style="color:var(--text-muted)">--</td>
         <td style="color:var(--text-muted)">--</td>
         <td class="code-num ${pnlCls}" style="font-weight:600">${pnl >= 0 ? '+' : ''}¥${pnl.toFixed(2)}</td>
-        <td class="code-num ${pnlCls}" style="font-weight:600">${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%</td>
         <td>
           <button onclick="deleteServerTrade(${t.id})" style="padding:2px 6px;border:none;border-radius:3px;background:transparent;color:var(--red);cursor:pointer;font-size:11px" title="删除">✕</button>
         </td>
@@ -2798,7 +2802,7 @@ function submitTrade() {
 function renderTradeJournal() {
   if (!currentUser) {
     const tbody = document.getElementById('tradeJournalBody');
-    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;color:var(--text-muted)">请先登录以查看和记录交易</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--text-muted)">请先登录以查看和记录交易</td></tr>';
     document.getElementById('tjTotal').textContent = '0';
     document.getElementById('tjWinRate').textContent = '0%';
     document.getElementById('tjPnl').textContent = '¥0';
@@ -2898,16 +2902,7 @@ async function refreshRealtimePrices() {
       if (slCell) { slCell.textContent = (pnl >= 0 ? '+' : '') + '¥' + pnl.toFixed(2); slCell.className = 'code-num ' + (pnl > 0 ? 'up' : pnl < 0 ? 'down' : ''); slCell.style.fontWeight = '700'; }
 
       // 浮盈%
-      const pnlPctCell = tr.querySelector('td:nth-child(13)');
-      const pnlPct = totalCost > 0 ? (pnl / totalCost * 100) : 0;
-      if (pnlPctCell) { pnlPctCell.textContent = (pnlPct >= 0 ? '+' : '') + pnlPct.toFixed(1) + '%'; pnlPctCell.className = 'code-num ' + (pnlPct > 0 ? 'up' : pnlPct < 0 ? 'down' : ''); pnlPctCell.style.fontWeight = '700'; }
-
-      // 盈亏%
-      const pctCell = tr.querySelector('td:nth-child(14)');
-      if (pctCell) { pctCell.textContent = (pnlPct >= 0 ? '+' : '') + pnlPct.toFixed(1) + '%'; pctCell.className = 'code-num ' + (pnlPct > 0 ? 'up' : pnlPct < 0 ? 'down' : ''); pctCell.style.fontWeight = '700'; }
-
-      updated++;
-    });
+      });
     if (btn) btn.textContent = '✅ 已更新 ' + updated + ' 只';
     setTimeout(() => { if(btn) btn.textContent = '🔄 实时价'; }, 3000);
   } catch(e) {
