@@ -835,15 +835,125 @@ function showKlineChart(code, name) {
         '<button onclick="switchKlinePeriod(\'' + code + '\',\'' + name + '\',30)" style="padding:3px 10px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-secondary);cursor:pointer;font-size:11px">30日</button>' +
         '<button onclick="switchKlinePeriod(\'' + code + '\',\'' + name + '\',60)" style="padding:3px 10px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-secondary);cursor:pointer;font-size:11px">60日</button>' +
         '<button onclick="switchKlinePeriod(\'' + code + '\',\'' + name + '\',120)" style="padding:3px 10px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-secondary);cursor:pointer;font-size:11px">120日</button>' +
+        '<button onclick="loadStockRadar(\'' + code + '\',\'' + name + '\')" style="padding:3px 10px;border:1px solid var(--cyan);border-radius:4px;background:rgba(6,182,212,.1);color:var(--cyan);cursor:pointer;font-size:11px;font-weight:600">📊 雷达分析</button>' +
         '<button onclick="document.getElementById(\'klineModal\').remove()" style="padding:3px 10px;border:1px solid var(--red);border-radius:4px;background:transparent;color:var(--red);cursor:pointer;font-size:11px">✕</button>' +
       '</div>' +
     '</div>' +
     '<div id="klineChart" style="width:100%;height:480px"></div>' +
     '<div id="klineLoading" style="text-align:center;padding:80px;color:var(--text-muted)">加载中...</div>' +
+    '<div id="radarPanel" style="display:none;margin-top:12px;padding:16px;background:rgba(6,182,212,.04);border:1px solid rgba(6,182,212,.15);border-radius:8px;font-size:12px;color:var(--text-secondary)"></div>' +
   '</div>';
   
   document.body.appendChild(modal);
   loadKlineData(code, 'klineChart', 60);
+}
+
+
+
+async function loadStockRadar(code, name) {
+  var panel = document.getElementById('radarPanel');
+  panel.style.display = 'block';
+  panel.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted)">📡 加载雷达分析中...</div>';
+  try {
+    var r = await fetch('/api/stock/' + code + '/radar');
+    var d = await r.json();
+    var ra = d.radar || {};
+    var co = d.conclusion || {};
+    var risks = d.risk || [];
+    var pp = d.price_position || {};
+    var tr = d.trend || {};
+    var fa = d.fundamental || {};
+    var cf = d.capital_flow || {};
+
+    // Bar chart for 5 dimensions
+    var bars = ['价格阶段','技术趋势','基本面','资金面','情绪'];
+    var colors = {'价格阶段':'#f59e0b','技术趋势':'#3b82f6','基本面':'#22c55e','资金面':'#8b5cf6','情绪':'#ef4444'};
+    var barHtml = '';
+    for (var i=0; i<bars.length; i++) {
+      var k = bars[i], v = ra[k] || 0, c = colors[k] || '#666';
+      barHtml += '<div style="margin-bottom:6px"><span style="display:inline-block;width:60px;font-size:11px">' + k + '</span>' +
+        '<span style="display:inline-block;width:' + (v*2.2) + 'px;height:14px;background:' + c + ';border-radius:3px"></span>' +
+        '<span style="margin-left:6px;font-size:11px;font-weight:700;color:' + c + '">' + v + '</span></div>';
+    }
+    var riskHtml = risks.length > 0 ? '<div style="margin-top:8px;font-size:11px;color:var(--red)">⚠️ ' + risks.join(' / ') + '</div>' : '';
+
+    // Summary panel
+    panel.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
+      '<div><strong style="font-size:14px">' + co.label + '</strong> <span style="font-size:12px">综合' + ra['综合'] + '分</span>' + riskHtml +
+        '<div style="margin-top:10px">' + barHtml + '</div>' +
+        '<div style="margin-top:8px;font-size:11px;color:var(--text-muted)">' + (co.reason || '') + '</div></div>' +
+      '<div style="font-size:11px;color:var(--text-muted);line-height:1.8">' +
+        '<strong style="color:var(--text-primary)">快速摘要:</strong><br>' +
+        '价格: ¥' + (d.price||'?') + ' | 1年分位: ' + (pp.pct_1y||'?') + '%<br>' +
+        '日线: ' + (tr.daily||{}).direction + '·' + (tr.daily||{}).phase + '<br>' +
+        '周线: ' + (tr.weekly||{}).direction + '<br>' +
+        'MA: ' + (tr.daily||{}).ma_arrangement + '<br>' +
+        'MACD: ' + (tr.indicators||{}).macd.signal + ' | RSI:' + (tr.indicators||{}).rsi_14 + '<br>' +
+        'PE:' + (fa.pe||'?') + ' PB:' + (fa.pb||'?') + ' ROE:' + (fa.roe||'?') + '%<br>' +
+        '负债率:' + (fa.debt_ratio||'?') + '% | 基本面:' + (fa.assessment||'?') + '<br>' +
+        '换手率:' + (cf.turnover_rate||'?') + '% | 资金:' + (cf.assessment||'?') + '<br>' +
+        '<button onclick="showRadarDetail(' + JSON.stringify(d).replace(/"/g, '&quot;') + ')" style="margin-top:8px;padding:4px 12px;border:1px solid var(--cyan);border-radius:4px;background:rgba(6,182,212,.1);color:var(--cyan);cursor:pointer;font-size:11px">📋 详细信息</button>' +
+      '</div></div>';
+  } catch(e) {
+    panel.innerHTML = '<div style="text-align:center;color:var(--red)">❌ 加载失败: ' + e.message + '</div>';
+  }
+}
+
+function showRadarDetail(d) {
+  var modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:10000';
+  modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+  var pp = d.price_position || {}, tr = d.trend || {}, fa = d.fundamental || {}, cf = d.capital_flow || {};
+  var daily = tr.daily || {}, ind = tr.indicators || {}, macd = ind.macd || {}, bb = ind.bollinger || {}, vol = tr.volume || {};
+
+  modal.innerHTML = '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:24px;width:800px;max-width:95vw;max-height:90vh;overflow-y:auto;font-size:13px">' +
+    '<div style="display:flex;justify-content:space-between;margin-bottom:16px">' +
+      '<span style="font-size:18px;font-weight:700">📊 ' + d.code + ' ' + (d.name||'') + ' 详细分析</span>' +
+      '<button onclick="this.parentElement.parentElement.parentElement.remove()" style="padding:4px 12px;border:1px solid var(--red);border-radius:4px;background:transparent;color:var(--red);cursor:pointer;font-size:12px">✕</button>' +
+    '</div>' +
+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:8px;margin-bottom:16px">' +
+      '<div style="padding:8px;background:rgba(245,158,11,.08);border-radius:6px;text-align:center"><div style="font-size:10px;color:var(--text-muted)">价格阶段</div><div style="font-size:18px;font-weight:700;color:#f59e0b">' + (d.radar||{})['价格阶段'] + '</div></div>' +
+      '<div style="padding:8px;background:rgba(59,130,246,.08);border-radius:6px;text-align:center"><div style="font-size:10px;color:var(--text-muted)">技术趋势</div><div style="font-size:18px;font-weight:700;color:#3b82f6">' + (d.radar||{})['技术趋势'] + '</div></div>' +
+      '<div style="padding:8px;background:rgba(34,197,94,.08);border-radius:6px;text-align:center"><div style="font-size:10px;color:var(--text-muted)">基本面</div><div style="font-size:18px;font-weight:700;color:#22c55e">' + (d.radar||{})['基本面'] + '</div></div>' +
+      '<div style="padding:8px;background:rgba(139,92,246,.08);border-radius:6px;text-align:center"><div style="font-size:10px;color:var(--text-muted)">资金面</div><div style="font-size:18px;font-weight:700;color:#8b5cf6">' + (d.radar||{})['资金面'] + '</div></div>' +
+      '<div style="padding:8px;background:rgba(239,68,68,.08);border-radius:6px;text-align:center"><div style="font-size:10px;color:var(--text-muted)">情绪</div><div style="font-size:18px;font-weight:700;color:#ef4444">' + (d.radar||{})['情绪'] + '</div></div>' +
+    '</div>' +
+
+    '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+      '<tr style="border-bottom:1px solid var(--border)"><td colspan="2" style="padding:8px;font-weight:700;color:var(--gold)">📍 价格位置</td><td style="font-size:10px;color:var(--text-muted)">数据源: Tushare K线</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)">当前价</td><td>¥' + (d.price||'?') + '</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)">1年分位</td><td>' + (pp.pct_1y||'?') + '% (' + (pp.zone||'?') + ')</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)">52周高低</td><td>¥' + (pp.high_52w||'?') + ' ~ ¥' + (pp.low_52w||'?') + '</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)">距高点/低点</td><td>' + (pp.dist_from_high||'?') + '% / +' + (pp.dist_from_low||'?') + '%</td></tr>' +
+
+      '<tr style="border-bottom:1px solid var(--border)"><td colspan="2" style="padding:8px;font-weight:700;color:var(--blue)">📈 技术趋势</td><td style="font-size:10px;color:var(--text-muted)">数据源: Tushare K线</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)">日线</td><td>' + (daily.direction||'?') + ' · ' + (daily.phase||'?') + ' | MA: ' + (daily.ma_arrangement||'?') + '</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)">周线</td><td>' + ((tr.weekly||{}).direction||'?') + ' · ' + ((tr.weekly||{}).phase||'?') + '</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)">MACD</td><td>' + (macd.signal||'?') + ' diff:' + (macd.diff||'?') + ' dea:' + (macd.dea||'?') + '</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)">RSI(14)</td><td>' + (ind.rsi_14||'?') + '</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)">布林带</td><td>' + (bb.position||'?') + ' 带宽:' + (bb.bandwidth||'?') + '%</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)">量价</td><td>' + (vol.health||'?') + ' vs20d:' + (vol.vs_20d_avg||'?') + '</td></tr>' +
+
+      '<tr style="border-bottom:1px solid var(--border)"><td colspan="2" style="padding:8px;font-weight:700;color:var(--green)">💰 基本面</td><td style="font-size:10px;color:var(--text-muted)">数据源: Tushare</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)">PE / 分位</td><td>' + (fa.pe||'?') + ' (' + (fa.pe_percentile||'?') + '%)</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)">PB / 分位</td><td>' + (fa.pb||'?') + ' (' + (fa.pb_percentile||'?') + '%)</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)">ROE</td><td>' + (fa.roe||'?') + '%</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)">毛利率 / 净利率</td><td>' + (fa.gross_margin||'?') + '% / ' + (fa.net_margin||'?') + '%</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)">资产负债率</td><td>' + (fa.debt_ratio||'?') + '%</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)">市值</td><td>' + (fa.market_cap_yi||'?') + '亿</td></tr>' +
+
+      '<tr style="border-bottom:1px solid var(--border)"><td colspan="2" style="padding:8px;font-weight:700;color:var(--purple)">💧 资金面</td><td style="font-size:10px;color:var(--text-muted)">数据源: 腾讯/Tushare</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)">换手率 / vs均值</td><td>' + (cf.turnover_rate||'?') + '% / ' + (cf.turnover_vs_avg||'?') + 'x</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)">融资余额</td><td>' + (cf.margin_balance||'?') + '万</td></tr>' +
+    '</table>' +
+
+    '<div style="margin-top:12px;padding:10px;background:rgba(255,255,255,.03);border-radius:6px;font-size:12px">' +
+      '<strong>结论:</strong> ' + (d.conclusion||{}).label + ' | ' + (d.conclusion||{}).reason +
+      ((d.risk||[]).length > 0 ? '<br><strong>风险:</strong> ' + (d.risk||[]).join(' / ') : '') +
+    '</div>' +
+  '</div>';
+  document.body.appendChild(modal);
 }
 
 function switchKlinePeriod(code, name, days) {
@@ -864,6 +974,24 @@ async function loadKlineData(code, containerId, days) {
     var dates = d.kline.map(function(k) { return k.date; });
     var ohlc = d.kline.map(function(k) { return [k.open, k.close, k.low, k.high]; });
     var volumes = d.kline.map(function(k) { return k.volume; });
+    var closes = d.kline.map(function(k) { return k.close; });
+    
+    // 计算移动平均线 MA5 / MA20 / MA60 / MA120
+    function calcMA(data, period) {
+      var result = [];
+      for (var i = 0; i < data.length; i++) {
+        if (i < period - 1) { result.push(null); continue; }
+        var sum = 0;
+        for (var j = i - period + 1; j <= i; j++) sum += data[j];
+        result.push(+(sum / period).toFixed(2));
+      }
+      return result;
+    }
+    var ma5 = calcMA(closes, 5);
+    var ma20 = calcMA(closes, 20);
+    var ma60 = calcMA(closes, 60);
+    var ma120 = calcMA(closes, 120);
+
     
     // 计算每日涨跌幅: (今日收盘-昨日收盘)/昨日收盘 × 100
     var changes = [];
@@ -935,6 +1063,26 @@ async function loadKlineData(code, containerId, days) {
           name: '成交量', type: 'bar', xAxisIndex: 1, yAxisIndex: 1,
           data: volumes,
           itemStyle: { color: function(p) { return ohlc[p.dataIndex][1] >= ohlc[p.dataIndex][0] ? '#ef4444' : '#22c55e'; } }
+        },
+        {
+          name: 'MA5', type: 'line', xAxisIndex: 0, yAxisIndex: 0,
+          data: ma5, symbol: 'none', lineStyle: { color: '#f59e0b', width: 1, type: 'solid' },
+          silent: true
+        },
+        {
+          name: 'MA20', type: 'line', xAxisIndex: 0, yAxisIndex: 0,
+          data: ma20, symbol: 'none', lineStyle: { color: '#8b5cf6', width: 1, type: 'solid' },
+          silent: true
+        },
+        {
+          name: 'MA60', type: 'line', xAxisIndex: 0, yAxisIndex: 0,
+          data: ma60, symbol: 'none', lineStyle: { color: '#06b6d4', width: 1.5, type: 'dashed' },
+          silent: true
+        },
+        {
+          name: 'MA120', type: 'line', xAxisIndex: 0, yAxisIndex: 0,
+          data: ma120, symbol: 'none', lineStyle: { color: '#ef4444', width: 1, type: 'dotted' },
+          silent: true
         }
       ]
     });
