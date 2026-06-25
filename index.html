@@ -930,23 +930,23 @@ function showRadarDetail(d) {
 
     '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
       '<tr style="border-bottom:1px solid var(--border)"><td colspan="2" style="padding:8px;font-weight:700;color:var(--gold)">📍 价格位置</td><td style="font-size:10px;color:var(--text-muted)">数据源: Tushare K线</td></tr>' +
-      '<tr><td style="padding:4px 8px;color:var(--text-muted)">当前价</td><td>¥' + (d.price||'?') + '</td></tr>' +
-      '<tr><td style="padding:4px 8px;color:var(--text-muted)">1年分位</td><td>' + (pp.pct_1y||'?') + '% (' + (pp.zone||'?') + ')</td></tr>' +
-      '<tr><td style="padding:4px 8px;color:var(--text-muted)">52周高低</td><td>¥' + (pp.high_52w||'?') + ' ~ ¥' + (pp.low_52w||'?') + '</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)" title="最新收盘价">当前价 ℹ️</td><td>¥' + (d.price||'?') + '</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)" title="当前价在近1年内的百分位(0=最低,100=最高)。数值越低越接近底部。">1年分位 ℹ️</td><td>' + (pp.pct_1y||'?') + '% (' + (pp.zone||'?') + ')</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)" title="近52周(约1年)最高价和最低价">52周高低 ℹ️</td><td>¥' + (pp.high_52w||'?') + ' ~ ¥' + (pp.low_52w||'?') + '</td></tr>' +
       '<tr><td style="padding:4px 8px;color:var(--text-muted)">距高点/低点</td><td>' + (pp.dist_from_high||'?') + '% / +' + (pp.dist_from_low||'?') + '%</td></tr>' +
 
       '<tr style="border-bottom:1px solid var(--border)"><td colspan="2" style="padding:8px;font-weight:700;color:var(--blue)">📈 技术趋势</td><td style="font-size:10px;color:var(--text-muted)">数据源: Tushare K线</td></tr>' +
-      '<tr><td style="padding:4px 8px;color:var(--text-muted)">日线</td><td>' + (daily.direction||'?') + ' · ' + (daily.phase||'?') + ' | MA: ' + (daily.ma_arrangement||'?') + '</td></tr>' +
-      '<tr><td style="padding:4px 8px;color:var(--text-muted)">周线</td><td>' + ((tr.weekly||{}).direction||'?') + ' · ' + ((tr.weekly||{}).phase||'?') + '</td></tr>' +
-      '<tr><td style="padding:4px 8px;color:var(--text-muted)">MACD</td><td>' + (macd.signal||'?') + ' diff:' + (macd.diff||'?') + ' dea:' + (macd.dea||'?') + '</td></tr>' +
-      '<tr><td style="padding:4px 8px;color:var(--text-muted)">RSI(14)</td><td>' + (ind.rsi_14||'?') + '</td></tr>' +
-      '<tr><td style="padding:4px 8px;color:var(--text-muted)">布林带</td><td>' + (bb.position||'?') + ' 带宽:' + (bb.bandwidth||'?') + '%</td></tr>' +
-      '<tr><td style="padding:4px 8px;color:var(--text-muted)">量价</td><td>' + (vol.health||'?') + ' vs20d:' + (vol.vs_20d_avg||'?') + '</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)" title="日K线趋势方向与阶段(蓄力期→中继期→加速期→末期)">日线 ℹ️</td><td>' + (daily.direction||'?') + ' · ' + (daily.phase||'?') + ' | MA: ' + (daily.ma_arrangement||'?') + '</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)" title="周K线趋势方向(反映中期趋势)">周线 ℹ️</td><td>' + ((tr.weekly||{}).direction||'?') + ' · ' + ((tr.weekly||{}).phase||'?') + '</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)" title="指数平滑异同移动平均线。金叉=看涨信号,死叉=看跌信号">MACD ℹ️</td><td>' + (macd.signal||'?') + ' diff:' + (macd.diff||'?') + ' dea:' + (macd.dea||'?') + '</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)" title="14日相对强弱指数。>70超买(回调概率高),<30超卖(反弹概率高)">RSI(14) ℹ️</td><td>' + (ind.rsi_14||'?') + '</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)" title="价格在布林带中的位置。带宽<5%时即将变盘(向上或向下突破)">布林带 ℹ️</td><td>' + (bb.position||'?') + ' 带宽:' + (bb.bandwidth||'?') + '%</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)" title="成交量与价格的关系。背离=价跌量增→出货信号">量价 ℹ️</td><td>' + (vol.health||'?') + ' vs20d:' + (vol.vs_20d_avg||'?') + '</td></tr>' +
 
       '<tr style="border-bottom:1px solid var(--border)"><td colspan="2" style="padding:8px;font-weight:700;color:var(--green)">💰 基本面</td><td style="font-size:10px;color:var(--text-muted)">数据源: Tushare</td></tr>' +
       '<tr><td style="padding:4px 8px;color:var(--text-muted)">PE / 分位</td><td>' + (fa.pe||'?') + ' (' + (fa.pe_percentile||'?') + '%)</td></tr>' +
       '<tr><td style="padding:4px 8px;color:var(--text-muted)">PB / 分位</td><td>' + (fa.pb||'?') + ' (' + (fa.pb_percentile||'?') + '%)</td></tr>' +
-      '<tr><td style="padding:4px 8px;color:var(--text-muted)">ROE</td><td>' + (fa.roe||'?') + '%</td></tr>' +
+      '<tr><td style="padding:4px 8px;color:var(--text-muted)" title="净资产收益率,反映企业盈利能力。>15%优秀,<0为亏损。">ROE ℹ️</td><td>' + (fa.roe||'?') + '%</td></tr>' +
       '<tr><td style="padding:4px 8px;color:var(--text-muted)">毛利率 / 净利率</td><td>' + (fa.gross_margin||'?') + '% / ' + (fa.net_margin||'?') + '%</td></tr>' +
       '<tr><td style="padding:4px 8px;color:var(--text-muted)">资产负债率</td><td>' + (fa.debt_ratio||'?') + '%</td></tr>' +
       '<tr><td style="padding:4px 8px;color:var(--text-muted)">市值</td><td>' + (fa.market_cap_yi||'?') + '亿</td></tr>' +
@@ -983,6 +983,23 @@ async function loadKlineData(code, containerId, days) {
     var ohlc = d.kline.map(function(k) { return [k.open, k.close, k.low, k.high]; });
     var volumes = d.kline.map(function(k) { return k.volume; });
     var closes = d.kline.map(function(k) { return k.close; });
+
+    function calcMA(data, period) {
+      var result = [];
+      for (var i = 0; i < data.length; i++) {
+        if (i < period - 1) { result.push(null); continue; }
+        var sum = 0;
+        for (var j = i - period + 1; j <= i; j++) sum += data[j];
+        result.push(+(sum / period).toFixed(2));
+      }
+      return result;
+    }
+    var ma5 = calcMA(closes, 5);
+    var ma20 = calcMA(closes, 20);
+    var ma60 = calcMA(closes, 60);
+    var ma120 = calcMA(closes, 120);
+    
+var closes = d.kline.map(function(k) { return k.close; });
     
     // 计算移动平均线 MA5 / MA20 / MA60 / MA120
     function calcMA(data, period) {
