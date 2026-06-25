@@ -960,6 +960,7 @@ function showRadarDetail(d) {
       '<strong>结论:</strong> ' + (d.conclusion||{}).label + ' | ' + (d.conclusion||{}).reason +
       ((d.risk||[]).length > 0 ? '<br><strong>风险:</strong> ' + (d.risk||[]).join(' / ') : '') +
     '</div>' +
+    '<div id="radarPanel" style="display:none;margin-top:12px;padding:16px;background:rgba(6,182,212,.04);border:1px solid rgba(6,182,212,.15);border-radius:8px;font-size:12px;color:var(--text-secondary)"></div>' +
   '</div>';
   document.body.appendChild(modal);
 }
@@ -1160,6 +1161,76 @@ document.addEventListener('click', function(e) {
   var inp = document.getElementById('stockSearch');
   if (dd && inp && e.target !== inp && !dd.contains(e.target)) dd.style.display = 'none';
 });
+
+// 个股雷达
+async function loadStockRadar(code, name) {
+  var panel = document.getElementById('radarPanel');
+  panel.style.display = 'block';
+  panel.innerHTML = '加载中...';
+  try {
+    var r = await fetch('/api/stock/' + code + '/radar/summary');
+    var d = await r.json();
+    var ra = d.radar || {}, co = d.conclusion || {}, risks = d.risk || [];
+    var bars = ['价格阶段','技术趋势','基本面','资金面','情绪'];
+    var colors = {'价格阶段':'#f59e0b','技术趋势':'#3b82f6','基本面':'#22c55e','资金面':'#8b5cf6','情绪':'#ef4444'};
+    var barHtml = '';
+    for (var i=0; i<bars.length; i++) {
+      var k = bars[i], v = ra[k] || 0, c = colors[k] || '#666';
+      barHtml += '<div style="margin-bottom:4px"><span style="display:inline-block;width:60px;font-size:11px">' + k + '</span>' +
+        '<span style="display:inline-block;width:' + (v*2.2) + 'px;height:14px;background:' + c + ';border-radius:3px"></span>' +
+        ' <span style="font-size:11px;font-weight:700;color:' + c + '">' + v + '</span></div>';
+    }
+    panel.innerHTML = '<strong>' + co.label + '</strong> ' + ra['综合'] + '分' +
+      (risks.length > 0 ? ' <span style="color:var(--red)">' + risks.join(' / ') + '</span>' : '') +
+      '<div style="margin:8px 0">' + barHtml + '</div>' +
+      '<button onclick="showDetailModal(\'' + code + '\',\'' + (d.name||'') + '\')" style="padding:4px 12px;border:1px solid var(--cyan);border-radius:4px;background:rgba(6,182,212,.1);color:var(--cyan);cursor:pointer;font-size:11px">📋 详细分析</button>';
+  } catch(e) { panel.innerHTML = '加载失败: ' + e.message; }
+}
+
+function showDetailModal(code, name) {
+  var m = document.createElement('div');
+  m.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:10000;display:flex;align-items:center;justify-content:center';
+  m.onclick = function(e) { if (e.target === m) m.remove(); };
+  m.innerHTML = '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:80px;color:var(--text-muted)">加载中...</div>';
+  document.body.appendChild(m);
+  fetch('/api/stock/' + code + '/radar').then(function(r) { return r.json(); }).then(function(d) {
+    var ra = d.radar || {}, co = d.conclusion || {}, pp = d.price_position || {};
+    var tr = d.trend || {}, fa = d.fundamental || {}, cf = d.capital_flow || {};
+    var daily = tr.daily || {}, ind = tr.indicators || {}, macd = ind.macd || {}, bb = ind.bollinger || {}, vol = tr.volume || {};
+    var T = function(l, e) { return '<td style="padding:3px 6px;color:var(--text-muted)" title="' + e + '">' + l + ' ℹ</td>'; };
+    m.innerHTML = '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:20px;width:780px;max-width:95vw;max-height:90vh;overflow-y:auto;font-size:13px">' +
+      '<div style="display:flex;justify-content:space-between;margin-bottom:12px"><span style="font-size:18px;font-weight:700">📊 ' + code + ' ' + (d.name||'') + '</span>' +
+        '<button onclick="this.parentElement.parentElement.parentElement.remove()" style="padding:4px 12px;border:1px solid var(--red);border-radius:4px;background:transparent;color:var(--red);cursor:pointer">✕</button></div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:6px;margin-bottom:10px">' +
+        '<div style="padding:6px;background:rgba(245,158,11,.08);border-radius:6px;text-align:center"><div style="font-size:10px;color:var(--text-muted)">价格</div><div style="font-size:16px;font-weight:700;color:#f59e0b">' + (ra['价格阶段']||0) + '</div></div>' +
+        '<div style="padding:6px;background:rgba(59,130,246,.08);border-radius:6px;text-align:center"><div style="font-size:10px;color:var(--text-muted)">趋势</div><div style="font-size:16px;font-weight:700;color:#3b82f6">' + (ra['技术趋势']||0) + '</div></div>' +
+        '<div style="padding:6px;background:rgba(34,197,94,.08);border-radius:6px;text-align:center"><div style="font-size:10px;color:var(--text-muted)">基本面</div><div style="font-size:16px;font-weight:700;color:#22c55e">' + (ra['基本面']||0) + '</div></div>' +
+        '<div style="padding:6px;background:rgba(139,92,246,.08);border-radius:6px;text-align:center"><div style="font-size:10px;color:var(--text-muted)">资金</div><div style="font-size:16px;font-weight:700;color:#8b5cf6">' + (ra['资金面']||0) + '</div></div>' +
+        '<div style="padding:6px;background:rgba(239,68,68,.08);border-radius:6px;text-align:center"><div style="font-size:10px;color:var(--text-muted)">情绪</div><div style="font-size:16px;font-weight:700;color:#ef4444">' + (ra['情绪']||0) + '</div></div>' +
+      '</div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+        '<tr><th colspan="2" style="text-align:left;padding:5px;color:var(--gold)">📍 价格位置</th></tr>' +
+        '<tr>' + T('当前价','最新收盘价') + '<td>¥' + (d.price||'?') + '</td></tr>' +
+        '<tr>' + T('1年分位','0=最低100=最高,越低越接近底部') + '<td>' + (pp.pct_1y||'?') + '%</td></tr>' +
+        '<tr>' + T('52周高低','近52周最高/最低价') + '<td>¥' + (pp.high_52w||'?') + '~' + (pp.low_52w||'?') + '</td></tr>' +
+        '<tr><th colspan="2" style="text-align:left;padding:5px;color:var(--blue)">📈 技术趋势</th></tr>' +
+        '<tr>' + T('日线','日K线趋势与阶段') + '<td>' + (daily.direction||'?') + '·' + (daily.phase||'?') + '</td></tr>' +
+        '<tr>' + T('MACD','金叉=看涨信号') + '<td>' + (macd.signal||'?') + '</td></tr>' +
+        '<tr>' + T('RSI(14)','>70超买 <30超卖') + '<td>' + (ind.rsi_14||'?') + '</td></tr>' +
+        '<tr>' + T('布林带','带宽<5%变盘') + '<td>' + (bb.position||'?') + '</td></tr>' +
+        '<tr>' + T('量价','价跌量增=背离→出货') + '<td>' + (vol.health||'?') + '</td></tr>' +
+        '<tr><th colspan="2" style="text-align:left;padding:5px;color:var(--green)">💰 基本面</th></tr>' +
+        '<tr>' + T('PE/PB','越低越便宜') + '<td>' + (fa.pe||'?') + ' / ' + (fa.pb||'?') + '</td></tr>' +
+        '<tr>' + T('ROE','>15%优秀 <0亏损') + '<td>' + (fa.roe||'?') + '%</td></tr>' +
+        '<tr>' + T('负债率','>60%风险偏高') + '<td>' + (fa.debt_ratio||'?') + '%</td></tr>' +
+        '<tr><th colspan="2" style="text-align:left;padding:5px;color:var(--purple)">💧 资金面</th></tr>' +
+        '<tr>' + T('换手率','>5%筹码活跃') + '<td>' + (cf.turnover_rate||'?') + '%</td></tr>' +
+      '</table>' +
+      '<div style="margin-top:10px;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:12px"><strong>' + co.label + '</strong> ' + co.reason +
+        ((d.risk||[]).length > 0 ? '<br>风险: ' + (d.risk||[]).join(' / ') : '') + '</div>' +
+    '</div>';
+  }).catch(function(e) { m.innerHTML = '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:40px;color:var(--red)">加载失败: ' + e.message + '</div>'; });
+}
 </script>
 <script>
 // 全局股票代码点击 → K线弹窗事件委托
