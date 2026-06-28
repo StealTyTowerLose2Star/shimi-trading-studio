@@ -180,6 +180,165 @@ def _compute_macd(close):
     return diff, dea, hist
 
 
+def _analyze_volume_divergence(df, close):
+    """6-factor volume-price divergence analysis model (PRD-019)
+    
+    Replaces simple single-day comparison with multi-period multi-factor analysis:
+      V1 - 放量滞涨 (20pts): 5d vol/20d vol > 1.5 AND 5d return < 1%
+      V2 - 放量下跌 (15pts): 5d vol/20d vol > 1.3 AND 5d return < -2%
+      V3 - 价涨量缩 (25pts): 5d vol/prev 5d vol < 0.7 AND 5d return > 3%
+      V4 - 价跌量缩 (10pts): 5d vol/20d vol < 0.6 AND 5d return < -3%
+      V5 - OBV背离 (20pts top/15pts bottom)
+      V6 - 单日异动 (10pts): vol[-1]/vol[-2] extreme AND price/vol direction mismatch
+    """
+    n = len(df)
+    if n < 20:
+        return {
+            "health": "数据不足", "score": 0, "divergence_types": [],
+            "details": {
+                "V1_surge_no_gain": {"triggered": False, "vol_ratio": 0, "return_5d": 0, "label": ""},
+                "V2_surge_drop": {"triggered": False, "vol_ratio": 0, "return_5d": 0, "label": ""},
+                "V3_rising_shrink": {"triggered": False, "vol_decline": 0, "return_5d": 0, "decline_pct": 0, "label": ""},
+                "V4_falling_shrink": {"triggered": False, "vol_ratio": 0, "return_5d": 0, "label": ""},
+                "V5_obv": {"triggered": False, "type": None, "obv_ratio": None, "label": ""},
+                "V6_single_day": {"triggered": False, "vol_change": 0, "price_up": False, "vol_up": False, "label": ""},
+            },
+            "vs_20d_avg": 1.0, "trend": "数据不足",
+        }
+
+    vol = df["volume"].astype(float)
+
+    # Backward-compat: single-day vs 20d moving average
+    vol_ma20 = vol.rolling(20).mean()
+    vs_avg = round(float(vol.iloc[-1] / max(vol_ma20.iloc[-1], 1)), 2)
+    vol_trend = "放量" if vs_avg > 1.5 else ("缩量" if vs_avg < 0.5 else "持平")
+
+    # 5-day volume averages
+    vol_5d = float(vol.iloc[-5:].mean())
+    vol_20d = float(vol.iloc[-20:].mean())
+    vol_prev5 = float(vol.iloc[-10:-5].mean()) if n >= 10 else vol_5d
+
+    # 5-day return (%)
+    return_5d = round(float((close.iloc[-1] - close.iloc[-6]) / max(abs(close.iloc[-6]), 0.01) * 100), 2) if n >= 6 else 0
+
+    # Single-day direction
+    price_up = float(close.iloc[-1]) > float(close.iloc[-2])
+    vol_up = float(vol.iloc[-1]) > float(vol.iloc[-2])
+
+    # ── V1: 放量滞涨 (20pts) ──
+    v1_vol_ratio = round(vol_5d / max(vol_20d, 1), 2)
+    v1_triggered = v1_vol_ratio > 1.5 and return_5d < 1
+    v1_label = f"放量滞涨: 量比{v1_vol_ratio}, 5日涨幅仅{return_5d}%" if v1_triggered else ""
+
+    # ── V2: 放量下跌 (15pts) ──
+    v2_vol_ratio = round(vol_5d / max(vol_20d, 1), 2)
+    v2_triggered = v2_vol_ratio > 1.3 and return_5d < -2
+    v2_label = f"放量下跌: 量比{v2_vol_ratio}, 5日跌幅{abs(return_5d)}%" if v2_triggered else ""
+
+    # ── V3: 价涨量缩 (25pts) ──
+    v3_vol_decline = round(vol_5d / max(vol_prev5, 1), 2)
+    v3_decline_pct = round((1 - v3_vol_decline) * 100)
+    v3_triggered = v3_vol_decline < 0.7 and return_5d > 3
+    v3_label = f"价涨量缩: 量缩{v3_decline_pct}%, 5日涨幅{return_5d}%" if v3_triggered else ""
+
+    # ── V4: 价跌量缩 (10pts) ──
+    v4_vol_ratio = round(vol_5d / max(vol_20d, 1), 2)
+    v4_triggered = v4_vol_ratio < 0.6 and return_5d < -3
+    v4_label = f"价跌量缩: 量比{v4_vol_ratio}, 5日跌幅{abs(return_5d)}%" if v4_triggered else ""
+
+    # ── V5: OBV背离 (20pts top / 15pts bottom) ──
+    v5_triggered = False
+    v5_type = None
+    v5_obv_ratio = None
+    v5_label = ""
+    v5_score = 0
+    try:
+        price_changes = close.diff()
+        obv = (vol * np.sign(price_changes.fillna(0))).cumsum()
+        if len(obv) >= 10:
+            current_obv = float(obv.iloc[-1])
+            obv_max10 = float(obv.iloc[-10:].max())
+            obv_min10 = float(obv.iloc[-10:].min())
+            close_max10 = float(close.iloc[-10:].max())
+            close_min10 = float(close.iloc[-10:].min())
+
+            # Top divergence: price at/near 10-day high but OBV not confirming
+            if float(close.iloc[-1]) >= close_max10 and obv_max10 > 0:
+                obv_ratio_v5 = round(current_obv / max(obv_max10, 1), 2)
+                if obv_ratio_v5 < 0.9:
+                    v5_triggered = True
+                    v5_type = "top"
+                    v5_obv_ratio = obv_ratio_v5
+                    v5_score = 20
+                    v5_label = f"OBV顶背离: 价格高位但OBV仅峰值的{int(obv_ratio_v5 * 100)}%"
+
+            # Bottom divergence: price at/near 10-day low but OBV not confirming
+            if not v5_triggered and float(close.iloc[-1]) <= close_min10 and obv_min10 > 0:
+                obv_ratio_v5 = round(current_obv / max(obv_min10, 1), 2)
+                if obv_ratio_v5 > 1.1:
+                    v5_triggered = True
+                    v5_type = "bottom"
+                    v5_obv_ratio = obv_ratio_v5
+                    v5_score = 15
+                    v5_label = f"OBV底背离: 价格低位但OBV为谷值的{int(obv_ratio_v5 * 100)}%"
+    except Exception:
+        pass
+
+    # ── V6: 单日异动 (10pts) ──
+    v6_vol_change = round(float(vol.iloc[-1] / max(vol.iloc[-2], 1)), 2)
+    v6_triggered = (v6_vol_change > 2.0 or v6_vol_change < 0.5) and (price_up != vol_up)
+    v6_label = ""
+    if v6_triggered:
+        if v6_vol_change > 2.0:
+            v6_label = f"单日异动: 量变{v6_vol_change}倍, 价{'涨' if price_up else '跌'}量{'涨' if vol_up else '跌'}"
+        else:
+            v6_label = f"单日异动: 量缩至{v6_vol_change}倍"
+
+    # ── Scoring & Classification ──
+    score = 0
+    divergence_types = []
+    if v1_triggered:
+        score += 20
+        divergence_types.append("放量滞涨")
+    if v2_triggered:
+        score += 15
+        divergence_types.append("放量下跌")
+    if v3_triggered:
+        score += 25
+        divergence_types.append("价涨量缩")
+    if v4_triggered:
+        score += 10
+        divergence_types.append("价跌量缩")
+    if v5_triggered:
+        score += v5_score
+        divergence_types.append(f"OBV{'顶' if v5_type == 'top' else '底'}背离")
+    if v6_triggered:
+        score += 10
+        divergence_types.append("单日异动")
+
+    if score >= 60:
+        health = "严重背离⚠️"
+    elif score >= 40:
+        health = "轻微背离"
+    elif score >= 1:
+        health = "正常"
+    else:
+        health = "健康"
+
+    return {
+        "health": health, "score": score, "divergence_types": divergence_types,
+        "details": {
+            "V1_surge_no_gain": {"triggered": v1_triggered, "vol_ratio": v1_vol_ratio, "return_5d": return_5d, "label": v1_label},
+            "V2_surge_drop": {"triggered": v2_triggered, "vol_ratio": v2_vol_ratio, "return_5d": return_5d, "label": v2_label},
+            "V3_rising_shrink": {"triggered": v3_triggered, "vol_decline": v3_vol_decline, "return_5d": return_5d, "decline_pct": v3_decline_pct, "label": v3_label},
+            "V4_falling_shrink": {"triggered": v4_triggered, "vol_ratio": v4_vol_ratio, "return_5d": return_5d, "label": v4_label},
+            "V5_obv": {"triggered": v5_triggered, "type": v5_type, "obv_ratio": v5_obv_ratio, "label": v5_label},
+            "V6_single_day": {"triggered": v6_triggered, "vol_change": v6_vol_change, "price_up": price_up, "vol_up": vol_up, "label": v6_label},
+        },
+        "vs_20d_avg": vs_avg, "trend": vol_trend,
+    }
+
+
 def analyze_trend(code: str) -> Dict[str, Any]:
     df = _get_kline(code, days=500)
     if df is None:
@@ -189,7 +348,7 @@ def analyze_trend(code: str) -> Dict[str, Any]:
                 "indicators": {"macd": {"signal": "数据不足", "diff": 0, "dea": 0, "histogram": 0},
                                "rsi_14": None, "bollinger": {"position": "数据不足", "bandwidth": 0, "squeeze": False},
                                "atr_14": None},
-                "volume": {"vs_20d_avg": 1.0, "trend": "数据不足", "health": "数据不足"}}
+                "volume": {"vs_20d_avg": 1.0, "trend": "数据不足", "health": "数据不足", "score": 0, "divergence_types": [], "details": {}}}
 
     close = _close(df)
     daily = _analyze_single_period(df, "日线")
@@ -250,22 +409,8 @@ def analyze_trend(code: str) -> Dict[str, Any]:
     except Exception:
         bandwidth, squeeze, bb_pos = 0, False, "数据不足"
 
-    # Volume
-    try:
-        vol = df["volume"].astype(float)
-        vol_ma20 = vol.rolling(20).mean()
-        vs_avg = round(float(vol.iloc[-1] / max(vol_ma20.iloc[-1], 1)), 2)
-        vol_trend = "放量" if vs_avg > 1.5 else ("缩量" if vs_avg < 0.5 else "持平")
-        price_up = float(close.iloc[-1]) > float(close.iloc[-2])
-        vol_up = float(vol.iloc[-1]) > float(vol.iloc[-2])
-        if price_up and vol_up:
-            health = "健康"
-        elif not price_up and vol_up:
-            health = "背离⚠️"
-        else:
-            health = "正常"
-    except Exception:
-        vs_avg, vol_trend, health = 1.0, "数据不足", "数据不足"
+    # Volume (PRD-019: 6-factor multi-period divergence model)
+    vol_analysis = _analyze_volume_divergence(df, close)
 
     return {
         "daily": daily, "weekly": weekly, "monthly": monthly,
@@ -275,7 +420,7 @@ def analyze_trend(code: str) -> Dict[str, Any]:
             "bollinger": {"position": bb_pos, "bandwidth": bandwidth, "squeeze": squeeze},
             "atr_14": atr,
         },
-        "volume": {"vs_20d_avg": vs_avg, "trend": vol_trend, "health": health},
+        "volume": vol_analysis,
     }
 
 
@@ -567,8 +712,9 @@ def collect_risks(price_pos, trend, fundamental, capital) -> list:
     if daily.get("ma_arrangement") == "空头排列":
         risks.append("均线空头排列")
     vol = trend.get("volume", {})
-    if vol.get("health") == "背离⚠️":
-        risks.append("量价背离")
+    divergence_types = vol.get("divergence_types", [])
+    for dt in divergence_types:
+        risks.append(f"量价背离: {dt}")
     rsi = trend.get("indicators", {}).get("rsi_14")
     if rsi is not None and rsi > 75:
         risks.append(f"RSI 超买 ({rsi})")
