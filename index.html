@@ -241,7 +241,27 @@
   .pnl-positive { color: var(--green) !important; font-weight: 700; }
   .pnl-negative { color: var(--red) !important; font-weight: 700; }
 </style>
+
+<style>
+td[title]::after {
+  content: '?';
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  line-height: 13px;
+  text-align: center;
+  background: rgba(6,182,212,.2);
+  color: #06b6d4;
+  border-radius: 50%;
+  font-size: 8px;
+  font-weight: 700;
+  margin-left: 3px;
+  cursor: help;
+  vertical-align: top;
+}
+</style>
 </head>
+
 <body>
 
 <header class="topbar">
