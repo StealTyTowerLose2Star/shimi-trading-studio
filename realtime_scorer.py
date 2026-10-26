@@ -86,7 +86,15 @@ def _native(val):
 
 def trend_detect(code: str):
     """完整趋势检测 — 官方 TrendDetector 评分公式"""
-    df = get_kline(code, days=120)
+    return trend_detect_df(get_kline(code, days=120), code=code)
+
+
+def trend_detect_df(df, code: str = ""):
+    """trend_detect 的纯数据部分: 对已截取的K线切片(截至信号日)评分。
+
+    回测按日切片复用同一公式, 与线上扫描共享计算路径; 调用方须保证
+    切片不含信号日之后的数据 (防未来函数)。
+    """
     if df is None or len(df) < 60:
         return None
 
@@ -136,7 +144,14 @@ def trend_detect(code: str):
 
 def hybrid_score(code: str, industry: str = ""):
     """混合策略真实评分 — 7维度 + 动量爆发加成"""
-    df = get_kline(code, days=120)
+    return hybrid_score_df(get_kline(code, days=120), code=code)
+
+
+def hybrid_score_df(df, code: str = ""):
+    """hybrid_score 的纯数据部分: 对已截取的K线切片评分 (回测复用)。
+
+    industry 参数当前评分公式未使用, 保留在包装层签名中。
+    """
     if df is None or len(df) < 60:
         return None
 
@@ -221,7 +236,11 @@ def _block_time_to_minutes(bt: str) -> int:
 
 def dragon_leader_score(code: str, extra: dict = None):
     """龙头评分 — 5维评分 (官方 LeaderScorer 公式)"""
-    df = get_kline(code, days=60)
+    return dragon_leader_score_df(get_kline(code, days=60), code=code, extra=extra)
+
+
+def dragon_leader_score_df(df, code: str = "", extra: dict = None):
+    """dragon_leader_score 的纯数据部分: 对已截取的K线切片评分 (回测复用)。"""
     if df is None or len(df) < 20: return None
 
     close_f = float(df["close"].iloc[-1])

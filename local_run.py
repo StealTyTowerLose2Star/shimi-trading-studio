@@ -468,6 +468,9 @@ else:
         '/api/market/events', '/api/market/events/refresh',
         # 2026-10-26 交易日志启用 (操作者授权: 仅手动记账, 无券商API/自动下单/买卖建议)
         '/api/trades', '/api/trades/portfolio',
+        # 2026-10-27 三策略回测视图启用 (面板150日口径, 防未来函数, 按数据日缓存)
+        '/api/strategy/trend/backtest', '/api/strategy/hybrid/backtest',
+        '/api/strategy/dragon/backtest',
     }
     _DEMO_POST = {
         '/api/review/daily', '/api/review/weekly',
@@ -497,7 +500,7 @@ _MODULES_REAL = [
     {'name':'A股行情(指数/板块/热门/涨停/情绪)', 'state':'真实只读(已实测)', 'reason':'Tushare日线EOD(收盘值非实时)；2026-10-24全端点实测与直连基准一致；失败时显式502不补位'},
     {'name':'搜索/K线/个股雷达', 'state':'真实只读(已实测)', 'reason':'Tushare名录与日K线(雷达含5年分位/基本面fina_indicator/换手率/融资余额，2026-10-25实测)；封板时间等盘中维度EOD口径退化'},
     {'name':'美股报价', 'state':'真实只读(已实测)', 'reason':'Tushare us_daily日线收盘值(/api/us/quote?symbol=代码),限1次/小时缓存65min；美股看板/扫描未启用'},
-    {'name':'三策略扫描/操作建议', 'state':'真实只读(日级缓存)', 'reason':'趋势/混合/龙头=Tushare全市场快照+K线真实评分(2026-10-25实测)；按数据日6h缓存,refresh同日不重扫；建议共识写入本地推荐表(复盘数据源)'},
+    {'name':'三策略扫描/操作建议', 'state':'真实只读(日级缓存)', 'reason':'趋势/混合/龙头=Tushare全市场快照+K线真实评分(2026-10-25实测)；按数据日6h缓存,refresh同日不重扫；建议共识写入本地推荐表(复盘数据源)；2026-10-27起各策略附回测视图(面板150日,T+1开盘价成交,防未来函数)'},
     {'name':'翻倍/观察跟踪', 'state':'真实只读(部分维度降级)', 'reason':'评分/月扫/10k方案/跟踪=Tushare真实数据；D9龙虎榜+资金流已实测接入；D7/D8公告催化剂2026-10-26起走巨潮(沪深北全量,已入白名单)；候选池已剔除ST'},
     {'name':'事件总览', 'state':'真实只读(免key源)', 'reason':'巨潮催化剂公告(沪深北全量)+东财公告+财联社电报+东财7×24快讯,2026-10-26接入出站白名单;finnhub/yfinance无凭据仍禁用并在sources_status显式标注;先知模型(合成训练数据)违反real-only保持不启用'},
     {'name':'缓存/监测', 'state':'真实只读', 'reason':'/api/monitor本机资源+/api/a-stock/cache/summary缓存状态已启用；/api/health/deps保持禁用(会探测付费源域名)'},
@@ -553,6 +556,10 @@ from local_accounts import install_local_accounts
 install_local_accounts(app, PORT)
 from local_trade_journal import install_trade_journal
 install_trade_journal(app, PORT)
+if DATA_MODE == "real":
+    # 2026-10-27 三策略回测视图 (真实面板, 防未来函数; 仅 real 模式有意义)
+    from local_backtest import install_backtest
+    install_backtest(app)
 _DEMO_SCOPE_MOCK = ("本地只读模拟演示: 仅开放 GET /, /static/index.html, /api/health, "
                     "/api/indices, /api/dashboard, /api/stock/lookup, "
                     "/api/stock/<6位代码>/kline (days 1-200) 等白名单; "

@@ -1,0 +1,2550 @@
+diff --git a/DEPLOY-NOTES.md b/DEPLOY-NOTES.md
+index 35cf386..4967c99 100644
+--- a/DEPLOY-NOTES.md
++++ b/DEPLOY-NOTES.md
+@@ -18,10 +18,10 @@
+ | 响应头 | `X-Shimi-Data-Mode: real-readonly`，`X-Shimi-Real-Data-Only: true`；含 `_mock` 标记的响应被统一拦截为 502 |
+ | 出站 | 白名单制：仅 loopback + `api.tushare.pro` + 事件免key源（`www.cninfo.com.cn` 巨潮公告、`np-anotice-stock.eastmoney.com` 东财公告、`www.cls.cn` 财联社电报、`np-weblist.eastmoney.com` 东财7×24快讯）（+ 东财 push2/push2his 备用节点保留，默认不走），其余一律拦截留痕 `[EGRESS-BLOCK]` |
+ | 美股 | `/api/us/quote?symbol=AAPL`（us_daily 日线收盘，**官方限 1 次/小时**，成功缓存 65min） |
+-| 策略扫描 | 趋势/混合/龙头已启用（Tushare 全市场快照+面板K线真实评分；按数据日 6h 重计算缓存，refresh 同日不重扫；2026-10-25 实测）；**候选池 2026-10-26 起剔除名称含 ST 证券**（北交所此前已排除） |
++| 策略扫描 | 趋势/混合/龙头已启用（Tushare 全市场快照+面板K线真实评分；按数据日 6h 重计算缓存，refresh 同日不重扫；2026-10-25 实测）；**候选池 2026-10-26 起剔除名称含 ST 证券**（北交所此前已排除）；**2026-10-27 起附回测视图** `GET /api/strategy/<trend\|hybrid\|dragon>/backtest?hold=5&top_n=5`：与线上扫描同一评分路径（realtime_scorer 纯数据函数按日切片），防未来函数（信号日 T 仅用 ≤T 数据，T+1 开盘价买入、T+1+H 开盘价卖出，停牌顺延/信号作废），等权定额+费用口径（买万2.5/卖万2.5+印花税万5），指标移植自 HKUDS/Vibe-Trading（MIT）`agent/backtest/metrics.py`（累计收益/年化/最大回撤/Sharpe/Calmar/Sortino/胜率/盈亏比/换手率，年化 252）；窗口受面板 150 日限制（暖机 60 日），结果按数据日 6h 缓存 |
+ | 新增模块 | 个股雷达（5年分位+fina_indicator 基本面+margin 融资余额+**估值六子项复核** financial_rigor，2026-10-26 移植自 ai-berkshire）、操作建议（三策略共识+K线形态共振）、翻倍评分/月扫/10k 方案（D9 龙虎榜+资金流真实接入；D7/D8 公告催化剂 2026-10-26 起走巨潮沪深北全量）、两融 `margin_detail`、复盘引擎（依赖建议推荐记录 T+3）、缓存摘要/运行监测（2026-10-25 实测） |
+ | 事件总览 | **2026-10-26 启用**：巨潮催化剂公告（沪深北全量 295 条实测）+东财公告+财联社电报+东财7×24快讯（全免 key 真实源，313 事件/288 标的实测）；finnhub/yfinance 无凭据源保持禁用并在 `sources_status` 显式标注；先知（合成训练数据）仍不启用 |
+-| 交易日志 | **2026-10-26 启用（仅手动记账，操作者授权）**：`/api/trades` 流水 CRUD（买/卖：代码、日期、价格、数量、费用可选）+ `/api/trades/portfolio` 持仓视图；移动加权平均成本（买入费用摊入成本、卖出费用抵减已实现）；现价为 tushare EOD 真实收盘（查不到显式 `quote_status=unavailable`，浮盈为 null 不用 0 冒充）；写路径仅本机+登录；**券商API/自动下单/买卖建议/webhook 永禁** |
++| 交易日志 | **2026-10-26 启用（仅手动记账，操作者授权）**：`/api/trades` 流水 CRUD（买/卖：代码、日期、价格、数量、费用可选）+ `/api/trades/portfolio` 持仓视图；移动加权平均成本（买入费用摊入成本、卖出费用抵减已实现）；现价为 tushare EOD 真实收盘（查不到显式 `quote_status=unavailable`，浮盈为 null 不用 0 冒充）；写路径仅本机+登录；**券商API/自动下单/买卖建议/webhook 永禁**。**2026-10-27 前端已切到后端**：流水表（买入/卖出）+持仓表（成本/现价/市值/浮动/已实现）+统计卡全部走后端返回值，录入/修改/删除走 CRUD，401 自动回登录提示；localStorage 仅余登录态，不再存交易数据；上游开仓语义按钮（实时价/盈亏日历/持仓分析/批量平仓/批量止损）已移除，CSV 导出改客户端生成 |
+ | 未开通 | 先知（训练数据为合成样本违反 real-only）、美股看板/扫描（yfinance/finnhub 永禁）、券商交易/推送（永禁） |
+ 
+ ## 启动方法
+@@ -77,8 +77,9 @@ powershell -File restart-local.ps1        # 唯一入口（仅 real）
+ - `test_st_filter.py` 7 项（三策略+月扫候选池 ST 剔除、主扫描名称级过滤源码契约，2026-10-26）
+ - `test_news_fetcher.py` 7 项（财联社签名确定性、双源解析、失败返回空、快讯分类去噪，2026-10-26）
+ - `test_trade_journal.py` 11 项（流水 CRUD、移动加权成本含部分卖出/费用摊入/清仓重置、超卖与破坏一致性改删拒绝、无行情显式 null、文案红线，2026-10-26）
++- `test_backtest.py` 15 项（回测指标手算核对、非正前价符号安全、T+1 成交价/费用口径、停牌顺延、ST/北证剔除、突变未来数据信号与净值前缀不变——防未来函数，2026-10-27）
+ 
+ ## 运维提示（2026-10-25 实测）
+ 
+-- 冷启动：全局 1s 节流下构建 150 日全市场面板需数分钟（代理路径 5-15 分钟）；预热线程依次跑 trend/hybrid/dragon/advice，完成后各端点秒回。浏览器在冷启动期间打开页面会并发触发翻倍/建议重计算，进一步拉长车队，属预期。
++- 冷启动：全局 1s 节流下构建 150 日全市场面板需数分钟（代理路径 5-15 分钟）；预热线程依次跑 trend/hybrid/dragon/advice，完成后各端点秒回。浏览器在冷启动期间打开页面会并发触发翻倍/建议重计算，进一步拉长车队，属预期。**回测端点同理**：冷缓存首次调用需等面板构建+逐日截面评分（数分钟），完成后按数据日 6h 缓存秒回；回测不新增出站域名（复用同一面板与快照缓存）。
+ - 历史日快照目前仅进程内存缓存（6h），重启重建；如需秒级重启，可将历史日快照持久化到 daily_store（历史日不可变，安全）。
+diff --git "a/handoff/to-codex/20261027-\346\213\276\347\261\263\345\233\236\346\265\213\344\270\216\345\211\215\347\253\257\346\216\245\347\272\277.md" "b/handoff/to-codex/20261027-\346\213\276\347\261\263\345\233\236\346\265\213\344\270\216\345\211\215\347\253\257\346\216\245\347\272\277.md"
+new file mode 100644
+index 0000000..58bbb39
+--- /dev/null
++++ "b/handoff/to-codex/20261027-\346\213\276\347\261\263\345\233\236\346\265\213\344\270\216\345\211\215\347\253\257\346\216\245\347\272\277.md"
+@@ -0,0 +1,92 @@
++# 2026-10-27 拾米：三策略回测视图（防未来函数）+ 交易日志前端接后端 — 主回传
++
++工作目录：`D:\Codex_Space\Jobs\shimi-local`（服务 http://127.0.0.1:17890，PID 26996，real 模式运行中）
++
++## 范围声明（不变）
++
++仅只读行情 + 手动记账；券商交易/自动下单/买卖建议/webhook/推送/模型 API 永禁；不新增出站域名
++（回测复用同一 tushare 面板与日快照缓存）；token 不落文件。回测指标移植自
++HKUDS/Vibe-Trading（MIT）`agent/backtest/metrics.py` 纯计算层——不整包安装、不接其 LLM，
++文件头保留上游版权与许可声明。
++
++## 回测口径（防未来函数）
++
++- 信号日 T：仅用 ≤T 的 K线切片评分（与线上扫描同一 realtime_scorer 纯数据函数逐日截面复算）
++- 成交：T+1 开盘价买入（T+1 停牌信号作废），T+1+H 开盘价卖出（停牌顺延，窗口末留仓浮动计值）
++- 资金：初始 100 万，每笔定额=初始/top_n（默认 5 → 20 万/笔），等权；允许零碎股（仅用于指标）
++- 费用：买入万 2.5 / 卖出万 2.5+印花税万 5
++- 预筛选复刻 services/strategy.py：非北证、非 ST（当前名录口径，历史戴帽未回溯）、
++  涨幅区间、成交额用 vol×close 近似（面板无 amount 列）、头部 80|60|10
++- 窗口受全市场面板 150 个已发布开市日限制（趋势/混合暖机 60 日、龙头暖机 20 日），年化 252
++- 端点：`GET /api/strategy/<trend|hybrid|dragon>/backtest?hold=1-20&top_n=1-10`，
++  结果按数据日 6h 缓存（同键并发单飞），数据源失败显式 502 不补位；响应含 notes 口径与免责声明
++
++## 验证样例一：回测真实数值（live，tushare EOD，2026-10-27 07:36 取数）
++
++`hold=5&top_n=5`（默认参数），窗口与指标为服务端真实返回：
++
++| 策略 | 窗口 | 信号日 | 成交笔数 | 累计收益 | 最大回撤 | Sharpe | 胜率 | 总换手(倍) | 期末市值 |
++|---|---|---|---|---|---|---|---|---|---|
++| 趋势 trend | 2026-06-11~10-26 | 90 | 54(+2留仓) | **-48.37%** | -55.81% | -2.75 | 25.9% | 14.50 | ¥516,264.62 |
++| 混合 hybrid | 2026-06-11~10-26 | 90 | 68(+3留仓) | **-42.84%** | -53.49% | -2.89 | 25.0% | 15.68 | ¥571,625.78 |
++| 龙头 dragon | 2026-04-13~10-26 | 130 | 94(+2留仓) | **-49.61%** | -55.72% | -1.80 | 42.6% | 22.82 | ¥503,927.97 |
++
++（初始资金均为 ¥1,000,000；另含年化/Calmar/Sortino/盈亏比/最大连亏等全量指标。）
++
++成交样本（trend 末笔）：`300133 华策影视 信号2026-10-12 → 买2026-10-13@8.70 → 卖2026-10-20@9.03
+++¥7,378.67 (+3.69%)`；dragon 末笔：`301282 金禄电子 信号10-15 → 买10-16@50.62 → 卖10-23@37.47
++-¥52,103.76 (-26.05%)` —— 买入日确为信号日次一交易日，口径正确。
++
++冷启动与单飞实证（server 日志）：首批 5 个 trend/backtest 并发请求在 07:36:24 同时返回 200，
++耗时分别为 1539.9s / 1281.4s / 918.4s / 103.6s / 0.7ms —— 先到的线程算面板+逐日截面，
++后来者挂同一单飞锁共享结果；面板暖后 hybrid 8.7s、dragon 3.7s（纯计算），再往后按数据日
++6h 缓存秒回。客户端 curl 超时不等于服务端失败（线程继续算并写缓存），重试挂锁即可。
++
++## 验证样例二：前端记账闭环（live，真实浏览器页面）
++
++页面（panel-tab-13，登录验证账号 journal_verify）表单录入
++`2026-10-26 买入 000001 平安银行 10.50×200 费0 备注"页面闭环验证"`：
++
++```
++07:36:17  POST /api/trades → 201 (60.5ms)          ← 页面提交落库
++          sqlite trade_entries id=5 (created_at 23:36:17 UTC = 07:36:17 本地) ✓
++07:36:44  整页重载 → GET /api/trades + GET /api/trades/portfolio ← 刷新后从后端重取 ✓
++DOM 实测: 流水笔数1 / 持仓1 / 浮动盈亏+¥160.00 / 市值¥2260.00 / 成本¥2100.00
++          持仓行: 000001 200股 成本¥10.50 现价¥11.30(2026-10-26 EOD) +¥160.00(+7.62%)
++          流水行: 2026-10-26 000001 平安银行 买入 ¥10.50 200 页面闭环验证 ✎ ✕
++          —— 与 API portfolio 返回值逐项一致 ✓（localStorage 仅余登录态，不再存交易数据）
++清理:     DELETE /api/trades/5 → 200，流水/持仓归零（验证账号保持干净）
++```
++
++注：本轮浏览器控制通道仅只读可用（activate_tab 被拒），行内 ✕ 删除按钮未驱动点击；
++DELETE 端点本身由 test_trade_journal 与上轮 9 步闭环覆盖，按钮接线已静态核对。
++
++## 测试退出码（全部 0，无凭据子 shell）
++
++- `test_backtest.py`（新）**15/15 OK**：指标手算核对、非正前价符号安全、T+1 成交价/费用、
++  停牌作废与顺延、ST/北证剔除、**突变未来数据后信号与净值前缀逐日不变**（防未来函数固化）
++- 既有回归：`test_trade_journal` 11、`test_st_filter` 7、`test_news_fetcher` 7、
++  `test_financial_rigor` 9、`test_real_only_policy` 8、`test_tushare_data_quality` 19、
++  `test_market_error_contract` OK、`test_local_modules` 4、`local_test_runner` 17/17、
++  preflight 17/17 —— 全绿
++
++## diff 摘要
++
++8 文件：新建 `services/backtest_metrics.py`（MIT 移植纯计算）、`local_backtest.py`
++（回测引擎+逐日截面+视图安装）、`test_backtest.py`；改 `realtime_scorer.py`
++（三策略评分拆出纯数据函数 trend_detect_df/hybrid_score_df/dragon_leader_score_df，
++原函数委托调用行为不变）、`local_run.py`（白名单+install+模块说明）、`public/index.html`
++（交易日志卡整体改后端 CRUD+portfolio+401 回登录，删除两代 localStorage 死代码与上游
++开仓语义按钮，CSV 导出改客户端生成；三策略卡加 📈 回测弹窗：指标网格+SVG净值线+成交样本）、
++`DEPLOY-NOTES.md`；入档 handoff md+diff。
++
++## GitHub 状态
++
++本地 main 领先 origin/main **3 个 commit**（含本轮），均未推送：push 403（系统凭据无写权限）
++问题未解，按指令不 push；凭据修复后 `git push origin main` 一次即可补齐。
++
++## 遗留
++
++- push 仍待凭据修复（3 个 commit 待推）
++- 回测为历史研究视图：面板 150 日上限内窗口较短（趋势/混合 90 信号日），指标仅作口径演示；
++  前端 btModal 已展示同样口径说明与免责声明
+diff --git a/local_backtest.py b/local_backtest.py
+new file mode 100644
+index 0000000..bcfda7f
+--- /dev/null
++++ b/local_backtest.py
+@@ -0,0 +1,342 @@
++"""策略信号区间回测 (本地真实只读模式) — 防未来函数口径。
++
++2026-10-27 启用 (操作者授权范围: 三策略扫描增加「回测」视图):
++- 数据源: 复用 local_tushare_data 全市场日线面板 (kline_panel:150, tushare 日线 EOD,
++  与线上扫描同一面板与快照缓存, 不新增出站域名);
++  面板深度规范化为最近 150 个已发布开市日 — 回测窗口受此限制, 输出中显式标注。
++- 信号口径: 与 services/strategy.py 线上扫描同一计算路径 — 预筛选 (排除北证/剔除
++  当前名录ST/涨跌幅区间/成交额近似排序取头部) 后, 调用 realtime_scorer 的纯数据
++  评分函数 (trend_detect_df / hybrid_score_df / dragon_leader_score_df) 对
++  截至信号日 T 的 K线切片评分 (与线上 get_kline(days=120/60) 等长的尾部切片)。
++- 防未来函数: 信号日 T 仅用 ≤T 的数据; 成交价 = T+1 开市日开盘价 (T+1 停牌则信号
++  作废跳过, 不向后顺延 stale 信号); 固定持有 H 个交易日, 于 T+H+1 开市日开盘价卖出
++  (当日停牌顺延至复牌首日开盘价; 窗口尽头仍未复牌则按最后收盘浮动计值, 不计入
++  已完成交易)。
++- 组合规则 (研究用简化, 输出中标注): 每笔定额 = 初始资金/top_n (等权, 不复利),
++  现金不足定额或标的已持仓则跳过; 允许零碎股 (仅用于指标, 不代表现实可成交);
++  手续费口径假设: 买入 0.025% (佣金万2.5), 卖出 0.075% (佣金万2.5+印花税万5)。
++- 指标: services/backtest_metrics (HKUDS/Vibe-Trading MIT 移植), 年化 252。
++- 成交额近似: 面板无 amount 列, 预筛选排序用 vol×close (量×价单调近似), 已标注。
++- 仅研究用途, 不构成投资建议; 券商交易/自动下单/推送保持永禁。
++"""
++import time
++
++import numpy as np
++import pandas as pd
++
++from realtime_scorer import trend_detect_df, hybrid_score_df, dragon_leader_score_df
++from services.backtest_metrics import (
++    calc_metrics, calc_trade_turnover_series, calc_bars_per_year,
++)
++
++FEE_BUY = 0.00025    # 买入佣金 万2.5 (口径假设)
++FEE_SELL = 0.00075   # 卖出佣金 万2.5 + 印花税 万5
++INITIAL_CASH = 1_000_000.0
++PANEL_DAYS = 150     # 全市场面板规范化深度 (real_get_kline_batch 同值)
++
++_STRATEGIES = ("trend", "hybrid", "dragon")
++
++# 与 services/strategy.py 三扫描的预筛选/阈值逐条对应
++_SIGNAL_SPEC = {
++    "trend": {
++        "lookback": 120, "warmup": 60, "prescreen_top": 80,
++        "pct_lo": 1.0, "pct_hi": 9.0, "fallback_lo": 0.5,
++        "prescreen_sort": "amount",     # 按成交额近似 (vol×close) 降序
++        "score_fn": trend_detect_df, "score_key": "total_score",
++        "threshold": 30.0, "picked_top": 25,
++    },
++    "hybrid": {
++        "lookback": 120, "warmup": 60, "prescreen_top": 60,
++        "pct_lo": 1.0, "pct_hi": 8.0, "fallback_lo": 0.5,
++        "prescreen_sort": "amount",
++        "score_fn": hybrid_score_df, "score_key": "score",
++        "threshold": 15.0, "picked_top": 25,
++    },
++    "dragon": {
++        "lookback": 60, "warmup": 20, "prescreen_top": 10,
++        "pct_lo": 9.5, "pct_hi": float("inf"), "fallback_lo": None,
++        "prescreen_sort": "pct_chg",    # 涨停板池按涨幅降序
++        "score_fn": dragon_leader_score_df, "score_key": "leader_score",
++        "threshold": None, "picked_top": 25,
++    },
++}
++
++
++def _short(ts_code):
++    return ts_code.split(".")[0]
++
++
++def _scan_day(spec, frames, cols, idx_maps, dates, t, st_codes):
++    """第 t 个市场日 (信号日 T) 的截面信号 — 仅用 ≤T 数据 (防未来函数)。
++
++    返回 [(ts_code, score)] 按评分降序, 长度 ≤ picked_top, 与线上 picked 同口径。
++    """
++    day = dates[t]
++    rows = []
++    for c, m in idx_maps.items():
++        if c.endswith(".BJ"):
++            continue
++        if _short(c) in st_codes:
++            continue
++        i = m.get(day)
++        if i is None:
++            continue
++        pct = cols[c][3][i]
++        if not np.isfinite(pct):
++            continue
++        rows.append((c, i, pct, cols[c][2][i] * cols[c][1][i]))  # vol×close 近似成交额
++
++    lo, hi = spec["pct_lo"], spec["pct_hi"]
++    cand = [r for r in rows if lo <= r[2] < hi]
++    if spec["fallback_lo"] is not None and len(cand) < 10:
++        cand = [r for r in rows if spec["fallback_lo"] <= r[2] < hi]
++    key_idx = 3 if spec["prescreen_sort"] == "amount" else 2
++    cand.sort(key=lambda r: r[key_idx], reverse=True)
++    cand = cand[:spec["prescreen_top"]]
++
++    lookback = spec["lookback"]
++    score_fn, score_key = spec["score_fn"], spec["score_key"]
++    threshold = spec["threshold"]
++    scored = []
++    for c, i, _pct, _amt in cand:
++        f = frames[c]
++        df_slice = f.iloc[max(0, i + 1 - lookback):i + 1]  # 截至 T 的尾部切片
++        try:
++            r = score_fn(df_slice, code=_short(c))
++        except Exception:
++            continue
++        if not r:
++            continue
++        s = r.get(score_key)
++        if s is None:
++            continue
++        if threshold is None or s >= threshold:
++            scored.append((c, float(s)))
++    scored.sort(key=lambda x: x[1], reverse=True)
++    return scored[:spec["picked_top"]]
++
++
++def run_backtest(strategy, frames, name_map=None, st_codes=None,
++                 hold=5, top_n=5, initial_cash=INITIAL_CASH):
++    """纯函数回测引擎 (离线可测): 输入全市场K线面板, 输出指标与成交明细。
++
++    frames: {ts_code: DataFrame[date,open,high,low,close,volume,pct_chg] 升序}
++    name_map: {短码: 名称} (交易明细展示用)
++    st_codes: 短码集合, 当前名录口径的 ST 剔除 (历史戴帽无法回溯, 见 notes)
++    """
++    if strategy not in _SIGNAL_SPEC:
++        raise ValueError(f"未知策略: {strategy}")
++    spec = _SIGNAL_SPEC[strategy]
++    hold = int(min(max(hold or 5, 1), 20))
++    top_n = int(min(max(top_n or 5, 1), 10))
++    initial_cash = float(initial_cash)
++    name_map = name_map or {}
++    st_codes = set(st_codes or ())
++
++    frames = {c: f.reset_index(drop=True) for c, f in frames.items()
++              if f is not None and len(f) >= spec["warmup"]}
++    if not frames:
++        raise ValueError("面板为空或无足够历史")
++
++    dates = sorted({d for f in frames.values() for d in f["date"].tolist()})
++    idx_maps = {c: {d: i for i, d in enumerate(f["date"].tolist())}
++                for c, f in frames.items()}
++    cols = {c: (f["open"].to_numpy(dtype=float), f["close"].to_numpy(dtype=float),
++                f["volume"].to_numpy(dtype=float), f["pct_chg"].to_numpy(dtype=float))
++            for c, f in frames.items()}
++
++    per_trade_cash = initial_cash / top_n
++    cash = initial_cash
++    positions = {}   # code -> dict(qty, invest, entry_date, entry_idx, exit_plan_idx|None)
++    trades = []      # 已完成交易 (metrics dict 契约)
++    open_legs = []   # 窗口尽头仍持仓的入场腿 (计入换手)
++    last_close = {}  # 持仓标的最近已知收盘 (停牌沿用)
++    equity_dates, equity_vals = [], []
++    signals_total = 0
++    scans = {}       # 信号日缓存: t -> [(code, score)]
++
++    first_t = spec["warmup"] - 1     # 首个可评分信号日 (0-based)
++    last_t = len(dates) - 1
++
++    for d in range(first_t, last_t + 1):
++        day = dates[d]
++        # ── 1) 开盘: 到期持仓卖出 ──
++        for c in list(positions):
++            p = positions[c]
++            if p["exit_idx"] is None or p["exit_idx"] != d:
++                continue
++            m = idx_maps[c]
++            if day in m:  # 正常: 当日开盘价成交
++                exit_open = cols[c][0][m[day]]
++            else:         # 停牌: 顺延至复牌首日开盘价
++                later_idx = None
++                for dd in range(d + 1, last_t + 1):
++                    if dates[dd] in m:
++                        later_idx = dd
++                        break
++                if later_idx is None:
++                    p["exit_idx"] = None      # 窗口内无复牌 → 留仓至结尾
++                    continue
++                p["exit_idx"] = later_idx
++                continue                      # 顺延到复牌日再卖
++            proceeds = p["qty"] * exit_open * (1 - FEE_SELL)
++            cash += proceeds
++            pnl = proceeds - p["invest"]
++            entry_px = p["invest"] / p["qty"] / (1 + FEE_BUY)
++            trades.append({
++                "symbol": _short(c), "name": name_map.get(_short(c), ""),
++                "pnl": pnl, "holding_bars": d - p["entry_idx"],
++                "signal_date": p["signal_date"],
++                "entry_time": p["entry_date"], "exit_time": day,
++                "entry_margin": p["invest"], "exit_margin": proceeds,
++                "entry_price": round(float(entry_px), 4),
++                "exit_price": round(float(exit_open), 4),
++                "pnl_pct": round(pnl / p["invest"] * 100, 2) if p["invest"] else 0.0,
++            })
++            del positions[c]
++
++        # ── 2) 开盘: 昨日 (T=d-1) 信号买入 ──
++        t = d - 1
++        if t >= first_t:
++            if t not in scans:
++                scans[t] = _scan_day(spec, frames, cols, idx_maps, dates, t, st_codes)
++            signals = scans[t][:top_n]
++            signals_total += len(signals)
++            for c, _s in signals:
++                if c in positions:
++                    continue                       # 已持仓不加仓
++                if cash < per_trade_cash:
++                    continue                       # 现金不足定额, 跳过
++                m = idx_maps[c]
++                i = m.get(day)
++                if i is None:
++                    continue                       # T+1 停牌 → 信号作废
++                entry_open = cols[c][0][i]
++                if not np.isfinite(entry_open) or entry_open <= 0:
++                    continue
++                qty = per_trade_cash / (entry_open * (1 + FEE_BUY))
++                cash -= qty * entry_open * (1 + FEE_BUY)
++                exit_idx = d + hold                # T+1+H 开市日卖出
++                positions[c] = {
++                    "qty": qty, "invest": per_trade_cash,
++                    "entry_date": day, "entry_idx": d,
++                    "signal_date": dates[t],
++                    "exit_idx": exit_idx if exit_idx <= last_t else None,
++                }
++
++        # ── 3) 收盘计值 ──
++        mv = 0.0
++        for c, p in positions.items():
++            i = idx_maps[c].get(day)
++            if i is not None:
++                last_close[c] = cols[c][1][i]
++            px = last_close.get(c)
++            if px is not None and np.isfinite(px):
++                mv += p["qty"] * px
++        equity_dates.append(day)
++        equity_vals.append(cash + mv)
++
++    # 窗口尽头仍持仓 → 浮动计入净值, 但不计入已完成交易; 其入场腿计入换手
++    for c, p in positions.items():
++        open_legs.append({
++            "symbol": _short(c), "entry_time": p["entry_date"], "exit_time": None,
++            "entry_margin": p["invest"], "exit_margin": None,
++        })
++
++    equity = pd.Series(equity_vals, index=pd.Index(equity_dates, name="date"),
++                       dtype=float)
++    turnover = calc_trade_turnover_series(trades + open_legs, equity)
++    metrics = calc_metrics(equity, trades, initial_cash,
++                           bars_per_year=calc_bars_per_year("1D", "tushare"),
++                           turnover_series=turnover)
++
++    return {
++        "strategy": strategy,
++        "engine": "local_backtest (signals=线上扫描同路径, metrics=Vibe-Trading/MIT移植)",
++        "params": {
++            "hold_days": hold, "top_n": top_n, "initial_cash": initial_cash,
++            "per_trade_cash": round(per_trade_cash, 2),
++            "fee_buy": FEE_BUY, "fee_sell": FEE_SELL,
++        },
++        "window": {
++            "start": equity_dates[0] if equity_dates else None,
++            "end": equity_dates[-1] if equity_dates else None,
++            "market_days": len(equity_dates),
++            "signal_days": max(0, last_t - first_t),
++            "panel_days": PANEL_DAYS, "warmup_days": spec["warmup"],
++        },
++        "metrics": metrics,
++        "signals_total": signals_total,
++        "trades_completed": len(trades),
++        "trades_open": len(open_legs),
++        "equity_curve": [{"date": d, "equity": round(v, 2)}
++                         for d, v in zip(equity_dates, equity_vals)],
++        "trades_sample": [{
++            "code": t["symbol"], "name": t["name"], "signal_date": t["signal_date"],
++            "entry_date": t["entry_time"], "entry_price": t["entry_price"],
++            "exit_date": t["exit_time"], "exit_price": t["exit_price"],
++            "pnl": round(t["pnl"], 2), "pnl_pct": t["pnl_pct"],
++        } for t in trades[-10:]],
++        "notes": [
++            f"防未来函数: 信号日T仅用≤T数据; 买入=T+1开盘价, 卖出=T+1+{hold}日开盘价",
++            "预筛选成交额用 vol×close 近似 (面板无amount列); ST剔除为当前名录口径, 历史戴帽未回溯",
++            f"每笔定额等权(初始资金/{top_n}), 现金不足跳过, 允许零碎股(仅用于指标)",
++            "手续费口径假设: 买入万2.5 / 卖出万2.5+印花税万5; 停牌顺延复牌首日开盘价",
++            f"面板限最近{PANEL_DAYS}个已发布开市日 (暖机{spec['warmup']}日), 年化=252",
++        ],
++        "disclaimer": "回测为历史数据研究视图, 不构成投资建议; 本地仅手动记账, 无交易能力",
++    }
++
++
++# ─── 本地服务装配 ────────────────────────────────────────
++
++def _run_local(strategy, hold, top_n):
++    """取真实面板 + 名录, 跑回测。异常向上抛 (视图层转 502, 不补位)。"""
++    import local_tushare_data as _real
++
++    frames = _real._cached(f"kline_panel:{PANEL_DAYS}", 600,
++                           lambda: _real._kline_panel_frames(PANEL_DAYS))
++    basic = _real.real_get_stock_basic() or {}
++    name_map, st_codes = {}, set()
++    for code, info in basic.items():
++        short = str(code).split(".")[0]
++        name = str((info or {}).get("name", ""))
++        name_map[short] = name
++        if "ST" in name.upper():
++            st_codes.add(short)
++    return run_backtest(strategy, frames, name_map=name_map, st_codes=st_codes,
++                        hold=hold, top_n=top_n)
++
++
++def install_backtest(app):
++    """注册三策略回测只读端点: GET /api/strategy/<name>/backtest?hold=5&top_n=5
++    (白名单放行在 local_run.py _DEMO_EXACT; 结果按数据日6h缓存)。"""
++    from flask import request, jsonify
++    import local_tushare_data as _real
++
++    def _make(name):
++        def _view():
++            try:
++                hold = int(request.args.get("hold", 5))
++                top_n = int(request.args.get("top_n", 5))
++            except (TypeError, ValueError):
++                return jsonify(error="bad_request",
++                               message="hold/top_n 须为整数"), 400
++            if not (1 <= hold <= 20) or not (1 <= top_n <= 10):
++                return jsonify(error="bad_request",
++                               message="hold 限 1-20, top_n 限 1-10"), 400
++            key = f"strategy_backtest:{name}:{hold}:{top_n}"
++            try:
++                result = _real.real_day_cached(
++                    key, lambda: _run_local(name, hold, top_n))()
++            except Exception as e:
++                return jsonify(error="backtest_unavailable",
++                               message=f"回测计算失败(数据源不可用或面板未就绪): {e}",
++                               strategy=name), 502
++            return jsonify(result)
++        return _view
++
++    for _name in _STRATEGIES:
++        app.add_url_rule(f"/api/strategy/{_name}/backtest",
++                         f"strategy_backtest_{_name}", _make(_name),
++                         methods=["GET"])
+diff --git a/local_run.py b/local_run.py
+index c058e5a..bc2cba8 100644
+--- a/local_run.py
++++ b/local_run.py
+@@ -468,6 +468,9 @@ else:
+         '/api/market/events', '/api/market/events/refresh',
+         # 2026-10-26 交易日志启用 (操作者授权: 仅手动记账, 无券商API/自动下单/买卖建议)
+         '/api/trades', '/api/trades/portfolio',
++        # 2026-10-27 三策略回测视图启用 (面板150日口径, 防未来函数, 按数据日缓存)
++        '/api/strategy/trend/backtest', '/api/strategy/hybrid/backtest',
++        '/api/strategy/dragon/backtest',
+     }
+     _DEMO_POST = {
+         '/api/review/daily', '/api/review/weekly',
+@@ -497,7 +500,7 @@ _MODULES_REAL = [
+     {'name':'A股行情(指数/板块/热门/涨停/情绪)', 'state':'真实只读(已实测)', 'reason':'Tushare日线EOD(收盘值非实时)；2026-10-24全端点实测与直连基准一致；失败时显式502不补位'},
+     {'name':'搜索/K线/个股雷达', 'state':'真实只读(已实测)', 'reason':'Tushare名录与日K线(雷达含5年分位/基本面fina_indicator/换手率/融资余额，2026-10-25实测)；封板时间等盘中维度EOD口径退化'},
+     {'name':'美股报价', 'state':'真实只读(已实测)', 'reason':'Tushare us_daily日线收盘值(/api/us/quote?symbol=代码),限1次/小时缓存65min；美股看板/扫描未启用'},
+-    {'name':'三策略扫描/操作建议', 'state':'真实只读(日级缓存)', 'reason':'趋势/混合/龙头=Tushare全市场快照+K线真实评分(2026-10-25实测)；按数据日6h缓存,refresh同日不重扫；建议共识写入本地推荐表(复盘数据源)'},
++    {'name':'三策略扫描/操作建议', 'state':'真实只读(日级缓存)', 'reason':'趋势/混合/龙头=Tushare全市场快照+K线真实评分(2026-10-25实测)；按数据日6h缓存,refresh同日不重扫；建议共识写入本地推荐表(复盘数据源)；2026-10-27起各策略附回测视图(面板150日,T+1开盘价成交,防未来函数)'},
+     {'name':'翻倍/观察跟踪', 'state':'真实只读(部分维度降级)', 'reason':'评分/月扫/10k方案/跟踪=Tushare真实数据；D9龙虎榜+资金流已实测接入；D7/D8公告催化剂2026-10-26起走巨潮(沪深北全量,已入白名单)；候选池已剔除ST'},
+     {'name':'事件总览', 'state':'真实只读(免key源)', 'reason':'巨潮催化剂公告(沪深北全量)+东财公告+财联社电报+东财7×24快讯,2026-10-26接入出站白名单;finnhub/yfinance无凭据仍禁用并在sources_status显式标注;先知模型(合成训练数据)违反real-only保持不启用'},
+     {'name':'缓存/监测', 'state':'真实只读', 'reason':'/api/monitor本机资源+/api/a-stock/cache/summary缓存状态已启用；/api/health/deps保持禁用(会探测付费源域名)'},
+@@ -553,6 +556,10 @@ from local_accounts import install_local_accounts
+ install_local_accounts(app, PORT)
+ from local_trade_journal import install_trade_journal
+ install_trade_journal(app, PORT)
++if DATA_MODE == "real":
++    # 2026-10-27 三策略回测视图 (真实面板, 防未来函数; 仅 real 模式有意义)
++    from local_backtest import install_backtest
++    install_backtest(app)
+ _DEMO_SCOPE_MOCK = ("本地只读模拟演示: 仅开放 GET /, /static/index.html, /api/health, "
+                     "/api/indices, /api/dashboard, /api/stock/lookup, "
+                     "/api/stock/<6位代码>/kline (days 1-200) 等白名单; "
+diff --git a/public/index.html b/public/index.html
+index cc5523a..92be2dd 100644
+--- a/public/index.html
++++ b/public/index.html
+@@ -370,17 +370,17 @@ td[title]::after {
+   <!-- 三大策略 -->
+   <div class="row three-col">
+     <div class="card">
+-      <div class="card-header"><span class="card-title">🔵 趋势策略</span><span class="badge badge-blue" id="trendCount">扫描中</span><button onclick="refreshModule('trend')" style="margin-left:auto;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-muted);cursor:pointer;font-size:11px">🔄</button></div>
++      <div class="card-header"><span class="card-title">🔵 趋势策略</span><span class="badge badge-blue" id="trendCount">扫描中</span><button onclick="showBacktest('trend')" style="margin-left:auto;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-muted);cursor:pointer;font-size:11px" title="区间回测(防未来函数)">📈</button><button onclick="refreshModule('trend')" style="padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-muted);cursor:pointer;font-size:11px">🔄</button></div>
+       <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">中期趋势跟踪 · 鱼身行情抓取</div>
+       <table><thead><tr><th>代码</th><th>名称</th><th>评分</th><th>阶段</th></tr></thead><tbody id="trendBody"></tbody></table>
+     </div>
+     <div class="card">
+-      <div class="card-header"><span class="card-title">🟢 混合策略</span><span class="badge badge-green" id="hybridCount">扫描中</span><button onclick="refreshModule('hybrid',this)" style="margin-left:auto;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-muted);cursor:pointer;font-size:11px">🔄</button></div>
++      <div class="card-header"><span class="card-title">🟢 混合策略</span><span class="badge badge-green" id="hybridCount">扫描中</span><button onclick="showBacktest('hybrid')" style="margin-left:auto;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-muted);cursor:pointer;font-size:11px" title="区间回测(防未来函数)">📈</button><button onclick="refreshModule('hybrid',this)" style="padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-muted);cursor:pointer;font-size:11px">🔄</button></div>
+       <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">趋势×动量 · 9维评分引擎</div>
+       <table><thead><tr><th>代码</th><th>名称</th><th>评分</th><th>评级</th></tr></thead><tbody id="hybridBody"></tbody></table>
+     </div>
+     <div class="card">
+-      <div class="card-header"><span class="card-title">🔴 龙头战法</span><span class="badge badge-red" id="dragonCount">扫描中</span><button onclick="refreshModule('dragon',this)" style="margin-left:auto;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-muted);cursor:pointer;font-size:11px">🔄</button></div>
++      <div class="card-header"><span class="card-title">🔴 龙头战法</span><span class="badge badge-red" id="dragonCount">扫描中</span><button onclick="showBacktest('dragon')" style="margin-left:auto;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-muted);cursor:pointer;font-size:11px" title="区间回测(防未来函数)">📈</button><button onclick="refreshModule('dragon',this)" style="padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-muted);cursor:pointer;font-size:11px">🔄</button></div>
+       <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">涨停板池 · 龙头评分</div>
+       <table><thead><tr><th>代码</th><th>名称</th><th>连板</th><th>评级</th></tr></thead><tbody id="dragonBody"></tbody></table>
+     </div>
+@@ -505,31 +505,35 @@ td[title]::after {
+         <button onclick="loadTradesFromServer()" style="margin-left:auto;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--text-muted);cursor:pointer;font-size:11px" title="刷新交易">🔄</button>
+       </div>
+ 
+-      <!-- 统计 -->
++      <!-- 统计 (后端 /api/trades + /api/trades/portfolio 返回值) -->
+       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;padding:12px;background:rgba(34,197,94,.05);border-radius:10px">
+-        <div><span style="color:var(--text-muted);font-size:12px">总交易</span><br><span id="tjTotal" style="font-size:18px;font-weight:700">--</span></div>
+-        <div><span style="color:var(--text-muted);font-size:12px">胜率</span><br><span id="tjWinRate" style="font-size:18px;font-weight:700;color:var(--green)">--</span></div>
+-        <div><span style="color:var(--text-muted);font-size:12px">总盈亏</span><br><span id="tjPnl" style="font-size:18px;font-weight:700">--</span></div>
+-        <div><span style="color:var(--text-muted);font-size:12px">月回报</span><br><span id="tjMonthlyRatio" style="font-size:14px;font-weight:700">--</span></div>
+-        <div><span style="color:var(--text-muted);font-size:12px">最大盈利</span><br><span id="tjBest" style="font-size:14px;color:var(--green)">--</span></div>
+-        <div><span style="color:var(--text-muted);font-size:12px">最大亏损</span><br><span id="tjWorst" style="font-size:14px;color:var(--red)">--</span></div>
++        <div><span style="color:var(--text-muted);font-size:12px">流水笔数</span><br><span id="tjEntries" style="font-size:18px;font-weight:700">--</span></div>
++        <div><span style="color:var(--text-muted);font-size:12px">持仓标的</span><br><span id="tjPositions" style="font-size:18px;font-weight:700;color:var(--gold)">--</span></div>
++        <div><span style="color:var(--text-muted);font-size:12px">已实现盈亏</span><br><span id="tjRealized" style="font-size:18px;font-weight:700">--</span></div>
++        <div><span style="color:var(--text-muted);font-size:12px">浮动盈亏</span><br><span id="tjUnrealized" style="font-size:18px;font-weight:700">--</span></div>
++        <div><span style="color:var(--text-muted);font-size:12px">持仓市值</span><br><span id="tjMktValue" style="font-size:14px;font-weight:700">--</span></div>
++        <div><span style="color:var(--text-muted);font-size:12px">持仓成本</span><br><span id="tjCost" style="font-size:14px;font-weight:700">--</span></div>
+         <button onclick="showAddTradeForm()" style="padding:6px 16px;border:1px solid var(--green);border-radius:8px;background:rgba(34,197,94,.1);color:var(--green);cursor:pointer;font-size:12px;font-weight:600">+ 记录交易</button>
+-        <button onclick="refreshRealtimePrices()" style="padding:6px 16px;border:1px solid var(--blue);border-radius:8px;background:rgba(59,130,246,.1);color:var(--blue);cursor:pointer;font-size:12px;font-weight:600">🔄 实时价</button>
+-        <button onclick="showPnLReport()" style="padding:6px 16px;border:1px solid var(--gold);border-radius:8px;background:rgba(240,180,41,.1);color:var(--gold);cursor:pointer;font-size:12px;font-weight:600">📊 盈亏统计</button>
+-        <button onclick="showPortfolioAdvice()" style="padding:6px 16px;border:1px solid var(--blue);border-radius:8px;background:rgba(59,130,246,.1);color:var(--blue);cursor:pointer;font-size:12px;font-weight:600">📋 持仓分析</button>
++        <button onclick="exportCSV()" style="padding:6px 16px;border:1px solid var(--green);border-radius:8px;background:rgba(34,197,94,.05);color:var(--green);cursor:pointer;font-size:12px;font-weight:600">📥 导出CSV</button>
+         <button onclick="showReviewModal()" style="padding:6px 16px;border:1px solid var(--purple);border-radius:8px;background:rgba(139,92,246,.1);color:var(--purple);cursor:pointer;font-size:12px;font-weight:600">📋 复盘</button>
+         <button onclick="showMarginRank()" style="padding:6px 16px;border:1px solid var(--cyan);border-radius:8px;background:rgba(6,182,212,.1);color:var(--cyan);cursor:pointer;font-size:12px;font-weight:600">💰 融资融券</button>
+-        <button onclick="batchCloseAll()" style="padding:6px 16px;border:1px solid var(--red);border-radius:8px;background:rgba(239,68,68,.1);color:var(--red);cursor:pointer;font-size:12px;font-weight:600">⏹ 批量平仓</button>
+-        <button onclick="batchUpdateSL()" style="padding:6px 16px;border:1px solid var(--gold);border-radius:8px;background:rgba(240,180,41,.1);color:var(--gold);cursor:pointer;font-size:12px;font-weight:600">🛡️ 批量止损</button>
+-        <button onclick="exportCSV()" style="padding:6px 16px;border:1px solid var(--green);border-radius:8px;background:rgba(34,197,94,.05);color:var(--green);cursor:pointer;font-size:12px;font-weight:600">📥 导出CSV</button>
+         <button onclick="loadTradesFromServer()" style="padding:6px 16px;border:1px solid var(--text-muted);border-radius:8px;background:rgba(255,255,255,.03);color:var(--text-muted);cursor:pointer;font-size:12px;font-weight:600">🔄 刷新</button>
+       </div>
++      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">仅手动记账 · 移动加权平均成本 · 现价为最近交易日收盘(EOD,非实时) · 不构成投资建议</div>
++
++      <!-- 持仓 (移动加权成本 + EOD真实现价) -->
++      <div id="tradePositionsWrap" style="display:none;margin-bottom:12px">
++        <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">📦 当前持仓 <span id="tradePositionsNote" style="font-weight:400;color:var(--text-muted)"></span></div>
++        <table style="font-size:12px"><thead>
++          <tr><th>代码</th><th>名称</th><th>持仓</th><th>成本价</th><th>现价</th><th>市值</th><th>浮动盈亏</th><th>已实现盈亏</th></tr>
++        </thead><tbody id="tradePositionsBody"></tbody></table>
++      </div>
+ 
+-      <!-- 交易记录表 -->
++      <!-- 交易流水表 -->
+       <table style="font-size:12px"><thead>
+-        <tr><th>日期</th><th>代码</th><th>名称</th><th>方向</th><th>入场价</th><th>数量</th><th>当前价</th><th>动态止损</th><th>目标1</th><th>目标2</th><th>目标3</th><th>浮动盈亏</th><th></th></tr>
++        <tr><th>日期</th><th>代码</th><th>名称</th><th>方向</th><th>价格</th><th>数量</th><th>费用</th><th>备注</th><th></th></tr>
+       </thead><tbody id="tradeJournalBody">
+-        <tr><td colspan="13" style="text-align:center;color:var(--text-muted)">暂无交易记录，点击上方"+ 记录交易"开始</td></tr>
++        <tr><td colspan="9" style="text-align:center;color:var(--text-muted)">暂无交易记录，点击上方"+ 记录交易"开始</td></tr>
+       </tbody></table>
+     </div>
+   </div>
+@@ -611,63 +615,7 @@ td[title]::after {
+   </div>
+ </div>
+ 
+-<!-- 盈亏统计弹窗 - 日历视图 -->
+-<div id="pnlModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center">
+-  <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:28px;width:640px;max-width:90vw;max-height:85vh;overflow-y:auto">
+-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+-      <span style="font-size:18px;font-weight:700">📊 盈亏统计 · 日历</span>
+-      <div style="display:flex;gap:4px">
+-        <button onclick="changeCalendarMonth(-1)" style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-secondary);cursor:pointer;font-size:13px">◀</button>
+-        <span id="calMonthLabel" style="font-size:15px;font-weight:600;padding:0 8px;min-width:100px;text-align:center">--</span>
+-        <button onclick="changeCalendarMonth(1)" style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-secondary);cursor:pointer;font-size:13px">▶</button>
+-      </div>
+-    </div>
+-    <!-- 周日~六 header -->
+-    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:8px;text-align:center">
+-      <div style="font-size:11px;color:var(--text-muted);padding:4px">日</div>
+-      <div style="font-size:11px;color:var(--text-muted);padding:4px">一</div>
+-      <div style="font-size:11px;color:var(--text-muted);padding:4px">二</div>
+-      <div style="font-size:11px;color:var(--text-muted);padding:4px">三</div>
+-      <div style="font-size:11px;color:var(--text-muted);padding:4px">四</div>
+-      <div style="font-size:11px;color:var(--text-muted);padding:4px">五</div>
+-      <div style="font-size:11px;color:var(--text-muted);padding:4px">六</div>
+-    </div>
+-    <div id="calGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;min-height:240px">
+-      <!-- dynamically filled -->
+-    </div>
+-    <div id="calSummary" style="margin-top:10px;display:flex;gap:16px;padding:8px 12px;background:rgba(255,255,255,.03);border-radius:8px;font-size:12px">
+-      <span>本月交易: <strong id="calTradeCount">0</strong>笔</span>
+-      <span>盈利: <strong id="calWinCount" style="color:var(--green)">0</strong>笔</span>
+-      <span>亏损: <strong id="calLossCount" style="color:var(--red)">0</strong>笔</span>
+-      <span>月盈亏: <strong id="calPnlTotal" style="font-weight:700">¥0</strong></span>
+-    </div>
+-    <div style="margin-top:12px;text-align:right">
+-      <button onclick="closePnL()" style="padding:8px 20px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text-secondary);cursor:pointer">关闭</button>
+-    </div>
+-  </div>
+-</div>
+-
+-<!-- 持仓分析弹窗 -->
+-<div id="portfolioModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center">
+-  <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:28px;width:700px;max-width:90vw;max-height:80vh;overflow-y:auto">
+-    <div style="font-size:18px;font-weight:700;margin-bottom:16px">📋 持仓分析 · 策略评分</div>
+-    <div id="portfolioSummary" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;padding:12px;background:rgba(59,130,246,.05);border-radius:10px">
+-      <div><span style="color:var(--text-muted);font-size:12px">持仓数量</span><br><span id="pfTotal" style="font-size:18px;font-weight:700">--</span></div>
+-      <div><span style="color:var(--text-muted);font-size:12px">总投入</span><br><span id="pfInvested" style="font-size:18px;font-weight:700">--</span></div>
+-      <div><span style="color:var(--text-muted);font-size:12px">总盈亏</span><br><span id="pfPnl" style="font-size:18px;font-weight:700">--</span></div>
+-      <div><span style="color:var(--text-muted);font-size:12px">风险等级</span><br><span id="pfRisk" style="font-size:18px;font-weight:700">--</span></div>
+-    </div>
+-    <table style="font-size:12px"><thead>
+-      <tr><th>代码</th><th>名称</th><th>入场</th><th>现价</th><th>止损</th><th>T1</th><th>T2</th><th>T3</th><th>数量</th><th>浮盈</th><th>建议</th><th>操作</th><th>融資</th></tr>
+-    </thead><tbody id="portfolioBody">
+-        <tr><td colspan="12" style="text-align:center;color:var(--text-muted)">暂无持仓</td></tr>
+-      <tr><td colspan="12" style="text-align:center;color:var(--text-muted)">加载中...</td></tr>
+-    </tbody></table>
+-    <div style="margin-top:12px;text-align:right">
+-      <button onclick="closePortfolio()" style="padding:8px 20px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text-secondary);cursor:pointer">关闭</button>
+-    </div>
+-  </div>
+-</div></div><!-- /ashareSection -->
++</div><!-- /ashareSection -->
+ 
+ <!-- ===== 海淘美股面板 ===== -->
+ <div id="haitaoSection" style="display:none">
+@@ -820,6 +768,21 @@ td[title]::after {
+   </div>
+ </div>
+ 
++<!-- 策略回测弹窗 (2026-10-27: 三策略区间回测, 防未来函数口径) -->
++<div id="btModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center">
++  <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:24px;width:700px;max-width:92vw;max-height:85vh;overflow-y:auto">
++    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
++      <span id="btTitle" style="font-size:18px;font-weight:700">📈 策略回测</span>
++      <button onclick="document.getElementById('btModal').style.display='none'" style="padding:6px 16px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text-secondary);cursor:pointer">关闭</button>
++    </div>
++    <div id="btMeta" style="font-size:11px;color:var(--text-muted);margin-bottom:10px;line-height:1.6"></div>
++    <div id="btMetrics" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px"></div>
++    <div style="margin-top:12px"><svg id="btChart" width="100%" height="120" style="background:rgba(255,255,255,.02);border-radius:8px"></svg></div>
++    <div id="btTrades" style="margin-top:12px"></div>
++    <div id="btNotes" style="font-size:11px;color:var(--text-muted);margin-top:12px;line-height:1.7"></div>
++  </div>
++</div>
++
+ <!-- 融资融券弹窗 -->
+ <div id="marginModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center">
+   <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:24px;width:600px;max-width:90vw;max-height:85vh;overflow-y:auto">
+@@ -2273,215 +2236,173 @@ try {
+ // Load advice after dashboard finishes (called in loadDashboard), then every 120s
+ setInterval(loadAdvice, 120000);
+ 
+-// ===== 交易日志 (localStorage) =====
+-const TRADE_KEY = 'shimi_trades';
++// ===== 交易日志 (后端流水簿记: /api/trades + /api/trades/portfolio) =====
++// 2026-10-27 起 localStorage 不再作主存储; 权威数据在后端 SQLite (本机)。
++// 口径: 流水簿记(买/卖) + 移动加权平均成本; 盈亏一律用后端返回值。
+ let tradeDialog = null;
+-
+-function getTrades() {
+-  try { return JSON.parse(localStorage.getItem(TRADE_KEY) || '[]'); }
+-  catch(e) { return []; }
+-}
+-
+-function saveTrades(trades) {
+-  localStorage.setItem(TRADE_KEY, JSON.stringify(trades));
+-}
+-
+-function renderTradeJournal() {
+-  const trades = getTrades();
+-  const tbody = $('tradeJournalBody');
+-  const openTrades = trades.filter(t => !t.exit_price);
+-  const closedTrades = trades.filter(t => t.exit_price);
+-
+-  // If there are open positions, fetch dynamic evaluation
+-  let evalData = {};
+-  if (openTrades.length > 0) {
+-    const payload = openTrades.map(t => ({code: t.code, entry_price: t.entry_price, direction: t.direction}));
+-    // Async fetch - will update when response arrives
+-    fetch('/api/positions/evaluate', {
+-      method: 'POST', headers: {'Content-Type': 'application/json'},
+-      body: JSON.stringify({positions: payload})
+-    }).then(r => r.json()).then(data => {
+-      if (data.results) {
+-        data.results.forEach(e => { evalData[e.code] = e; });
+-        renderJournalTable();
+-      }
+-    }).catch(() => {});
++let editingTradeId = null;
++let serverTrades = [];       // 流水 entries (后端返回, 日期倒序)
++let serverSummary = {};      // GET /api/trades summary
++let serverPortfolio = null;  // GET /api/trades/portfolio
++
++async function tradesFetch(url, opts) {
++  const r = await fetch(url, opts);
++  let d = null;
++  try { d = await r.json(); } catch(e) {}
++  if (r.status === 401) {
++    clearUser(); showLoginPrompt();
++    const err = new Error('登录已过期，请重新登录'); err.status = 401; throw err;
+   }
++  if (!r.ok) {
++    const err = new Error((d && (d.error || d.message)) || ('请求失败: HTTP ' + r.status));
++    err.status = r.status; throw err;
++  }
++  return d;
++}
+ 
+-  function renderJournalTable() {
+-    const allTrades = [...openTrades, ...closedTrades.reverse()];
+-    if (allTrades.length === 0) {
+-      tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--text-muted)">暂无交易记录</td></tr>';
+-      updateTradeStats(trades);
+-      return;
++async function loadTradesFromServer() {
++  const tbody = document.getElementById('tradeJournalBody');
++  if (!currentUser) { showLoginPrompt(); return; }
++  tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted)">加载中...</td></tr>';
++  try {
++    const d = await tradesFetch('/api/trades', {headers: apiHeaders()});
++    serverTrades = d.entries || [];
++    serverSummary = d.summary || {};
++    try {
++      serverPortfolio = await tradesFetch('/api/trades/portfolio', {headers: apiHeaders()});
++    } catch(e2) {
++      if (e2.status === 401) return;
++      serverPortfolio = null;  // 行情/持仓视图失败不阻塞流水展示
+     }
++    renderJournalTables();
++  } catch(e) {
++    if (e.status === 401) return;  // 已切到登录提示
++    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--gold)">' + (e.message || '加载失败') + '</td></tr>';
++  }
++}
+ 
+-    // Show newest first
+-    allTrades.reverse();
+-    tbody.innerHTML = allTrades.map((t, i) => {
+-      const realIdx = trades.indexOf(t);
+-      const ev = evalData[t.code] || {};
+-      const isOpen = !t.exit_price;
+-      const currentPrice = isOpen ? (ev.current_price || '--') : t.exit_price;
+-      const slLabel = isOpen ? (ev.stop_loss_label || '计算中...') : '--';
+-      const t1 = isOpen ? (ev.targets?.[0]?.price ? '¥' + ev.targets[0].price : (t.target_1 || '--')) : '--';
+-      const t2 = isOpen ? (ev.targets?.[1]?.price ? '¥' + ev.targets[1].price : (t.target_2 || '--')) : '--';
+-      const t3 = isOpen ? (ev.targets?.[2]?.price ? '¥' + ev.targets[2].price : '--') : '--';
+-      const trailLabels = {0:'初始',1:'保本',2:'锁利',3:'高锁'};
+-      const trailLvl = isOpen ? (ev.trailing_level != null ? trailLabels[ev.trailing_level] || ('T'+ev.trailing_level) : '初始') : '--';
+-      const pnl = isOpen ? ((ev.unrealized_pnl || 0) * (t.qty || 1)) : (() => {
+-        if (!t.exit_price) return '--';
+-        return t.direction === 'buy' ? (t.exit_price - t.entry_price) * t.qty : (t.entry_price - t.exit_price) * t.qty;
+-      })();
+-      const pnlPct = isOpen ? (ev.unrealized_pnl_pct ? (ev.unrealized_pnl_pct >= 0 ? '+' : '') + ev.unrealized_pnl_pct + '%' : '--')
+-        : (() => {
+-          if (!t.exit_price || !t.entry_price) return '--';
+-          const p = t.direction === 'buy' ? (t.exit_price - t.entry_price) / t.entry_price * 100 : (t.entry_price - t.exit_price) / t.entry_price * 100;
+-          return (p >= 0 ? '+' : '') + p.toFixed(1) + '%';
+-        })();
+-      const pnlCls = (typeof pnl === 'number' ? (pnl > 0 ? 'up' : pnl < 0 ? 'down' : '') : '');
++function _money(v, sign) {
++  if (v === null || v === undefined || isNaN(v)) return '--';
++  return (sign && v >= 0 ? '+' : '') + '¥' + Number(v).toFixed(2);
++}
++function _moneyCls(v) { return v > 0 ? 'up' : (v < 0 ? 'down' : ''); }
+ 
++function renderJournalTables() {
++  const tbody = document.getElementById('tradeJournalBody');
++  const entries = serverTrades;
++  // ── 流水表 ──
++  if (entries.length === 0) {
++    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted)">暂无交易记录，点击上方"+ 记录交易"开始</td></tr>';
++  } else {
++    tbody.innerHTML = entries.map(t => {
++      const isBuy = t.side === 'buy';
+       return `<tr>
+         <td style="color:var(--text-muted);font-size:11px">${t.date || '--'}</td>
+         <td style="color:var(--text-muted);font-size:11px">${t.code || ''}</td>
+         <td style="font-weight:600;font-size:12px">${t.name || ''}</td>
+-        <td><span style="padding:1px 6px;border-radius:3px;font-size:11px;font-weight:600;background:${t.direction==='buy'?'rgba(34,197,94,.15)':'rgba(239,68,68,.15)'};color:${t.direction==='buy'?'var(--green)':'var(--red)'}">${t.direction==='buy'?'做多':'做空'}</span></td>
+-        <td class="code-num">${t.entry_price || '--'}</td>
++        <td><span style="padding:1px 6px;border-radius:3px;font-size:11px;font-weight:600;background:${isBuy?'rgba(34,197,94,.15)':'rgba(239,68,68,.15)'};color:${isBuy?'var(--green)':'var(--red)'}">${isBuy?'买入':'卖出'}</span></td>
++        <td class="code-num">${t.price != null ? '¥' + Number(t.price).toFixed(2) : '--'}</td>
+         <td class="code-num">${t.qty || 0}</td>
+-        <td class="code-num" style="font-weight:600;${isOpen ? 'color:var(--gold)' : ''}">${isOpen ? ('¥' + currentPrice) : '¥' + currentPrice}</td>
+-        <td class="code-num" style="color:var(--red);font-size:11px">${slLabel}</td>
+-        <td class="code-num" style="color:var(--green);font-size:11px">${t1}</td>
+-        <td class="code-num" style="color:var(--gold);font-size:11px">${t2}</td>
+-        <td class="code-num" style="color:var(--purple);font-size:11px">${t3}</td>
+-        <td style="font-size:11px;color:var(--gold)">${trailLvl}</td>
+-        <td class="code-num ${pnlCls}" style="font-weight:600">${isOpen ? ('¥' + (typeof pnl === 'number' ? pnl.toFixed(2) : pnl)) : '¥' + (typeof pnl === 'number' ? pnl.toFixed(2) : pnl)}</td>
++        <td class="code-num" style="color:var(--text-muted)">${t.fee ? '¥' + Number(t.fee).toFixed(2) : '--'}</td>
++        <td style="font-size:11px;color:var(--text-secondary);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(t.note||'').replace(/"/g,'&quot;')}">${t.note || ''}</td>
+         <td>
+-          <button onclick="deleteTrade(${realIdx})" style="padding:2px 6px;border:none;border-radius:3px;background:transparent;color:var(--red);cursor:pointer;font-size:11px" title="删除">✕</button>
+-          ${isOpen ? `<button onclick="closeTrade(${realIdx})" style="padding:2px 6px;border:1px solid var(--gold);border-radius:3px;background:transparent;color:var(--gold);cursor:pointer;font-size:11px;margin-left:2px" title="平仓">平</button>` : ''}
+-          <button onclick="quickLog('${t.code}','${t.name}',${t.entry_price})" style="padding:2px 6px;border:1px solid var(--blue);border-radius:3px;background:transparent;color:var(--blue);cursor:pointer;font-size:11px;margin-left:2px" title="复制">+</button>
++          <button onclick="editTrade(${t.id})" style="padding:2px 6px;border:1px solid var(--text-muted);border-radius:3px;background:transparent;color:var(--text-muted);cursor:pointer;font-size:11px" title="修改">✎</button>
++          <button onclick="deleteTrade(${t.id})" style="padding:2px 6px;border:none;border-radius:3px;background:transparent;color:var(--red);cursor:pointer;font-size:11px;margin-left:2px" title="删除">✕</button>
+         </td>
+       </tr>`;
+     }).join('');
+-    updateTradeStats(trades);
+   }
+-
+-  // Initial render (without eval data)
+-  if (openTrades.length === 0) {
+-    renderJournalTable();
++  // ── 统计 (后端返回值) ──
++  const s = serverSummary, ps = (serverPortfolio && serverPortfolio.summary) || {};
++  document.getElementById('tjEntries').textContent = (s.total_entries || 0) + '笔';
++  document.getElementById('tjPositions').textContent = s.open_positions || 0;
++  const rl = (ps.total_realized_pnl !== undefined ? ps.total_realized_pnl : s.total_realized_pnl);
++  const rlEl = document.getElementById('tjRealized');
++  rlEl.textContent = _money(rl, true); rlEl.style.color = rl >= 0 ? 'var(--green)' : 'var(--red)';
++  const un = ps.total_unrealized_pnl;
++  const unEl = document.getElementById('tjUnrealized');
++  unEl.textContent = un === null || un === undefined ? '--(行情不可用)' : _money(un, true);
++  unEl.style.color = un === null || un === undefined ? 'var(--text-muted)' : (un >= 0 ? 'var(--green)' : 'var(--red)');
++  document.getElementById('tjMktValue').textContent = _money(ps.total_market_value);
++  document.getElementById('tjCost').textContent = _money(ps.total_cost);
++  document.getElementById('tradeJournalStats').textContent = (s.total_entries || 0) + '笔';
++  // ── 持仓表 ──
++  const wrap = document.getElementById('tradePositionsWrap');
++  const pbody = document.getElementById('tradePositionsBody');
++  const positions = ((serverPortfolio && serverPortfolio.positions) || []).filter(p => p.qty > 0);
++  if (positions.length === 0) {
++    wrap.style.display = 'none';
+   } else {
+-    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--text-muted)">正在评估持仓...</td></tr>';
+-    updateTradeStats(trades);
++    wrap.style.display = 'block';
++    document.getElementById('tradePositionsNote').textContent =
++      ps.price_kind ? ` · 现价口径: ${ps.price_kind} · 行情 ${ps.quote_available || '--'}` : '';
++    pbody.innerHTML = positions.map(p => {
++      const up = p.unrealized_pnl, rp = p.realized_pnl;
++      return `<tr>
++        <td style="color:var(--text-muted);font-size:11px">${p.code}</td>
++        <td style="font-weight:600;font-size:12px">${p.name || ''}</td>
++        <td class="code-num" style="font-weight:700">${p.qty}</td>
++        <td class="code-num">${p.avg_cost != null ? '¥' + Number(p.avg_cost).toFixed(2) : '--'}</td>
++        <td class="code-num" style="color:var(--gold)">${p.last_price != null ? '¥' + Number(p.last_price).toFixed(2) + ' <span style="font-size:10px;color:var(--text-muted)">' + (p.price_date || '') + '</span>' : '行情不可用'}</td>
++        <td class="code-num">${_money(p.market_value)}</td>
++        <td class="code-num ${_moneyCls(up)}" style="font-weight:600">${up === null ? '--' : _money(up, true) + (p.unrealized_pct != null ? ' (' + (p.unrealized_pct >= 0 ? '+' : '') + p.unrealized_pct + '%)' : '')}</td>
++        <td class="code-num ${_moneyCls(rp)}">${_money(rp, true)}</td>
++      </tr>`;
++    }).join('');
+   }
+ }
+ 
+-function updateTradeStats(trades) {
+-  const closed = trades.filter(t => t.exit_price);
+-  const won = closed.filter(t => {
+-    const pnl = t.direction === 'buy' ? (t.exit_price - t.entry_price) * t.qty : (t.entry_price - t.exit_price) * t.qty;
+-    return pnl > 0;
+-  });
+-  const totalPnl = closed.reduce((sum, t) => {
+-    const pnl = t.direction === 'buy' ? (t.exit_price - t.entry_price) * t.qty : (t.entry_price - t.exit_price) * t.qty;
+-    return sum + pnl;
+-  }, 0);
+-  const winRate = closed.length > 0 ? (won.length / closed.length * 100).toFixed(1) + '%' : '0%';
+-  const bestPnl = closed.length > 0 ? Math.max(...closed.map(t => {
+-    return t.direction === 'buy' ? (t.exit_price - t.entry_price) * t.qty : (t.entry_price - t.exit_price) * t.qty;
+-  })) : 0;
+-  const worstPnl = closed.length > 0 ? Math.min(...closed.map(t => {
+-    return t.direction === 'buy' ? (t.exit_price - t.entry_price) * t.qty : (t.entry_price - t.exit_price) * t.qty;
+-  })) : 0;
+-
+-  // 月回报 = 本月所有交易盈亏(含持仓浮动) / 本金 × 100%
+-  const now = new Date();
+-  const thisMonth = String(now.getMonth() + 1).padStart(2, '0');
+-  const thisYear = now.getFullYear();
+-  let monthPnl = 0, monthCapital = 0;
+-  trades.forEach(t => {
+-    const d = t.date || '';
+-    if (!d || !d.startsWith(thisYear + '-' + thisMonth)) return;
+-    const qty = t.qty || 0;
+-    const entry = t.entry_price || 0;
+-    monthCapital += entry * qty;
+-    if (t.exit_price) {
+-      monthPnl += (t.direction === 'buy' ? (t.exit_price - entry) : (entry - t.exit_price)) * qty;
+-    }
+-  });
+-  updateMonthRatio(monthPnl, monthCapital);
+-
+-  $('tjTotal').textContent = closed.length;
+-  $('tjWinRate').textContent = winRate;
+-  $('tjWinRate').style.color = parseFloat(winRate) >= 50 ? 'var(--green)' : 'var(--red)';
+-  $('tjPnl').textContent = (totalPnl >= 0 ? '+' : '') + '¥' + totalPnl.toFixed(2);
+-  $('tjPnl').style.color = totalPnl >= 0 ? 'var(--green)' : 'var(--red)';
+-  $('tjBest').textContent = bestPnl > 0 ? '¥' + bestPnl.toFixed(2) : '--';
+-  $('tjWorst').textContent = worstPnl < 0 ? '¥' + worstPnl.toFixed(2) : '--';
+-  $('tradeJournalStats').textContent = `${trades.length}笔`;
+-}
+-
+-function updateMonthRatio(monthPnl, monthCapital) {
+-  const ratio = monthCapital > 0 ? (monthPnl / monthCapital * 100) : null;
+-  const el = document.getElementById('tjMonthlyRatio');
+-  if (!el) return;
+-  el.textContent = ratio !== null ? (ratio >= 0 ? '+' : '') + ratio.toFixed(1) + '%' : '--';
+-  el.style.color = ratio !== null ? (ratio >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text-muted)';
+-}
+-
+-function deleteTrade(idx) {
+-  const trades = getTrades();
+-  if (idx >= 0 && idx < trades.length) {
+-    trades.splice(idx, 1);
+-    saveTrades(trades);
+-    renderTradeJournal();
+-  }
++async function deleteTrade(id) {
++  if (!confirm('删除此条流水？')) return;
++  try {
++    await tradesFetch('/api/trades/' + id, {method: 'DELETE', headers: apiHeaders()});
++    loadTradesFromServer();
++  } catch(e) { if (e.status !== 401) alert('删除失败: ' + e.message); }
+ }
+ 
+-function closeTrade(idx) {
+-  const trades = getTrades();
+-  const t = trades[idx];
+-  const price = prompt(`平仓价 (${t.code} ${t.name})：`, '');
+-  if (price === null) return;
+-  const exitPrice = parseFloat(price);
+-  if (isNaN(exitPrice) || exitPrice <= 0) { alert('请输入有效价格'); return; }
+-  t.exit_price = exitPrice;
+-  saveTrades(trades);
+-  renderTradeJournal();
++function editTrade(id) {
++  const t = serverTrades.find(x => x.id === id);
++  if (!t) { alert('记录不存在'); return; }
++  showAddTradeForm(t.code, t.name, t.price, t);
+ }
+ 
+ function quickLog(code, name, price) {
+   showAddTradeForm(code, name, price);
+ }
+ 
+-function showAddTradeForm(code, name, price) {
++function showAddTradeForm(code, name, price, editEntry) {
+   if (tradeDialog) { document.body.removeChild(tradeDialog); tradeDialog = null; }
++  editingTradeId = editEntry ? editEntry.id : null;
+   const div = document.createElement('div');
+   div.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:1000';
+   const today = new Date().toISOString().slice(0,10);
++  const e = editEntry || {};
+   div.innerHTML = `
+     <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:28px;width:400px;max-width:90vw">
+-      <div style="font-size:18px;font-weight:700;margin-bottom:16px">📝 记录交易</div>
++      <div style="font-size:18px;font-weight:700;margin-bottom:4px">📝 ${editEntry ? '修改流水 #' + e.id : '记录交易'}</div>
++      <div style="font-size:11px;color:var(--text-muted);margin-bottom:14px">流水簿记(买入/卖出) · 移动加权成本自动核算 · 仅手动记账</div>
+       <div style="display:flex;flex-direction:column;gap:10px">
+         <div style="display:flex;gap:10px">
+-          <div style="flex:1"><label style="font-size:11px;color:var(--text-muted)">日期</label><input id="tfDate" value="${today}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary)"></div>
+-          <div style="flex:1"><label style="font-size:11px;color:var(--text-muted)">代码</label><input id="tfCode" value="${code||''}" placeholder="输入代码自动识别" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary)" onkeyup="var v=this.value.trim();if(v.length>=3)fetch('/api/stock/lookup?q='+v).then(r=>r.json()).then(d=>{var n=document.getElementById('tfName'),h=document.getElementById('tfNameHint');if(!n)return;var e=d.find(s=>s.code===v);if(e){n.value=e.name;if(h)h.textContent='✅'}else if(d.length>0&&h)h.textContent='❓'+d.map(s=>s.code).join(',');else if(h)h.textContent='❌'}).catch(()=>{})"></div>
++          <div style="flex:1"><label style="font-size:11px;color:var(--text-muted)">日期</label><input id="tfDate" value="${e.date || today}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary)"></div>
++          <div style="flex:1"><label style="font-size:11px;color:var(--text-muted)">代码</label><input id="tfCode" value="${e.code || code || ''}" placeholder="6位代码自动识别" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary)"></div>
+         </div>
+-        <div><label style="font-size:11px;color:var(--text-muted)">名称 <span id="tfNameHint" style="color:var(--text-muted);font-weight:400"></span></label><input id="tfName" value="${name||''}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary)"></div>
++        <div><label style="font-size:11px;color:var(--text-muted)">名称 <span id="tfNameHint" style="color:var(--text-muted);font-weight:400"></span></label><input id="tfName" value="${e.name || name || ''}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary)"></div>
+         <div style="display:flex;gap:10px">
+           <div style="flex:1"><label style="font-size:11px;color:var(--text-muted)">方向</label>
+-            <select id="tfDir" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary)">
+-              <option value="buy" ${code?'selected':''}>做多</option>
+-              <option value="sell">做空</option>
++            <select id="tfSide" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary)">
++              <option value="buy" ${(e.side || 'buy') === 'buy' ? 'selected' : ''}>买入</option>
++              <option value="sell" ${e.side === 'sell' ? 'selected' : ''}>卖出</option>
+             </select>
+           </div>
+-          <div style="flex:1"><label style="font-size:11px;color:var(--text-muted)">入场价</label><input id="tfEntry" value="${price||''}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary)"></div>
+-          <div style="flex:1"><label style="font-size:11px;color:var(--text-muted)">数量</label><input id="tfQty" value="100" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary)"></div>
++          <div style="flex:1"><label style="font-size:11px;color:var(--text-muted)">价格</label><input id="tfPrice" value="${e.price != null ? e.price : (price || '')}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary)"></div>
++          <div style="flex:1"><label style="font-size:11px;color:var(--text-muted)">数量(股)</label><input id="tfQty" value="${e.qty || 100}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary)"></div>
+         </div>
+         <div style="display:flex;gap:10px">
+-          <div style="flex:1"><label style="font-size:11px;color:var(--text-muted)">出场价 <span style="color:var(--text-muted)">(留空=持仓中)</span></label><input id="tfExit" placeholder="留空" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary)"></div>
+-          <div style="flex:2"><label style="font-size:11px;color:var(--text-muted)">备注</label><input id="tfNote" placeholder="策略/理由" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary)"></div>
++          <div style="flex:1"><label style="font-size:11px;color:var(--text-muted)">费用(佣金+印花税, 可0)</label><input id="tfFee" value="${e.fee != null ? e.fee : 0}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary)"></div>
++          <div style="flex:2"><label style="font-size:11px;color:var(--text-muted)">备注</label><input id="tfNote" value="${(e.note || '').replace(/"/g, '&quot;')}" placeholder="策略/理由" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-primary);color:var(--text-primary)"></div>
+         </div>
+         <div style="display:flex;gap:10px;margin-top:6px">
+-          <button onclick="submitTrade()" style="flex:1;padding:10px;border:none;border-radius:8px;background:var(--green);color:#fff;font-weight:600;cursor:pointer">保存</button>
++          <button onclick="submitTrade()" style="flex:1;padding:10px;border:none;border-radius:8px;background:var(--green);color:#fff;font-weight:600;cursor:pointer">${editEntry ? '保存修改' : '保存'}</button>
+           <button onclick="closeDialog(this)" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text-secondary);cursor:pointer">取消</button>
+         </div>
+       </div>
+@@ -2518,26 +2439,35 @@ function closeDialog(btn) {
+   tradeDialog = null;
+ }
+ 
+-function submitTrade() {
+-  const date = document.getElementById('tfDate')?.value;
+-  const code = document.getElementById('tfCode')?.value;
+-  const name = document.getElementById('tfName')?.value;
+-  const dir = document.getElementById('tfDir')?.value;
+-  const entry = parseFloat(document.getElementById('tfEntry')?.value);
+-  const qty = parseInt(document.getElementById('tfQty')?.value) || 100;
+-  const exitStr = document.getElementById('tfExit')?.value;
+-  const exit = exitStr ? parseFloat(exitStr) : null;
+-  const note = document.getElementById('tfNote')?.value;
+-
+-  if (!code || isNaN(entry) || entry <= 0) { alert('请填写代码和有效入场价'); return; }
+-  if (exit !== null && (isNaN(exit) || exit <= 0)) { alert('出场价无效'); return; }
+-
+-  const trades = getTrades();
+-  trades.push({ date, code, name, direction: dir, entry_price: entry, qty, exit_price: exit, note });
+-  saveTrades(trades);
+-  renderTradeJournal();
+-  if (tradeDialog && tradeDialog.parentNode) tradeDialog.parentNode.removeChild(tradeDialog);
+-  tradeDialog = null;
++async function submitTrade() {
++  const data = {
++    date: (document.getElementById('tfDate')?.value || '').trim(),
++    code: (document.getElementById('tfCode')?.value || '').trim(),
++    name: (document.getElementById('tfName')?.value || '').trim(),
++    side: document.getElementById('tfSide')?.value || 'buy',
++    price: parseFloat(document.getElementById('tfPrice')?.value),
++    qty: parseInt(document.getElementById('tfQty')?.value),
++    fee: parseFloat(document.getElementById('tfFee')?.value) || 0,
++    note: (document.getElementById('tfNote')?.value || '').trim(),
++  };
++  if (!/^\d{6}$/.test(data.code)) { alert('代码须为6位数字'); return; }
++  if (isNaN(data.price) || data.price <= 0) { alert('请填写有效价格'); return; }
++  if (isNaN(data.qty) || data.qty <= 0) { alert('请填写有效数量'); return; }
++  if (data.fee < 0) { alert('费用不能为负'); return; }
++  try {
++    if (editingTradeId) {
++      await tradesFetch('/api/trades/' + editingTradeId, {
++        method: 'PUT', headers: apiHeaders(), body: JSON.stringify(data)});
++    } else {
++      await tradesFetch('/api/trades', {
++        method: 'POST', headers: apiHeaders(), body: JSON.stringify(data)});
++    }
++    if (tradeDialog && tradeDialog.parentNode) tradeDialog.parentNode.removeChild(tradeDialog);
++    tradeDialog = null; editingTradeId = null;
++    loadTradesFromServer();
++  } catch(e) {
++    if (e.status !== 401) alert('保存失败: ' + e.message);  // 后端校验文案(如超持仓卖出)直接展示
++  }
+ }
+ 
+ // Initialize trade journal — handled by loadAuth() below
+@@ -2566,13 +2496,15 @@ function loadAuth() {
+ 
+ function showLoginPrompt() {
+   document.getElementById('tradeJournalBody').innerHTML =
+-    '<tr><td colspan="13" style="text-align:center;color:var(--text-muted);padding:20px">交易记录未取得；本地只读模式暂未开放该功能，不代表零交易或零盈亏</td></tr>';
+-  document.getElementById('tjTotal').textContent = '--';
+-  document.getElementById('tjWinRate').textContent = '--';
+-  document.getElementById('tjPnl').textContent = '--';
+-  document.getElementById('tjBest').textContent = '--';
+-  document.getElementById('tjWorst').textContent = '--';
++    '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:20px">登录后可使用手动记账 (流水/持仓盈亏); 数据仅存本机, 不构成投资建议</td></tr>';
++  document.getElementById('tjEntries').textContent = '--';
++  document.getElementById('tjPositions').textContent = '--';
++  document.getElementById('tjRealized').textContent = '--';
++  document.getElementById('tjUnrealized').textContent = '--';
++  document.getElementById('tjMktValue').textContent = '--';
++  document.getElementById('tjCost').textContent = '--';
+   document.getElementById('tradeJournalStats').textContent = '未登录';
++  document.getElementById('tradePositionsWrap').style.display = 'none';
+ }
+ 
+ function setUser(user, token) {
+@@ -2584,8 +2516,7 @@ function setUser(user, token) {
+   document.getElementById('logoutBtn').style.display = 'inline';
+   document.getElementById('loginModal').style.display = 'none';
+   document.getElementById('loginError').style.display = 'none';
+-  showLoginPrompt();
+-  document.getElementById('tradeJournalStats').textContent = '已登录 · 交易功能暂未启用';
++  renderTradeJournal();  // 登录成功: 从后端加载流水与持仓
+ }
+ 
+ function clearUser() {
+@@ -2761,319 +2692,11 @@ async function logout() {
+   }
+ }
+ 
+-async function loadTradesFromServer() {
+-  const tbody = document.getElementById('tradeJournalBody');
+-  if (!currentUser) { renderTradeJournal(); return; }
+-  try {
+-    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--text-muted)">加载中...</td></tr>';
+-    const d = await fetchJSON('/api/trades', {headers: apiHeaders()});
+-    serverTrades = d.trades || [];
+-    serverSummary = d.summary || {};
+-    renderServerTrades();
+-  } catch(e) {
+-    moduleUnavailable(['tradeJournalBody'],e);
+-  }
+-}
+-
+-let serverTrades = [];
+-let serverSummary = {};
+-
+-function renderServerTrades() {
+-  const tbody = document.getElementById('tradeJournalBody');
+-  const trades = serverTrades;
+-  if (trades.length === 0) {
+-    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--text-muted)">暂无交易记录</td></tr>';
+-    updateServerStats();
+-    return;
+-  }
+-
+-  // Step 1: 拆分持仓和已平仓
+-  const openRaw = trades.filter(t => !t.exit_price);
+-  const closedTrades = trades.filter(t => t.exit_price);
+-
+-  // Step 2: 同标的持仓合并
+-  const merged = {};
+-  openRaw.forEach(t => {
+-    const c = t.code;
+-    if (!merged[c]) merged[c] = [];
+-    merged[c].push(t);
+-  });
+-
+-  const openMerged = Object.values(merged).map(batch => {
+-    const totalQty = batch.reduce((s, t) => s + (t.qty || 0), 0);
+-    const wAvgEntry = totalQty > 0 ? batch.reduce((s, t) => s + (t.entry_price || 0) * (t.qty || 0), 0) / totalQty : batch[0].entry_price;
+-    return {
+-      code: batch[0].code,
+-      name: batch[0].name,
+-      direction: batch[0].direction,
+-      entry_price: wAvgEntry,
+-      qty: totalQty,
+-      date: batch[0].date,
+-      count: batch.length,
+-      batch: batch,
+-    };
+-  });
+-
+-  // Step 3: 合并持仓评估 + 实时价
+-  const openCodes = openMerged.map(p => ({code: p.code, entry_price: Math.round(p.entry_price * 100) / 100, direction: p.direction}));
+-  if (openMerged.length > 0) {
+-    const evalReq = fetch('/api/positions/evaluate', {
+-      method: 'POST', headers: {'Content-Type': 'application/json'},
+-      body: JSON.stringify({positions: openCodes})
+-    });
+-    const rtReq = fetch('/api/positions/realtime', {
+-      method: 'POST', headers: {'Content-Type': 'application/json'},
+-      body: JSON.stringify({codes: openMerged.map(p => p.code)})
+-    });
+-    Promise.all([evalReq, rtReq]).then(([er, rr]) => Promise.all([er.json(), rr.json()])).then(([evalData, rtData]) => {
+-      const evalMap = {};
+-      if (evalData.results) evalData.results.forEach(e => { evalMap[e.code] = e; });
+-      // 实时价覆盖（盘中数据优先）
+-      const rtPrices = rtData.prices || {};
+-      Object.keys(rtPrices).forEach(code => {
+-        if (rtPrices[code] && rtPrices[code].price != null) {
+-          if (!evalMap[code]) evalMap[code] = {};
+-          evalMap[code].current_price = rtPrices[code].price;
+-          evalMap[code].change_pct = rtPrices[code].change_pct;
+-        }
+-      });
+-      renderTable(evalMap);
+-    }).catch(() => renderTable({}));
+-  } else {
+-    renderTable({});
+-  }
+-
+-  function renderTable(evalMap) {
+-    // 合并持仓行
+-    const openRows = openMerged.map(p => {
+-      const ev = evalMap[p.code] || {};
+-      const currentPrice = ev.current_price || '--';
+-      const slLabel = ev.stop_loss_label || (p.batch.some(t => t.stop_loss) ? '¥' + p.batch.find(t => t.stop_loss).stop_loss : '--');
+-      const t1 = ev.targets ? (ev.targets[0]?.price ? '¥' + ev.targets[0].price : '--') : '--';
+-      const t2 = ev.targets ? (ev.targets[1]?.price ? '¥' + ev.targets[1].price : '--') : '--';
+-      const t3 = ev.targets ? (ev.targets[2]?.price ? '¥' + ev.targets[2].price : '--') : '--';
+-      const trailLabels = {0:'初始',1:'保本',2:'锁利',3:'高锁'};
+-      const trailLvl = ev.trailing_level != null ? trailLabels[ev.trailing_level] || ('T'+ev.trailing_level) : '初始';
+-      // 逐批计算 P&L（避免加权均价导致的偏差）
+-      const cp = ev.current_price;
+-      const totalCost = p.batch.reduce((s, t) => s + (t.entry_price || 0) * (t.qty || 0), 0);
+-      const pnl = cp != null ? p.batch.reduce((s, t) => s + (cp - t.entry_price) * (t.qty || 0), 0) : null;
+-      const pnlPct = totalCost > 0 && pnl != null ? ((pnl >= 0 ? '+' : '') + (pnl / totalCost * 100).toFixed(1) + '%') : '--';
+-      const pnlCls = (pnl !== null ? (pnl > 0 ? 'up' : pnl < 0 ? 'down' : '') : '');
+-      const pnlDisplay = pnl !== null ? (pnl >= 0 ? '+' : '') + '¥' + pnl.toFixed(2) : '--';
+-
+-      return `<tr style="border-top:2px solid var(--border)">
+-        <td style="color:var(--text-muted);font-size:11px">${p.date || '--'}</td>
+-        <td style="color:var(--gold);font-size:11px;font-weight:700">${p.code || ''}</td>
+-        <td style="font-weight:700;font-size:12px">${p.name || ''} <span style="color:var(--text-muted);font-size:10px">(x${p.count})</span></td>
+-        <td><span style="padding:1px 6px;border-radius:3px;font-size:11px;font-weight:600;background:${p.direction==='buy'?'rgba(34,197,94,.15)':'rgba(239,68,68,.15)'};color:${p.direction==='buy'?'var(--green)':'var(--red)'}">${p.direction==='buy'?'做多':'做空'}</span></td>
+-        <td class="code-num" style="font-weight:700">${p.entry_price.toFixed(2)}</td>
+-        <td class="code-num" style="font-weight:700">${p.qty}</td>
+-        <td class="code-num" style="font-weight:600;color:var(--gold)">${currentPrice !== '--' ? '¥' + currentPrice : '--'}</td>
+-        <td class="code-num" style="color:var(--red);font-size:11px">${slLabel}</td>
+-        <td class="code-num" style="color:var(--green);font-size:11px">${t1}</td>
+-        <td class="code-num" style="color:var(--gold);font-size:11px">${t2}</td>
+-        <td class="code-num" style="color:var(--purple);font-size:11px">${t3}</td>
+-        <td style="font-size:11px;color:var(--gold)">${trailLvl}</td>
+-        <td class="code-num ${pnlCls}" style="font-weight:700">${pnlDisplay}</td>
+-        <td>
+-          <button onclick="showSplitTrades('${p.code}')" style="padding:2px 6px;border:1px solid var(--text-muted);border-radius:3px;background:transparent;color:var(--text-muted);cursor:pointer;font-size:10px" title="展开明细">📋</button>
+-          <button onclick="closeAllByCode('${p.code}')" style="padding:2px 6px;border:1px solid var(--gold);border-radius:3px;background:transparent;color:var(--gold);cursor:pointer;font-size:11px;margin-left:2px" title="平仓">平</button>
+-        </td>
+-      </tr>`;
+-    }).join('');
+-
+-    // 已平仓行
+-    const closedRows = closedTrades.map(t => {
+-      const pnl = t.direction === 'buy' ? (t.exit_price - t.entry_price) * t.qty : (t.entry_price - t.exit_price) * t.qty;
+-      const pnlPct = t.direction === 'buy' ? (t.exit_price - t.entry_price) / t.entry_price * 100 : (t.entry_price - t.exit_price) / t.entry_price * 100;
+-      const pnlCls = pnl > 0 ? 'up' : (pnl < 0 ? 'down' : '');
+-      return `<tr>
+-        <td style="color:var(--text-muted);font-size:11px">${t.date || '--'}</td>
+-        <td style="color:var(--text-muted);font-size:11px">${t.code || ''}</td>
+-        <td style="font-weight:600;font-size:12px">${t.name || ''}</td>
+-        <td><span style="padding:1px 6px;border-radius:3px;font-size:11px;font-weight:600;background:${t.direction==='buy'?'rgba(34,197,94,.15)':'rgba(239,68,68,.15)'};color:${t.direction==='buy'?'var(--green)':'var(--red)'}">${t.direction==='buy'?'做多':'做空'}</span></td>
+-        <td class="code-num">${t.entry_price || '--'}</td>
+-        <td class="code-num">${t.qty || 0}</td>
+-        <td class="code-num">¥${t.exit_price || '--'}</td>
+-        <td class="code-num" style="color:var(--text-muted)">--</td>
+-        <td style="color:var(--text-muted)">--</td>
+-        <td style="color:var(--text-muted)">--</td>
+-        <td style="color:var(--text-muted)">--</td>
+-        <td style="color:var(--text-muted)">--</td>
+-        <td class="code-num ${pnlCls}" style="font-weight:600">${pnl >= 0 ? '+' : ''}¥${pnl.toFixed(2)}</td>
+-        <td>
+-          <button onclick="deleteServerTrade(${t.id})" style="padding:2px 6px;border:none;border-radius:3px;background:transparent;color:var(--red);cursor:pointer;font-size:11px" title="删除">✕</button>
+-        </td>
+-      </tr>`;
+-    }).join('');
++// (旧服务端持仓语义实现已移除 — 本地为流水簿记模型, 见上方「交易日志」区块)
+ 
+-    tbody.innerHTML = openRows + closedRows;
+-    updateServerStats();
+-
+-    // 动态月回报：含持仓浮动盈亏 + 已平仓盈亏
+-    if (Object.keys(evalMap).length > 0) {
+-      const now = new Date();
+-      const m = String(now.getMonth() + 1).padStart(2, '0');
+-      const prefix = now.getFullYear() + '-' + m;
+-      let pnl = 0, capital = 0;
+-      trades.forEach(t => {
+-        if (!t.date || !t.date.startsWith(prefix)) return;
+-        const q = t.qty || 0, entry = t.entry_price || 0;
+-        capital += entry * q;
+-        if (t.exit_price) {
+-          pnl += (t.direction === 'buy' ? (t.exit_price - entry) : (entry - t.exit_price)) * q;
+-        } else {
+-          const ev = evalMap[t.code] || {};
+-          const cur = ev.current_price || entry;
+-          pnl += (t.direction === 'buy' ? (cur - entry) : (entry - cur)) * q;
+-        }
+-      });
+-      updateMonthRatio(pnl, capital);
+-    }
+-  }
+-}
+-
+-function showSplitTrades(code) {
+-  const trades = serverTrades.filter(t => !t.exit_price && t.code === code);
+-  const lines = trades.map((t, i) =>
+-    `  #${i+1} ${t.date || '--'} 入场:¥${t.entry_price} x${t.qty}股`
+-  ).join('\n');
+-  alert(`📋 ${code} 持仓明细:\n${lines}\n\n合计: ${trades.reduce((s,t)=>s+(t.qty||0),0)}股`);
+-}
+-
+-function updateServerStats() {
+-  const s = serverSummary;
+-  document.getElementById('tjTotal').textContent = (s.total_trades || 0) + '笔';
+-  document.getElementById('tradeJournalStats').textContent = (s.total_trades || 0) + '笔';
+-  document.getElementById('tjWinRate').textContent = (s.win_rate || 0) + '%';
+-  const wr = s.win_rate || 0;
+-  document.getElementById('tjWinRate').style.color = wr >= 50 ? 'var(--green)' : 'var(--red)';
+-  // 总盈亏 = 已实现 + 浮动
+-  const totalPnl = s.total_pnl_with_unrealized ?? s.total_pnl ?? 0;
+-  const hasUnrealized = (s.unrealized_pnl || 0) !== 0 && (s.open_trades || 0) > 0;
+-  const pnlText = (totalPnl >= 0 ? '+' : '') + '¥' + totalPnl.toFixed(2);
+-  document.getElementById('tjPnl').textContent = pnlText + (hasUnrealized ? ' (含浮动)' : '');
+-  document.getElementById('tjPnl').style.color = totalPnl >= 0 ? 'var(--green)' : 'var(--red)';
+-  document.getElementById('tjBest').textContent = s.best_trade > 0 ? '¥' + s.best_trade.toFixed(2) : '--';
+-  document.getElementById('tjWorst').textContent = s.worst_trade < 0 ? '¥' + s.worst_trade.toFixed(2) : '--';
+-  document.getElementById('tradeJournalStats').textContent = (s.total_trades || 0) + '笔';
+-}
+-
+-async function deleteServerTrade(id) {
+-  if (!confirm('删除此交易记录？')) return;
+-  try {
+-    await fetch('/api/trades/' + id, {method: 'DELETE', headers: apiHeaders()});
+-    loadTradesFromServer();
+-  } catch(e) { alert('删除失败'); }
+-}
+-
+-async function closeServerTrade(id) {
+-  // 从服务端数据中查找持仓
+-  const t = Array.isArray(serverTrades) ? serverTrades.find(t2 => t2.id === id) : null;
+-  if (!t) { alert('交易记录不存在'); return; }
+-  const maxQty = t.qty || 0;
+-  const input = prompt(`平仓 (${t.code} ${t.name})\n当前持仓: ${maxQty}股\n输入平仓数量 (留空=全部平仓)：`, '');
+-  if (input === null) return;
+-  let exitQty = maxQty;
+-  if (input.trim() !== '') {
+-    exitQty = parseInt(input);
+-    if (isNaN(exitQty) || exitQty <= 0 || exitQty > maxQty) { alert(`无效数量 (1-${maxQty})`); return; }
+-  }
+-  const price = prompt(`平仓价 (${t.code} ${t.name})：`, '');
+-  if (!price) return;
+-  const exitPrice = parseFloat(price);
+-  if (isNaN(exitPrice) || exitPrice <= 0) { alert('无效价格'); return; }
+-  try {
+-    await fetch('/api/trades/' + id, {
+-      method: 'PUT', headers: apiHeaders(),
+-      body: JSON.stringify({exit_price: exitPrice, exit_qty: exitQty})
+-    });
+-    loadTradesFromServer();
+-  } catch(e) { alert('平仓失败'); }
+-}
+-
+-async function closeAllByCode(code) {
+-  // 按标的合并平仓：支持部分平仓
+-  const trades = serverTrades.filter(t => !t.exit_price && t.code === code);
+-  if (trades.length === 0) { alert('无持仓'); return; }
+-  const totalQty = trades.reduce((s, t) => s + (t.qty || 0), 0);
+-  const name = trades[0].name || code;
+-  const qtyInput = prompt(`平仓 (${code} ${name})\n总持仓: ${totalQty}股 (${trades.length}笔)\n输入平仓数量 (留空=全部平仓)：`, '');
+-  if (qtyInput === null) return;
+-  let exitQty = totalQty;
+-  if (qtyInput.trim() !== '') {
+-    exitQty = parseInt(qtyInput);
+-    if (isNaN(exitQty) || exitQty <= 0 || exitQty > totalQty) { alert(`无效数量 (1-${totalQty})`); return; }
+-  }
+-  const price = prompt(`平仓价 (${code} ${name})：`, '');
+-  if (!price) return;
+-  const exitPrice = parseFloat(price);
+-  if (isNaN(exitPrice) || exitPrice <= 0) { alert('无效价格'); return; }
+-  try {
+-    // 按入场批次从早到晚排序，逐批平仓
+-    const sorted = [...trades].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+-    let remaining = exitQty;
+-    const promises = [];
+-    for (const t of sorted) {
+-      if (remaining <= 0) break;
+-      const batchQty = t.qty || 0;
+-      const closeQty = Math.min(batchQty, remaining);
+-      promises.push(
+-        fetch('/api/trades/' + t.id, {
+-          method: 'PUT', headers: apiHeaders(),
+-          body: JSON.stringify({exit_price: exitPrice, exit_qty: closeQty})
+-        })
+-      );
+-      remaining -= closeQty;
+-    }
+-    await Promise.all(promises);
+-    loadTradesFromServer();
+-  } catch(e) { alert('平仓失败'); }
+-}
+-
+-async function submitServerTrade(data) {
+-  try {
+-    await fetch('/api/trades', {
+-      method: 'POST', headers: apiHeaders(),
+-      body: JSON.stringify(data)
+-    });
+-    loadTradesFromServer();
+-  } catch(e) { alert('保存失败'); }
+-}
+-
+-// Override the old trade form submit to use server
+-function submitTrade() {
+-  const data = {
+-    date: document.getElementById('tfDate')?.value || '',
+-    code: document.getElementById('tfCode')?.value || '',
+-    name: document.getElementById('tfName')?.value || '',
+-    direction: document.getElementById('tfDir')?.value || 'buy',
+-    entry_price: parseFloat(document.getElementById('tfEntry')?.value) || 0,
+-    qty: parseInt(document.getElementById('tfQty')?.value) || 100,
+-    note: document.getElementById('tfNote')?.value || '',
+-  };
+-  const exitStr = document.getElementById('tfExit')?.value;
+-  if (exitStr) data.exit_price = parseFloat(exitStr);
+-  if (!data.code || data.entry_price <= 0) { alert('请填写代码和入场价'); return; }
+-  submitServerTrade(data);
+-  if (tradeDialog && tradeDialog.parentNode) tradeDialog.parentNode.removeChild(tradeDialog);
+-  tradeDialog = null;
+-}
+-
+-// Also override renderTradeJournal to use server data
++// renderTradeJournal: 入口保持原调用约定 (loadAuth / setUser / logout 等)
+ function renderTradeJournal() {
+-  if (!currentUser) {
+-    const tbody = document.getElementById('tradeJournalBody');
+-    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--text-muted)">请先登录以查看和记录交易</td></tr>';
+-    document.getElementById('tjTotal').textContent = '0';
+-    document.getElementById('tjWinRate').textContent = '0%';
+-    document.getElementById('tjPnl').textContent = '¥0';
+-    document.getElementById('tjBest').textContent = '--';
+-    document.getElementById('tjWorst').textContent = '--';
+-    document.getElementById('tradeJournalStats').textContent = '需登录';
+-    return;
+-  }
++  if (!currentUser) { showLoginPrompt(); return; }
+   loadTradesFromServer();
+ }
+ 
+@@ -3122,57 +2745,8 @@ function showReason(code, name, reason) {
+   document.body.appendChild(div);
+ }
+ 
+-// ===== 实时价格刷新 =====
+-async function refreshRealtimePrices() {
+-  if (!currentUser) { showLoginModal(); return; }
+-  const btn = document.querySelector('[onclick="refreshRealtimePrices()"]') || document.querySelector('button:contains("🔄 实时价")');
+-  if (btn) btn.textContent = '⏳ 刷新中...';
+-  try {
+-    const r = await fetch('/api/trades', {headers: apiHeaders()});
+-    const d = await r.json();
+-    const trades = d.trades || [];
+-    const openCodes = [...new Set(trades.filter(t => !t.exit_price).map(t => t.code))];
+-    if (openCodes.length === 0) { if(btn) btn.textContent = '🔄 实时价'; alert('无持仓'); return; }
+-
+-    const r2 = await fetch('/api/positions/realtime', {
+-      method: 'POST', headers: apiHeaders(),
+-      body: JSON.stringify({codes: openCodes})
+-    });
+-    const prices = (await r2.json()).prices || {};
+-
+-    // 逐行更新：价格 + 浮盈(¥ + %)
+-    let updated = 0;
+-    document.querySelectorAll('#tradeJournalBody tr').forEach(tr => {
+-      const codeCell = tr.querySelector('td:nth-child(2)');
+-      if (!codeCell) return;
+-      const code = codeCell.textContent.trim();
+-      const info = prices[code];
+-      if (!info || info.price == null) return;
+-
+-      // 更新当前价
+-      const priceCell = tr.querySelector('td:nth-child(7)');
+-      const newPrice = info.price;
+-      if (priceCell) priceCell.textContent = '¥' + newPrice;
+-
+-      // 逐批计算浮盈（合并行）
+-      const openBatch = trades.filter(t => !t.exit_price && t.code === code);
+-      if (openBatch.length === 0) return;
+-      const totalCost = openBatch.reduce((s, t) => s + (t.entry_price || 0) * (t.qty || 0), 0);
+-      const pnl = openBatch.reduce((s, t) => s + (newPrice - t.entry_price) * (t.qty || 0), 0);
+-
+-      // 浮动
+-      const slCell = tr.querySelector('td:nth-child(12)');
+-      if (slCell) { slCell.textContent = (pnl >= 0 ? '+' : '') + '¥' + pnl.toFixed(2); slCell.className = 'code-num ' + (pnl > 0 ? 'up' : pnl < 0 ? 'down' : ''); slCell.style.fontWeight = '700'; }
+-
+-      // 浮盈%
+-      });
+-    if (btn) btn.textContent = '✅ 已更新 ' + updated + ' 只';
+-    setTimeout(() => { if(btn) btn.textContent = '🔄 实时价'; }, 3000);
+-  } catch(e) {
+-    if (btn) btn.textContent = '❌ 失败';
+-    setTimeout(() => { if(btn) btn.textContent = '🔄 实时价'; }, 3000);
+-  }
+-}
++// ===== 实时价刷新已移除: /api/positions/* 为上游开仓语义端点, 本地未启用 =====
++// (持仓现价由 /api/trades/portfolio 以 tushare EOD 口径提供, 随刷新按钮更新)
+ 
+ // ===== 模块独立刷新 =====
+ async function refreshModule(module, btn) {
+@@ -3203,182 +2777,90 @@ async function refreshModule(module, btn) {
+   if (btn) { btn.textContent = '🔄'; btn.disabled = false; }
+ }
+ 
+-// ===== 盈亏统计 · 日历视图 =====
+-let calYear = new Date().getFullYear();
+-let calMonth = new Date().getMonth() + 1; // 1-based
+-
+-function showPnLReport() {
+-  if (!currentUser) { showLoginModal(); return; }
+-  const now = new Date();
+-  calYear = now.getFullYear();
+-  calMonth = now.getMonth() + 1;
+-  document.getElementById('pnlModal').style.display = 'flex';
+-  renderCalendar();
+-}
+-
+-function closePnL() {
+-  document.getElementById('pnlModal').style.display = 'none';
+-}
+-
+-function changeCalendarMonth(delta) {
+-  calMonth += delta;
+-  if (calMonth < 1) { calMonth = 12; calYear--; }
+-  if (calMonth > 12) { calMonth = 1; calYear++; }
+-  renderCalendar();
+-}
+-
+-async function renderCalendar() {
+-  document.getElementById('calMonthLabel').textContent = calYear + '年' + String(calMonth).padStart(2,'0') + '月';
+-  const grid = document.getElementById('calGrid');
+-  grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:30px">加载中...</div>';
+-
+-  // Get day-level P&L data
+-  let dayData = {};
+-  try {
+-    const d = await fetchJSON('/api/trades/pnl-report?period=day', {headers: apiHeaders()});
+-    const items = d.report || [];
+-    items.forEach(item => { dayData[item.period] = item; });
+-  } catch(e) {
+-    grid.textContent = e.message;
+-    ['calTradeCount','calWinCount','calLossCount'].forEach(id=>{if($(id))$(id).textContent='--';});
+-    return;
+-  }
+-
+-  // Build calendar grid
+-  const firstDay = new Date(calYear, calMonth - 1, 1);
+-  const lastDay = new Date(calYear, calMonth, 0);
+-  const startDow = firstDay.getDay(); // 0=Sun
+-  const daysInMonth = lastDay.getDate();
+-  const today = new Date();
+-  const isCurrentMonth = today.getFullYear() === calYear && today.getMonth() + 1 === calMonth;
+-
+-  let cells = '';
+-  let totalTrades = 0, totalWon = 0, totalLoss = 0, totalPnl = 0;
+-
+-  // Empty cells before first day
+-  for (let i = 0; i < startDow; i++) {
+-    cells += '<div style="min-height:50px"></div>';
+-  }
+-
+-  for (let d = 1; d <= daysInMonth; d++) {
+-    const dateStr = calYear + '-' + String(calMonth).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+-    const dayInfo = dayData[dateStr];
+-    const hasTrade = !!dayInfo;
+-    const pnl = dayInfo ? dayInfo.pnl : 0;
+-    const isToday = isCurrentMonth && d === today.getDate();
+-
+-    if (hasTrade) {
+-      totalTrades += dayInfo.trades;
+-      if (dayInfo.won > 0) totalWon += dayInfo.won;
+-      if (dayInfo.trades - dayInfo.won > 0) totalLoss += (dayInfo.trades - dayInfo.won);
+-      totalPnl += pnl;
+-    }
+-
+-    const bg = hasTrade ? (pnl > 0 ? 'rgba(34,197,94,.15)' : pnl < 0 ? 'rgba(239,68,68,.15)' : 'rgba(255,255,255,.03)') : 'transparent';
+-    const border = isToday ? '1px solid var(--gold)' : '1px solid transparent';
+-    const pnlText = hasTrade ? (pnl >= 0 ? '+' : '') + '¥' + pnl.toFixed(0) : '';
+-    const pnlColor = hasTrade ? (pnl > 0 ? 'var(--green)' : pnl < 0 ? 'var(--red)' : 'var(--text-muted)') : '';
+-
+-    cells += `<div style="min-height:50px;background:${bg};border:${border};border-radius:6px;padding:3px;text-align:center;position:relative">
+-      <div style="font-size:11px;font-weight:${isToday?'700':'400'};color:${isToday?'var(--gold)':'var(--text-secondary)'}">${d}</div>
+-      ${hasTrade ? `<div style="font-size:9px;font-weight:600;color:${pnlColor};line-height:1.2">${pnlText}</div>` : ''}
+-    </div>`;
+-  }
+-
+-  grid.innerHTML = cells || '<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:20px">暂无数据</div>';
+-
+-  document.getElementById('calTradeCount').textContent = totalTrades;
+-  document.getElementById('calWinCount').textContent = totalWon;
+-  document.getElementById('calLossCount').textContent = totalLoss;
+-  const el = document.getElementById('calPnlTotal');
+-  el.textContent = (totalPnl >= 0 ? '+' : '') + '¥' + totalPnl.toFixed(2);
+-  el.style.color = totalPnl >= 0 ? 'var(--green)' : 'var(--red)';
+-}
+-
+-// ===== 持仓分析 =====
+-function showPortfolioAdvice() {
+-  if (!currentUser) { showLoginModal(); return; }
+-  document.getElementById('portfolioModal').style.display = 'flex';
+-  loadPortfolioAdvice();
+-}
+-
+-function closePortfolio() {
+-  document.getElementById('portfolioModal').style.display = 'none';
+-}
+-
+-async function loadPortfolioAdvice() {
+-  const tbody = document.getElementById('portfolioBody');
+-  tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--text-muted)">加载中...</td></tr>';
++// ===== 策略回测视图 (GET /api/strategy/<name>/backtest, 按数据日缓存) =====
++async function showBacktest(name) {
++  const label = {trend:'🔵 趋势策略', hybrid:'🟢 混合策略', dragon:'🔴 龙头战法'}[name] || name;
++  document.getElementById('btModal').style.display = 'flex';
++  document.getElementById('btTitle').textContent = '📈 ' + label + ' · 区间回测';
++  document.getElementById('btMetrics').innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:24px">回测计算中 (首次约10-30秒, 结果按数据日缓存)…</div>';
++  document.getElementById('btMeta').textContent = '';
++  document.getElementById('btNotes').textContent = '';
++  document.getElementById('btTrades').innerHTML = '';
++  document.getElementById('btChart').innerHTML = '';
+   try {
+-    const d = await fetchJSON('/api/portfolio/advice', {headers: apiHeaders()});
+-    const s = d.summary || {};
+-    document.getElementById('pfTotal').textContent = (s.total_positions || 0) + '笔';
+-    document.getElementById('pfInvested').textContent = '¥' + (s.total_invested || 0).toFixed(2);
+-    const tp = s.total_pnl || 0;
+-    document.getElementById('pfPnl').textContent = (tp >= 0 ? '+' : '') + '¥' + tp.toFixed(2);
+-    document.getElementById('pfPnl').style.color = tp >= 0 ? 'var(--green)' : 'var(--red)';
+-    document.getElementById('pfRisk').textContent = s.risk || '--';
+-    document.getElementById('pfRisk').style.color = s.risk === '高⚠️' ? 'var(--red)' : (s.risk === '中' ? 'var(--gold)' : 'var(--green)');
+-
+-    const items = d.positions || [];
+-    if (items.length === 0) {
+-      tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--text-muted)">暂无持仓</td></tr>';
+-      return;
+-    }
+-    tbody.innerHTML = items.map(p => {
+-      const pnlCls = p.pnl > 0 ? 'up' : (p.pnl < 0 ? 'down' : '');
+-      const advCls = p.advice === '持有 ✅' ? 'up' : (p.advice === '减仓 ⚠️' ? 'down' : '');
+-      const sl = p.stop_loss_price ? '¥' + p.stop_loss_price : (p.stop_loss || '--');
+-      const t1 = p.target_1_price ? '¥' + p.target_1_price + ' ' + (p.target_1_gain || '') : '--';
+-      const t2 = p.target_2_price ? '¥' + p.target_2_price + ' ' + (p.target_2_gain || '') : '--';
+-      const t3 = p.target_3_price ? '¥' + p.target_3_price + ' ' + (p.target_3_gain || '') : '--';
+-      return `<tr>
+-        <td style="color:var(--text-muted);font-size:11px">${p.code}</td>
+-        <td style="font-weight:600;font-size:12px">${p.name}</td>
+-        <td class="code-num">${p.entry_price}</td>
+-        <td class="code-num" style="color:var(--gold)">${p.current_price}</td>
+-        <td class="code-num" style="color:var(--red);font-size:11px" title="${p.scenario || ''}">${sl}</td>
+-        <td class="code-num" style="color:var(--green);font-size:11px">${t1}</td>
+-        <td class="code-num" style="color:var(--gold);font-size:11px">${t2}</td>
+-        <td class="code-num" style="color:var(--purple);font-size:11px">${t3}</td>
+-        <td class="code-num">${p.qty}</td>
+-        <td class="code-num ${pnlCls}" style="font-weight:600">${p.pnl >= 0 ? '+' : ''}¥${p.pnl.toFixed(2)} (${p.pnl_pct >= 0 ? '+' : ''}${p.pnl_pct}%)</td>
+-        <td class="${advCls}" style="font-weight:600">${p.advice}</td>
+-        <td style="font-size:11px;color:var(--gold)">${p.action || ''}</td>
+-        <td style="font-size:11px;color:var(--text-secondary)">${p.margin && p.margin.rzye ? p.margin.rzye.toFixed(1) + '亿' : '--'}</td>
+-      </tr>`;
+-    }).join('');
++    const d = await fetchJSON('/api/strategy/' + name + '/backtest');
++    renderBacktest(d);
+   } catch(e) {
+-    moduleUnavailable(['portfolioBody'],e);
+-    ['pfTotal','pfInvested','pfPnl'].forEach(id=>{if($(id))$(id).textContent='--（未接通）';});
+-  }
+-}
+-
+-async function loadPnLReport(period) {
+-  const tbody = document.getElementById('pnlBody');
+-  if (!tbody) return; // Current UI uses calGrid; legacy table is not mounted.
+-  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">加载中...</td></tr>';
+-  try {
+-    const d = await fetchJSON('/api/trades/pnl-report?period=' + period, {headers: apiHeaders()});
+-    const items = d.report || [];
+-    if (items.length === 0) {
+-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">暂无已平仓交易</td></tr>';
+-      return;
+-    }
+-    tbody.innerHTML = items.map(item => {
+-      const pnlCls = item.pnl > 0 ? 'up' : (item.pnl < 0 ? 'down' : '');
+-      return `<tr>
+-        <td style="font-weight:600">${item.period}</td>
+-        <td>${item.trades}笔</td>
+-        <td>${item.won}笔</td>
+-        <td style="color:${item.win_rate >= 50 ? 'var(--green)' : 'var(--red)'}">${item.win_rate}%</td>
+-        <td class="code-num ${pnlCls}" style="font-weight:700">${item.pnl >= 0 ? '+' : ''}¥${item.pnl.toFixed(2)}</td>
+-      </tr>`;
+-    }).join('');
+-  } catch(e) {
+-    moduleUnavailable(['pnlBody'],e);
+-  }
+-}
++    document.getElementById('btMetrics').innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--gold);padding:24px">' + (e.message || '回测不可用') + '</div>';
++  }
++}
++
++function _pct(v, digits) { return v == null || isNaN(v) ? '--' : (v >= 0 ? '+' : '') + (v * 100).toFixed(digits == null ? 2 : digits) + '%'; }
++function _num(v, digits) { return v == null || isNaN(v) ? '--' : Number(v).toFixed(digits == null ? 2 : digits); }
++
++function renderBacktest(d) {
++  const m = d.metrics || {}, w = d.window || {}, p = d.params || {};
++  document.getElementById('btMeta').textContent =
++    `窗口 ${w.start} ~ ${w.end} · 信号日 ${w.signal_days} · 市场日 ${w.market_days} · 面板 ${w.panel_days} 日(暖机 ${w.warmup_days}) · ` +
++    `持有 ${p.hold_days} 日 · 每笔定额 ¥${(p.per_trade_cash || 0).toLocaleString()} · 信号 ${d.signals_total} · 完成交易 ${d.trades_completed} (窗口末仍持仓 ${d.trades_open})`;
++  const items = [
++    ['累计收益', _pct(m.total_return), (m.total_return >= 0 ? 'var(--green)' : 'var(--red)')],
++    ['年化收益(252)', _pct(m.annual_return), (m.annual_return >= 0 ? 'var(--green)' : 'var(--red)')],
++    ['最大回撤', _pct(m.max_drawdown), 'var(--red)'],
++    ['Sharpe', _num(m.sharpe), m.sharpe >= 1 ? 'var(--green)' : (m.sharpe >= 0 ? 'var(--gold)' : 'var(--red)')],
++    ['Calmar', _num(m.calmar), 'var(--text-primary)'],
++    ['Sortino', _num(m.sortino), 'var(--text-primary)'],
++    ['胜率', m.win_rate != null ? (m.win_rate * 100).toFixed(1) + '%' : '--', (m.win_rate || 0) >= 0.5 ? 'var(--green)' : 'var(--red)'],
++    ['盈亏比', _num(m.profit_factor), 'var(--text-primary)'],
++    ['交易次数', m.trade_count != null ? m.trade_count : '--', 'var(--text-primary)'],
++    ['平均换手/日', _pct(m.avg_turnover, 2), 'var(--text-primary)'],
++    ['总换手', _num(m.total_turnover), 'var(--text-primary)'],
++    ['期末净值', '¥' + (m.final_value != null ? Number(m.final_value).toLocaleString(undefined, {maximumFractionDigits: 0}) : '--'), 'var(--gold)'],
++  ];
++  document.getElementById('btMetrics').innerHTML = items.map(it =>
++    `<div style="padding:8px;background:rgba(255,255,255,.03);border-radius:8px"><div style="font-size:11px;color:var(--text-muted)">${it[0]}</div><div style="font-size:16px;font-weight:700;color:${it[2]}">${it[1]}</div></div>`
++  ).join('');
++  // 净值曲线 (纯SVG polyline)
++  const curve = d.equity_curve || [];
++  const svg = document.getElementById('btChart');
++  if (curve.length > 1) {
++    const W = 660, H = 120, pad = 6;
++    const vals = curve.map(c => c.equity);
++    const lo = Math.min(...vals, d.params.initial_cash), hi = Math.max(...vals, d.params.initial_cash);
++    const span = Math.max(hi - lo, 1e-9);
++    const pts = curve.map((c, i) =>
++      (pad + i / (curve.length - 1) * (W - 2 * pad)).toFixed(1) + ',' + (H - pad - (c.equity - lo) / span * (H - 2 * pad)).toFixed(1)
++    ).join(' ');
++    const baseY = (H - pad - (d.params.initial_cash - lo) / span * (H - 2 * pad)).toFixed(1);
++    const up = vals[vals.length - 1] >= d.params.initial_cash;
++    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
++    svg.innerHTML =
++      `<line x1="${pad}" y1="${baseY}" x2="${W - pad}" y2="${baseY}" stroke="#888" stroke-width="0.5" stroke-dasharray="3,3"/>` +
++      `<polyline points="${pts}" fill="none" stroke="${up ? '#22c55e' : '#ef4444'}" stroke-width="1.5"/>` +
++      `<text x="${pad + 2}" y="${pad + 9}" font-size="9" fill="#888">${curve[0].date}</text>` +
++      `<text x="${W - pad - 70}" y="${pad + 9}" font-size="9" fill="#888">${curve[curve.length - 1].date}</text>`;
++  }
++  // 交易样本 (末10笔)
++  const ts = d.trades_sample || [];
++  document.getElementById('btTrades').innerHTML = ts.length === 0 ? '' :
++    '<div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px">最近成交样本 (信号日→T+1开盘价买入→持有' + (p.hold_days || '') + '日)</div>' +
++    '<table style="font-size:11px"><thead><tr><th>信号日</th><th>代码</th><th>名称</th><th>买入日</th><th>买价</th><th>卖出日</th><th>卖价</th><th>盈亏</th></tr></thead><tbody>' +
++    ts.map(t => `<tr>
++      <td style="color:var(--text-muted)">${t.signal_date}</td>
++      <td style="color:var(--text-muted)">${t.code}</td>
++      <td style="font-weight:600">${t.name || ''}</td>
++      <td>${t.entry_date}</td>
++      <td class="code-num">¥${t.entry_price}</td>
++      <td>${t.exit_date}</td>
++      <td class="code-num">¥${t.exit_price}</td>
++      <td class="code-num" style="color:${t.pnl >= 0 ? 'var(--green)' : 'var(--red)'};font-weight:600">${t.pnl >= 0 ? '+' : ''}¥${t.pnl} (${t.pnl_pct >= 0 ? '+' : ''}${t.pnl_pct}%)</td>
++    </tr>`).join('') + '</tbody></table>';
++  document.getElementById('btNotes').innerHTML = (d.notes || []).map(n => '· ' + n).join('<br>') +
++    '<br><span style="color:var(--gold)">' + (d.disclaimer || '') + '</span>';
++}
++
++// ===== 盈亏日历/持仓分析弹窗已移除: 依赖上游 /api/trades/pnl-report 与
++// /api/portfolio/advice (开仓语义), 本地未启用; 盈亏与持仓见交易日志卡(后端返回值) =====
+ 
+ // ===== 复盘系统 =====
+ let reviewCurrentType = 'daily';
+@@ -3538,45 +3020,25 @@ function searchMargin() {
+   loadMarginData(code);
+ }
+ 
+-// ─── 批量操作 ─────────────────────────────
+-async function batchCloseAll() {
+-  if (!currentUser) { showLoginModal(); return; }
+-  if (!confirm('确定要平掉所有持仓吗？此操作不可撤销。')) return;
+-  try {
+-    const r = await fetch('/api/trades/batch/close', {method:'POST', headers:apiHeaders()});
+-    const d = await r.json();
+-    alert('✅ 已平仓 ' + d.closed + ' 笔');
+-    loadTradesFromServer();
+-  } catch(e) { alert('❌ 批量平仓失败: ' + e.message); }
+-}
+-
+-async function batchUpdateSL() {
+-  if (!currentUser) { showLoginModal(); return; }
+-  const sl = prompt('输入新止损价（所有持仓统一设置）:');
+-  if (!sl || isNaN(parseFloat(sl))) return;
+-  try {
+-    const r = await fetch('/api/trades/batch/update-sl', {method:'POST', headers:apiHeaders(), body:JSON.stringify({stop_loss:parseFloat(sl)})});
+-    const d = await r.json();
+-    alert('✅ 已更新 ' + d.updated + '/' + d.total + ' 笔止损为 ¥' + d.new_stop_loss);
+-    loadTradesFromServer();
+-  } catch(e) { alert('❌ 批量止损失败: ' + e.message); }
+-}
++// ─── 批量平仓/批量止损已移除: 上游开仓语义端点 (/api/trades/batch/*) 本地未启用 ───
++// 流水簿记下「卖出」即录入一条 side=sell 流水, 无批量平仓概念。
+ 
+ async function exportCSV() {
+   if (!currentUser) { showLoginModal(); return; }
+-  const token = getToken();
+-  if (!token) { showLoginModal(); return; }
+-  try {
+-    const r = await fetch('/api/trades/export/csv', {headers: {'Authorization': 'Bearer ' + token}});
+-    if (!r.ok) throw new Error('HTTP ' + r.status);
+-    const blob = await r.blob();
+-    const url = URL.createObjectURL(blob);
+-    const a = document.createElement('a');
+-    a.href = url;
+-    a.download = 'trades_'+ new Date().toISOString().slice(0,10) + '.csv';
+-    a.click();
+-    URL.revokeObjectURL(url);
+-  } catch(e) { alert('❌ 导出失败: ' + e.message); }
++  // 客户端导出: 数据源为已加载的后端流水 (后端无导出端点, 不新增写面)
++  if (!serverTrades.length) { alert('暂无流水可导出'); return; }
++  const esc = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
++  const rows = [['日期','代码','名称','方向','价格','数量','费用','备注'].map(esc).join(',')]
++    .concat(serverTrades.map(t => [t.date, t.code, t.name,
++      t.side === 'buy' ? '买入' : '卖出', t.price, t.qty, t.fee || 0, t.note]
++      .map(esc).join(',')));
++  const blob = new Blob(['﻿' + rows.join('\r\n')], {type: 'text/csv;charset=utf-8'});
++  const url = URL.createObjectURL(blob);
++  const a = document.createElement('a');
++  a.href = url;
++  a.download = 'trades_' + new Date().toISOString().slice(0,10) + '.csv';
++  a.click();
++  URL.revokeObjectURL(url);
+ }
+ 
+ // 当未登录时，点击"记录交易"按钮自动弹出登录
+diff --git a/realtime_scorer.py b/realtime_scorer.py
+index 5fdf073..f6db534 100644
+--- a/realtime_scorer.py
++++ b/realtime_scorer.py
+@@ -86,7 +86,15 @@ def _native(val):
+ 
+ def trend_detect(code: str):
+     """完整趋势检测 — 官方 TrendDetector 评分公式"""
+-    df = get_kline(code, days=120)
++    return trend_detect_df(get_kline(code, days=120), code=code)
++
++
++def trend_detect_df(df, code: str = ""):
++    """trend_detect 的纯数据部分: 对已截取的K线切片(截至信号日)评分。
++
++    回测按日切片复用同一公式, 与线上扫描共享计算路径; 调用方须保证
++    切片不含信号日之后的数据 (防未来函数)。
++    """
+     if df is None or len(df) < 60:
+         return None
+ 
+@@ -136,7 +144,14 @@ def trend_detect(code: str):
+ 
+ def hybrid_score(code: str, industry: str = ""):
+     """混合策略真实评分 — 7维度 + 动量爆发加成"""
+-    df = get_kline(code, days=120)
++    return hybrid_score_df(get_kline(code, days=120), code=code)
++
++
++def hybrid_score_df(df, code: str = ""):
++    """hybrid_score 的纯数据部分: 对已截取的K线切片评分 (回测复用)。
++
++    industry 参数当前评分公式未使用, 保留在包装层签名中。
++    """
+     if df is None or len(df) < 60:
+         return None
+ 
+@@ -221,7 +236,11 @@ def _block_time_to_minutes(bt: str) -> int:
+ 
+ def dragon_leader_score(code: str, extra: dict = None):
+     """龙头评分 — 5维评分 (官方 LeaderScorer 公式)"""
+-    df = get_kline(code, days=60)
++    return dragon_leader_score_df(get_kline(code, days=60), code=code, extra=extra)
++
++
++def dragon_leader_score_df(df, code: str = "", extra: dict = None):
++    """dragon_leader_score 的纯数据部分: 对已截取的K线切片评分 (回测复用)。"""
+     if df is None or len(df) < 20: return None
+ 
+     close_f = float(df["close"].iloc[-1])
+diff --git a/services/backtest_metrics.py b/services/backtest_metrics.py
+new file mode 100644
+index 0000000..cdb4429
+--- /dev/null
++++ b/services/backtest_metrics.py
+@@ -0,0 +1,375 @@
++"""回测绩效指标 — 纯计算模块 (无项目内依赖, 无 IO)。
++
++移植自 HKUDS/Vibe-Trading (MIT License) `agent/backtest/metrics.py`:
++  来源: https://github.com/HKUDS/Vibe-Trading/blob/main/agent/backtest/metrics.py
++  上游版权: Copyright (c) HKUDS, MIT License
++  (许可证全文见 https://github.com/HKUDS/Vibe-Trading/blob/main/LICENSE)
++
++本地化适配 (计算公式与上游逐字一致, 仅做接口裁剪):
++- 去除 `from backtest.models import FillRecord, TradeRecord` 依赖; 成交/交易记录
++  改用 dict (duck-typing): trades 需含 pnl/holding_bars/symbol 键, 换手用记录另需
++  entry_time/exit_time/entry_margin/exit_margin 键。
++- `calc_bars_per_year` 的年化查找表裁剪到本项目实际使用的区间 (1D/1W/1M 与
++  tushare 默认 252); 上游完整多周期×多数据源表见原文件。
++- 未移植 `effective_bars_per_year` / `buy_and_hold_return` / `by_exit_reason_stats`
++  / `calc_fill_turnover_series` (本项目未使用)。
++"""
++from __future__ import annotations
++
++import logging
++from typing import Any, Dict, List, Optional
++
++import numpy as np
++import pandas as pd
++
++# ─── Annualisation factor mapping (裁剪: 仅 1D/1W/1M + tushare 252) ───
++
++_TRADING_DAYS = {
++    "tushare": 252, "akshare": 252, "baostock": 252,
++    "yfinance": 252, "yahoo": 252,
++}
++
++_BARS_PER_DAY = {
++    "1D": {"tushare": 1, "akshare": 1, "baostock": 1, "yfinance": 1, "yahoo": 1},
++}
++
++# Weekly and monthly bars count calendar periods, whatever the market's
++# trading days: every week and every month holds one bar (#1479).
++_CALENDAR_BARS_PER_YEAR = {"1W": 52, "1M": 12}
++
++# Runner/loaders also emit these aliases; map them onto the table keys above.
++_SOURCE_ALIASES = {"yahoo": "yfinance"}
++
++
++def _normalize_interval(interval: str) -> str:
++    """Map project interval tokens onto ``_BARS_PER_DAY`` keys (上游逐字)。
++
++    ``1M`` is a month and is matched before the case fold, which would read
++    it as a minute (#1479).
++    """
++    token = str(interval or "1D").strip()
++    if token == "1M":
++        return token
++    lower = token.lower()
++    if lower == "1w":
++        return "1W"
++    if lower in ("1m", "5m", "15m", "30m"):
++        return lower
++    if lower in ("1h", "4h", "1d"):
++        return lower.upper()
++    return token
++
++
++def calc_bars_per_year(interval: str = "1D", source: str = "tushare") -> int:
++    """Number of bars per year for annualisation (上游逐字逻辑, 表已裁剪)。
++
++    Defaults to 252 days, 1 bar/day when source is missing from the table.
++    """
++    interval_key = _normalize_interval(interval)
++    if interval_key in _CALENDAR_BARS_PER_YEAR:
++        return _CALENDAR_BARS_PER_YEAR[interval_key]
++    source_key = str(source or "").strip().lower()
++    source_key = _SOURCE_ALIASES.get(source_key, source_key)
++    trading_days = _TRADING_DAYS.get(source_key, 252)
++    bars_per_day = _BARS_PER_DAY.get(interval_key, {}).get(source_key, 1)
++    return trading_days * bars_per_day
++
++
++# ─── Sign-safe returns ───
++
++_log = logging.getLogger(__name__)
++
++
++def bar_returns(close: Any, *, label: str = "") -> Any:
++    """Per-bar simple returns, defined only where the prior price is positive
++    (上游逐字; 见上游 docstring / issue #872 说明)。
++
++    A return is defined only when the previous price is finite and strictly
++    positive; otherwise it is undefined and reported as ``0.0``, never
++    ``inf`` or ``nan``. For an all-positive series this is identical to
++    ``pct_change().fillna(0.0)``. The prior price is carried forward across
++    gaps (explicit ffill, matching ``pct_change``'s old pad default).
++    """
++    # ffill *then* shift: the divisor is the last known price, not NaN.
++    prev = close.ffill().shift(1)
++    # ``inf > 0`` is True, so finiteness has to be asserted, not assumed.
++    usable_prev = np.isfinite(prev) & (prev > 0)
++    positive_prev = prev.where(usable_prev)
++
++    undefined = int((prev.notna() & ~usable_prev).to_numpy().sum())
++    if undefined:
++        _log.warning(
++            "%s: %d bar(s) follow a non-positive or non-finite prior price; "
++            "their return is undefined and reported as 0.0 (issue #872)",
++            label or "returns",
++            undefined,
++        )
++
++    # ``close / prev - 1`` is exactly the expression ``pct_change`` uses, kept
++    # verbatim so results for positive series are bit-identical.
++    ret = close / positive_prev - 1
++    return ret.replace([np.inf, -np.inf], np.nan).fillna(0.0)
++
++
++def win_rate_and_stats(trades: List[dict]) -> Dict[str, float]:
++    """Win rate and P&L statistics from completed trades (上游逐字逻辑)。
++
++    适配: TradeRecord.pnl / .holding_bars → dict 键访问。
++    """
++    if not trades:
++        return {
++            "win_rate": 0.0,
++            "profit_loss_ratio": 0.0,
++            "max_consecutive_loss": 0,
++            "avg_holding_bars": 0.0,
++            "profit_factor": 0.0,
++        }
++
++    wins = [t["pnl"] for t in trades if t["pnl"] > 0]
++    losses = [t["pnl"] for t in trades if t["pnl"] < 0]
++
++    win_rate = len(wins) / len(trades)
++
++    avg_win = float(np.mean(wins)) if wins else 0.0
++    avg_loss = abs(float(np.mean(losses))) if losses else 1e-10
++    profit_loss_ratio = avg_win / avg_loss if avg_loss > 1e-10 else 0.0
++
++    gross_profit = sum(wins) if wins else 0.0
++    gross_loss = abs(sum(losses)) if losses else 1e-10
++    profit_factor = gross_profit / gross_loss if gross_loss > 1e-10 else 0.0
++
++    max_consec = 0
++    cur_consec = 0
++    for t in trades:
++        if t["pnl"] < 0:
++            cur_consec += 1
++            max_consec = max(max_consec, cur_consec)
++        else:
++            cur_consec = 0
++
++    hold_bars = [t["holding_bars"] for t in trades if t["holding_bars"] > 0]
++    avg_holding = float(np.mean(hold_bars)) if hold_bars else 0.0
++
++    return {
++        "win_rate": win_rate,
++        "profit_loss_ratio": round(profit_loss_ratio, 4),
++        "max_consecutive_loss": max_consec,
++        "avg_holding_bars": round(avg_holding, 1),
++        "profit_factor": round(profit_factor, 4),
++    }
++
++
++def by_symbol_stats(trades: List[dict]) -> Dict[str, Dict[str, Any]]:
++    """Per-symbol trade statistics (上游逐字逻辑, dict 适配)。"""
++    groups: Dict[str, list] = {}
++    for t in trades:
++        groups.setdefault(t["symbol"], []).append(t)
++
++    result = {}
++    for sym, sym_trades in groups.items():
++        pnls = [t["pnl"] for t in sym_trades]
++        wins = [p for p in pnls if p > 0]
++        result[sym] = {
++            "count": len(sym_trades),
++            "win_rate": round(len(wins) / len(sym_trades), 4) if sym_trades else 0.0,
++            "total_pnl": round(sum(pnls), 2),
++            "avg_pnl": round(float(np.mean(pnls)), 2) if pnls else 0.0,
++        }
++    return result
++
++
++def calc_turnover_series(positions: pd.DataFrame) -> pd.Series:
++    """Per-bar weight-implied portfolio turnover from a position frame
++    (上游逐字)。
++
++    Turnover for a bar is ``0.5 * sum_i |w_{t,i} - w_{t-1,i}|``, so a full
++    rotation from one asset to another counts as 1.0. The first bar's
++    turnover is ``0.5 * sum_i |w_{0,i}|`` (entry from cash).
++    """
++    if positions is None or positions.empty:
++        return pd.Series(dtype=float)
++    filled = positions.fillna(0.0)
++    prev = filled.shift(1).fillna(0.0)
++    return 0.5 * (filled - prev).abs().sum(axis=1)
++
++
++def calc_trade_turnover_series(
++    trades: List[dict],
++    equity_curve: pd.Series,
++) -> pd.Series:
++    """Per-bar turnover from actual entry and exit allocations (上游逐字逻辑)。
++
++    Each filled leg contributes its margin-equivalent traded value; dividing
++    gross traded value by twice the portfolio equity preserves the convention:
++    entering a 100% allocation counts as 0.5, a full rotation counts as 1.0.
++
++    适配: trade.entry_time/.exit_time/.entry_margin/.exit_margin → dict 键。
++    """
++    if equity_curve is None or equity_curve.empty:
++        return pd.Series(dtype=float)
++
++    traded_margin = pd.Series(0.0, index=equity_curve.index, dtype=float)
++    for trade in trades:
++        for timestamp, margin in (
++            (trade.get("entry_time"), trade.get("entry_margin")),
++            (trade.get("exit_time"), trade.get("exit_margin")),
++        ):
++            try:
++                margin_value = float(margin)
++            except (TypeError, ValueError):
++                continue
++            if (
++                timestamp in traded_margin.index
++                and np.isfinite(margin_value)
++                and margin_value > 0
++            ):
++                traded_margin.loc[timestamp] += margin_value
++
++    denominator = 2.0 * equity_curve.abs().replace(0.0, np.nan)
++    return (traded_margin / denominator).replace([np.inf, -np.inf], np.nan).fillna(0.0)
++
++
++def calc_metrics(
++    equity_curve: pd.Series,
++    trades: List[dict],
++    initial_cash: float,
++    bars_per_year: Optional[int] = 252,
++    bench_ret: Optional[pd.Series] = None,
++    positions: Optional[pd.DataFrame] = None,
++    turnover_series: Optional[pd.Series] = None,
++) -> Dict[str, Any]:
++    """Full set of performance metrics (上游逐字逻辑, dict trades 适配)。
++
++    bars_per_year=None 的跨市场日历年自动检测在本移植中不支持 (本地面板恒为
++    A股日线 252); 传 None 会回落到 252。
++    """
++    if len(equity_curve) == 0:
++        return _empty_metrics(initial_cash)
++
++    n = len(equity_curve)
++
++    bpy = bars_per_year if bars_per_year is not None else 252
++
++    port_ret = equity_curve.pct_change().fillna(0.0)
++    returns_finite = bool(np.isfinite(port_ret.to_numpy(dtype=float, copy=False)).all())
++
++    total_ret = float(equity_curve.iloc[-1] / initial_cash - 1)
++    # A leveraged/short book can end at or below zero equity; a total wipeout
++    # annualises to -100%.
++    growth = 1 + total_ret
++    if growth <= 0:
++        ann_ret = -1.0
++    else:
++        try:
++            ann_ret = float(growth ** (bpy / max(n, 1)) - 1)
++        except OverflowError:
++            ann_ret = float("inf")
++    if not np.isfinite(ann_ret):
++        ann_ret = float("inf")
++    # ``Series.std()`` uses ddof=1, so a single-observation return series
++    # yields NaN and poisons the Sharpe ratio. Guard the small sample.
++    vol = float(port_ret.std()) if len(port_ret) > 1 and returns_finite else 0.0
++    sharpe = (
++        float(port_ret.mean() / (vol + 1e-10) * np.sqrt(bpy))
++        if returns_finite
++        else 0.0
++    )
++    if not np.isfinite(sharpe):
++        sharpe = 0.0
++
++    # Drawdown: the account starts at ``initial_cash`` before the first
++    # recorded bar, so that value is the initial high-water mark.
++    peak = equity_curve.cummax().clip(lower=float(initial_cash))
++    dd = (equity_curve - peak) / peak.replace(0, 1)
++    max_dd = float(dd.min())
++
++    calmar = ann_ret / abs(max_dd) if abs(max_dd) > 1e-10 else 0.0
++
++    # Sortino
++    if returns_finite:
++        downside = port_ret[port_ret < 0]
++        downside_std = float(downside.std()) if len(downside) > 1 else 1e-10
++        sortino = float(port_ret.mean() / (downside_std + 1e-10) * np.sqrt(bpy))
++    else:
++        sortino = 0.0
++    if not np.isfinite(sortino):
++        sortino = 0.0
++
++    trade_stats = win_rate_and_stats(trades)
++
++    # Prefer execution-derived turnover; retain the position-frame fallback.
++    turnover_values = (
++        turnover_series.reindex(equity_curve.index).fillna(0.0).clip(lower=0.0)
++        if turnover_series is not None
++        else calc_turnover_series(positions)
++        if positions is not None
++        else pd.Series(dtype=float)
++    )
++    avg_turnover = float(turnover_values.mean()) if len(turnover_values) > 0 else 0.0
++    total_turnover = float(turnover_values.sum()) if len(turnover_values) > 0 else 0.0
++
++    # Benchmark comparison
++    bench_return = 0.0
++    excess = 0.0
++    ir = 0.0
++    tracking_error = 0.0
++    bench_beta = 0.0
++    if bench_ret is not None and len(bench_ret) > 0:
++        bench_return = float((1 + bench_ret).prod() - 1)
++        excess = total_ret - bench_return
++        aligned_bench = bench_ret.reindex(port_ret.index).fillna(0.0)
++        active_ret = port_ret - aligned_bench
++        active_std = float(active_ret.std()) if len(active_ret) > 1 and returns_finite else 0.0
++        ir = (
++            float(active_ret.mean() / (active_std + 1e-10) * np.sqrt(bpy))
++            if returns_finite
++            else 0.0
++        )
++        if not np.isfinite(ir):
++            ir = 0.0
++        tracking_error = active_std * np.sqrt(bpy) if returns_finite else 0.0
++        if not np.isfinite(tracking_error):
++            tracking_error = 0.0
++        bench_var = float(aligned_bench.var()) if len(aligned_bench) > 1 else 0.0
++        if returns_finite and bench_var > 0:
++            covariance = float(port_ret.cov(aligned_bench))
++            bench_beta = covariance / bench_var
++        if not np.isfinite(bench_beta):
++            bench_beta = 0.0
++
++    return {
++        "final_value": float(equity_curve.iloc[-1]),
++        "total_return": total_ret,
++        "annual_return": ann_ret,
++        "max_drawdown": max_dd,
++        "sharpe": sharpe,
++        "calmar": round(calmar, 4),
++        "sortino": round(sortino, 4),
++        "win_rate": trade_stats["win_rate"],
++        "profit_loss_ratio": trade_stats["profit_loss_ratio"],
++        "profit_factor": trade_stats["profit_factor"],
++        "max_consecutive_loss": trade_stats["max_consecutive_loss"],
++        "avg_holding_days": trade_stats["avg_holding_bars"],
++        "trade_count": len(trades),
++        "benchmark_return": round(bench_return, 6),
++        "excess_return": round(excess, 6),
++        "information_ratio": round(ir, 4),
++        "tracking_error": round(float(tracking_error), 6),
++        "benchmark_beta": round(float(bench_beta), 4),
++        "avg_turnover": round(avg_turnover, 6),
++        "total_turnover": round(total_turnover, 6),
++    }
++
++
++def _empty_metrics(initial_cash: float) -> Dict[str, Any]:
++    """Return zero-valued metrics when no data is available (上游逐字)。"""
++    return {
++        "final_value": initial_cash,
++        "total_return": 0, "annual_return": 0, "max_drawdown": 0,
++        "sharpe": 0, "calmar": 0, "sortino": 0,
++        "win_rate": 0, "profit_loss_ratio": 0, "profit_factor": 0,
++        "max_consecutive_loss": 0, "avg_holding_days": 0, "trade_count": 0,
++        "benchmark_return": 0, "excess_return": 0, "information_ratio": 0,
++        "tracking_error": 0.0, "benchmark_beta": 0.0,
++        "avg_turnover": 0.0, "total_turnover": 0.0,
++    }
+diff --git a/test_backtest.py b/test_backtest.py
+new file mode 100644
+index 0000000..b8780a7
+--- /dev/null
++++ b/test_backtest.py
+@@ -0,0 +1,305 @@
++# -*- coding: utf-8 -*-
++"""回测离线测试 — Vibe-Trading 指标移植正确性 + 防未来函数 + 引擎簿记 (2026-10-27)
++
++- 指标: services/backtest_metrics (HKUDS/Vibe-Trading MIT 移植) 手算小例子核对
++  total_return / max_drawdown / sharpe / 胜率 / 盈亏比 / 换手率。
++- 防未来函数: 信号日 T 突变 T 之后的数据, T 时刻信号与已成交交易必须不变;
++  成交价恒为 T+1 开盘价, 卖出恒为 T+1+H 开盘价 (停牌顺延)。
++- 引擎: local_backtest.run_backtest 纯函数, 合成K线面板, 无网络无凭据。
++
++全程合成数据, 无网络、无凭据要求。
++"""
++import math
++import os
++import sys
++import unittest
++
++sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
++
++import numpy as np
++import pandas as pd
++
++from services import backtest_metrics as bm
++import local_backtest as lb
++
++
++def _mk_dates(n=90):
++    return [d.strftime("%Y-%m-%d") for d in pd.date_range("2026-05-01", periods=n)]
++
++
++def _mk_frame(ts_code, dates, base=10.0, daily=0.01, skip_dates=()):
++    """合成稳定上涨趋势 (趋势策略必出信号): close=base*(1+daily)^i, open=昨收"""
++    closes, opens, dates_out = [], [], []
++    prev = None
++    for i, d in enumerate(dates):
++        if d in skip_dates:
++            continue
++        c = base * (1 + daily) ** i
++        o = prev if prev is not None else base
++        closes.append(c)
++        opens.append(o)
++        dates_out.append(d)
++        prev = c
++    n = len(dates_out)
++    close = np.array(closes)
++    open_ = np.array(opens)
++    df = pd.DataFrame({
++        "date": dates_out,
++        "open": open_,
++        "high": close * 1.005,
++        "low": open_ * 0.995,
++        "close": close,
++        "volume": np.full(n, 10000.0),
++        "pct_chg": np.concatenate([[np.nan], close[1:] / close[:-1] - 1]) * 100,
++    })
++    return df
++
++
++def _mk_frames(dates, skip_b=()):
++    return {
++        "000001.SZ": _mk_frame("000001.SZ", dates),
++        "000002.SZ": _mk_frame("000002.SZ", dates, skip_dates=skip_b),
++        "600000.SH": _mk_frame("600000.SH", dates, daily=0.0),   # 平盘, 预筛除外
++        "000003.SZ": _mk_frame("000003.SZ", dates),              # ST 剔除测试
++        "430001.BJ": _mk_frame("430001.BJ", dates),              # 北证排除测试
++    }
++
++
++class TestMetricsHandCalc(unittest.TestCase):
++    """手算小例子核对移植指标 (公式与上游逐字一致)"""
++
++    def test_bars_per_year(self):
++        self.assertEqual(bm.calc_bars_per_year("1D", "tushare"), 252)
++        self.assertEqual(bm.calc_bars_per_year("1d", "TUSHARE"), 252)
++        self.assertEqual(bm.calc_bars_per_year("1W", "tushare"), 52)
++        self.assertEqual(bm.calc_bars_per_year("1M", "tushare"), 12)
++        self.assertEqual(bm.calc_bars_per_year("1D", "unknown_source"), 252)
++
++    def test_calc_metrics_hand(self):
++        eq = pd.Series([100.0, 110.0, 99.0, 121.0],
++                       index=["d0", "d1", "d2", "d3"])
++        trades = [
++            {"pnl": 10.0, "holding_bars": 5, "symbol": "A"},
++            {"pnl": -5.0, "holding_bars": 5, "symbol": "B"},
++            {"pnl": 20.0, "holding_bars": 5, "symbol": "A"},
++            {"pnl": -10.0, "holding_bars": 5, "symbol": "C"},
++        ]
++        m = bm.calc_metrics(eq, trades, 100.0, bars_per_year=252)
++        self.assertAlmostEqual(m["total_return"], 0.21, places=9)
++        self.assertAlmostEqual(m["max_drawdown"], -0.1, places=9)
++        self.assertAlmostEqual(m["annual_return"], 164238.770664, places=3)
++        self.assertAlmostEqual(m["sharpe"], 6.396021, places=5)
++        self.assertAlmostEqual(m["win_rate"], 0.5, places=9)
++        self.assertAlmostEqual(m["profit_factor"], 2.0, places=9)
++        self.assertAlmostEqual(m["profit_loss_ratio"], 2.0, places=9)
++        self.assertEqual(m["max_consecutive_loss"], 1)
++        self.assertEqual(m["trade_count"], 4)
++        self.assertAlmostEqual(m["avg_holding_days"], 5.0, places=9)
++        self.assertAlmostEqual(m["final_value"], 121.0, places=9)
++
++    def test_trade_turnover(self):
++        eq = pd.Series([100.0, 110.0, 99.0, 121.0],
++                       index=["d0", "d1", "d2", "d3"])
++        trades = [{
++            "pnl": 10.0, "holding_bars": 1, "symbol": "X",
++            "entry_time": "d0", "entry_margin": 100.0,
++            "exit_time": "d1", "exit_margin": 110.0,
++        }]
++        ts = bm.calc_trade_turnover_series(trades, eq)
++        self.assertAlmostEqual(ts.loc["d0"], 0.5, places=9)   # 100/(2*100)
++        self.assertAlmostEqual(ts.loc["d1"], 0.5, places=9)   # 110/(2*110)
++        self.assertAlmostEqual(ts.loc["d2"], 0.0, places=9)
++        m = bm.calc_metrics(eq, trades, 100.0, turnover_series=ts)
++        self.assertAlmostEqual(m["avg_turnover"], 0.25, places=9)
++        self.assertAlmostEqual(m["total_turnover"], 1.0, places=9)
++
++    def test_position_turnover_series(self):
++        pos = pd.DataFrame({"A": [0.0, 100.0, 100.0, 0.0],
++                            "B": [0.0, 0.0, 50.0, 0.0]})
++        ts = bm.calc_turnover_series(pos)
++        self.assertAlmostEqual(ts.iloc[0], 0.0, places=9)
++        self.assertAlmostEqual(ts.iloc[1], 50.0, places=9)    # 0.5*100
++        self.assertAlmostEqual(ts.iloc[2], 25.0, places=9)    # 0.5*50
++        self.assertAlmostEqual(ts.iloc[3], 75.0, places=9)    # 0.5*(100+50)
++
++    def test_empty_metrics(self):
++        m = bm.calc_metrics(pd.Series(dtype=float), [], 100.0)
++        self.assertEqual(m["trade_count"], 0)
++        self.assertEqual(m["final_value"], 100.0)
++
++
++class TestBarReturns(unittest.TestCase):
++    """非正前价的符号安全 (上游 issue #872 口径)"""
++
++    def test_normal_series(self):
++        r = bm.bar_returns(pd.Series([100.0, 110.0, 121.0]))
++        self.assertAlmostEqual(r.iloc[0], 0.0, places=12)
++        self.assertAlmostEqual(r.iloc[1], 0.1, places=12)
++        self.assertAlmostEqual(r.iloc[2], 0.1, places=12)
++
++    def test_zero_and_gap(self):
++        r = bm.bar_returns(pd.Series([100.0, 0.0, 50.0, 50.0, 25.0]))
++        vals = r.tolist()
++        self.assertTrue(all(np.isfinite(vals)), vals)  # 绝不出现 inf/nan
++        self.assertAlmostEqual(vals[1], -1.0, places=12)  # 0/100-1 (前价为正, 有定义)
++        self.assertAlmostEqual(vals[2], 0.0, places=12)   # 前价=0, 无定义报 0.0
++        self.assertAlmostEqual(vals[3], 0.0, places=12)
++        self.assertAlmostEqual(vals[4], -0.5, places=12)
++
++
++class TestEngineSemantics(unittest.TestCase):
++    """合成面板上的引擎簿记: T+1成交 / 手续费 / 跳过规则 / 停牌顺延"""
++
++    @classmethod
++    def setUpClass(cls):
++        cls.dates = _mk_dates(90)
++        cls.frames = _mk_frames(cls.dates, skip_b={cls.dates[75]})
++        cls.result = lb.run_backtest(
++            "trend", cls.frames,
++            name_map={"000001": "平安", "000002": "万科", "000003": "ST测试"},
++            st_codes={"000003"}, hold=5, top_n=2, initial_cash=100000.0)
++
++    def test_signals_and_trades_exist(self):
++        r = self.result
++        self.assertGreater(r["signals_total"], 0)
++        self.assertGreater(r["trades_completed"], 0)
++        self.assertEqual(r["metrics"]["trade_count"], r["trades_completed"])
++
++    def test_no_st_no_bj_no_flat(self):
++        codes = set()
++        # 通过 scan 直接确认候选池
++        spec = lb._SIGNAL_SPEC["trend"]
++        idx_maps = {c: {d: i for i, d in enumerate(f["date"].tolist())}
++                    for c, f in self.frames.items()}
++        cols = {c: (f["open"].to_numpy(float), f["close"].to_numpy(float),
++                    f["volume"].to_numpy(float), f["pct_chg"].to_numpy(float))
++                for c, f in self.frames.items()}
++        sigs = lb._scan_day(spec, self.frames, cols, idx_maps, self.dates, 70,
++                            {"000003"})
++        codes = {c for c, _ in sigs}
++        self.assertIn("000001.SZ", codes)
++        self.assertNotIn("000003.SZ", codes)   # ST 剔除
++        self.assertNotIn("430001.BJ", codes)   # 北证排除
++        self.assertNotIn("600000.SH", codes)   # 平盘 pct_chg=0 被预筛除外
++
++    def test_execution_dates_and_prices(self):
++        """成交价恒为信号日次日(T+1)开盘价; 卖出恒为 T+1+H 开盘价"""
++        dates = self.dates
++        r = lb.run_backtest("trend", self.frames,
++                            st_codes={"000003"}, hold=5, top_n=2,
++                            initial_cash=100000.0)
++        # 直接重跑取 trades_sample 不含全部交易, 用内部口径重建校验样本
++        for t in r["trades_sample"]:
++            sig_i = dates.index(t["signal_date"])
++            self.assertEqual(t["entry_date"], dates[sig_i + 1])      # T+1
++            f = self.frames["000001.SZ" if t["code"] == "000001"
++                            else "000002.SZ"]
++            f = f.reset_index(drop=True)
++            ei = f.index[f["date"] == t["entry_date"]][0]
++            self.assertAlmostEqual(t["entry_price"], float(f["open"].iloc[ei]),
++                                   places=3)
++            xi = f.index[f["date"] == t["exit_date"]][0]
++            # 退出日 = 入场后第5个市场日 (停牌顺延除外)
++            self.assertGreaterEqual(dates.index(t["exit_date"]),
++                                    dates.index(t["entry_date"]) + 5)
++            self.assertAlmostEqual(t["exit_price"], float(f["open"].iloc[xi]),
++                                   places=3)
++            # 费用口径: pnl = invest*(exit*(1-0.00075)/(entry*(1+0.00025)) - 1)
++            invest = 100000.0 / 2
++            expect = invest * (float(f["open"].iloc[xi]) * (1 - 0.00075)
++                               / (float(f["open"].iloc[ei]) * (1 + 0.00025)) - 1)
++            self.assertAlmostEqual(t["pnl"], expect, places=2)
++
++    def test_suspension_skip_and_postpone(self):
++        """000002 在 dates[75] 停牌: 该日无入场; dates[70] 入场者顺延至 76 卖出"""
++        r = lb.run_backtest("trend", self.frames, st_codes={"000003"},
++                            hold=5, top_n=2, initial_cash=100000.0)
++        for t in r["trades_sample"]:
++            if t["code"] != "000002":
++                continue
++            self.assertNotEqual(t["entry_date"], self.dates[75])  # T+1停牌信号作废
++            if t["entry_date"] == self.dates[70]:
++                self.assertEqual(t["exit_date"], self.dates[76])  # 顺延复牌首日
++
++    def test_equity_curve_shape(self):
++        r = self.result
++        curve = r["equity_curve"]
++        spec_warm = lb._SIGNAL_SPEC["trend"]["warmup"]
++        self.assertEqual(len(curve), len(self.dates) - (spec_warm - 1))
++        self.assertAlmostEqual(curve[0]["equity"], 100000.0, places=2)  # 首日无持仓
++        self.assertAlmostEqual(r["metrics"]["final_value"], curve[-1]["equity"],
++                               places=2)
++        self.assertAlmostEqual(r["metrics"]["total_return"],
++                               curve[-1]["equity"] / 100000.0 - 1, places=6)
++        self.assertGreater(r["metrics"]["total_turnover"], 0.0)
++
++    def test_window_notes(self):
++        w = self.result["window"]
++        self.assertEqual(w["panel_days"], 150)
++        self.assertEqual(w["warmup_days"], 60)
++        self.assertEqual(w["start"], self.dates[59])
++
++
++class TestAntiLookahead(unittest.TestCase):
++    """防未来函数: 突变信号日之后的数据, 既有信号与成交不得改变"""
++
++    def test_engine_invariance_to_future_mutation(self):
++        """突变 cutoff 之后的数据: cutoff 之前(含)的净值曲线必须逐日不变 —
++        净值由 ≤当日的信号/成交/收盘计值决定, 前缀不变即引擎无未来函数"""
++        dates = _mk_dates(90)
++        frames = _mk_frames(dates)
++        r1 = lb.run_backtest("trend", frames, hold=5, top_n=2,
++                             initial_cash=100000.0)
++        cutoff = dates[70]
++        frames2 = {}
++        for c, f in frames.items():
++            f2 = f.copy()
++            mask = f2["date"] > cutoff
++            f2.loc[mask, "open"] = f2.loc[mask, "open"] * 3.0
++            f2.loc[mask, "close"] = f2.loc[mask, "close"] * 3.0
++            f2.loc[mask, "high"] = f2.loc[mask, "high"] * 3.0
++            f2.loc[mask, "low"] = f2.loc[mask, "low"] * 3.0
++            f2.loc[mask, "volume"] = f2.loc[mask, "volume"] * 10.0
++            f2.loc[mask, "pct_chg"] = 5.0
++            frames2[c] = f2
++        r2 = lb.run_backtest("trend", frames2, hold=5, top_n=2,
++                             initial_cash=100000.0)
++        pre1 = [(p["date"], p["equity"]) for p in r1["equity_curve"]
++                if p["date"] <= cutoff]
++        pre2 = [(p["date"], p["equity"]) for p in r2["equity_curve"]
++                if p["date"] <= cutoff]
++        self.assertTrue(pre1)
++        self.assertEqual(pre1, pre2)
++
++    def test_scan_day_reads_only_past(self):
++        """_scan_day(t) 在 t 之后数据任意突变下结果不变"""
++        dates = _mk_dates(90)
++        frames = _mk_frames(dates)
++        spec = lb._SIGNAL_SPEC["trend"]
++
++        def _maps(fs):
++            im = {c: {d: i for i, d in enumerate(f["date"].tolist())}
++                  for c, f in fs.items()}
++            co = {c: (f["open"].to_numpy(float), f["close"].to_numpy(float),
++                      f["volume"].to_numpy(float), f["pct_chg"].to_numpy(float))
++                  for c, f in fs.items()}
++            return im, co
++
++        im1, co1 = _maps(frames)
++        s1 = lb._scan_day(spec, frames, co1, im1, dates, 65, set())
++        frames3 = {c: f.copy() for c, f in frames.items()}
++        for c, f in frames3.items():
++            mask = f["date"] > dates[65]
++            f.loc[mask, "close"] = 999.0
++            f.loc[mask, "open"] = 999.0
++            f.loc[mask, "high"] = 1000.0
++            f.loc[mask, "low"] = 998.0
++            f.loc[mask, "volume"] = 999999.0
++            f.loc[mask, "pct_chg"] = 9.0
++        im3, co3 = _maps(frames3)
++        s3 = lb._scan_day(spec, frames3, co3, im3, dates, 65, set())
++        self.assertEqual(s1, s3)
++
++
++if __name__ == "__main__":
++    unittest.main(verbosity=2)
