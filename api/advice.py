@@ -14,7 +14,12 @@ bp = Blueprint("advice", __name__, url_prefix="/api")
 
 @bp.route("/advice")
 def api_advice():
-    return jsonify(cache_or_fetch("advice", generate_advice, 120))
+    result = cache_or_fetch("advice", generate_advice, 120)
+    # 错误契约: 上游失败 (error 字典) → 502 显式失败, 不 200 包错误
+    if isinstance(result, dict) and result.get("error"):
+        return jsonify({"error": str(result["error"])[:120],
+                        "data_status": "unavailable"}), 502
+    return jsonify(result)
 
 
 @bp.route("/positions/evaluate", methods=["POST"])

@@ -7,11 +7,17 @@ import os
 import hashlib
 import secrets
 import time
+import hmac
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # ─── 独立数据库路径 ──────────────────────────
-USER_DB_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "data", "users.db"
+# [本地安全补丁] 允许环境变量重定向, 避免加载仓库内已提交的用户库
+USER_DB_PATH = os.getenv(
+    "SHIMI_USER_DB_PATH",
+    os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "data", "users.db"
+    ),
 )
 
 os.makedirs(os.path.dirname(USER_DB_PATH), exist_ok=True)
@@ -58,12 +64,20 @@ def init_users_db():
 # ─── 密码 ────────────────────────────────────
 
 def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+    return generate_password_hash(password, method='pbkdf2:sha256:600000')
 
 
 # ─── 用户管理 ────────────────────────────────
 
 def register_user(username: str, password: str, display_name: str = None) -> dict:
+    if not isinstance(username, str) or not 2 <= len(username.strip()) <= 64 or any(ord(c) < 32 for c in username):
+        return {"error": "用户名须为2—64个字符"}
+    if not isinstance(password, str) or not 8 <= len(password) <= 256:
+        return {"error": "密码须为8—256个字符"}
+    if display_name is not None and (not isinstance(display_name, str) or len(display_name) > 64):
+        return {"error": "显示名称最多64个字符"}
+    username = username.strip()
+    display_name = (display_name or username).strip() or username
     conn = get_users_db()
     try:
         conn.execute(
@@ -82,17 +96,29 @@ def register_user(username: str, password: str, display_name: str = None) -> dic
 
 
 def login_user(username: str, password: str) -> dict:
+    if not isinstance(username, str) or not isinstance(password, str) or not username.strip() or len(username) > 64 or not password or len(password) > 256:
+        return {"error": "请输入有效的用户名和密码"}
+    username = username.strip()
     conn = get_users_db()
     try:
         cur = conn.execute(
-            "SELECT id, username, display_name, role FROM users WHERE username=? AND password=?",
-            (username, hash_password(password))
+            "SELECT id, username, display_name, role, password FROM users WHERE username=?",
+            (username,)
         )
         row = cur.fetchone()
         if not row:
             return {"error": "用户名或密码错误"}
-
         user = dict(row)
+        stored = user.pop('password')
+        legacy = len(stored) == 64 and all(c in '0123456789abcdef' for c in stored)
+        try:
+            valid = hmac.compare_digest(stored, hashlib.sha256(password.encode()).hexdigest()) if legacy else check_password_hash(stored, password)
+        except (ValueError, TypeError):
+            valid = False
+        if not valid:
+            return {"error": "用户名或密码错误"}
+        if legacy:
+            conn.execute('UPDATE users SET password=? WHERE id=?', (hash_password(password), user['id']))
         token = secrets.token_hex(32)
         expires = time.time() + 72 * 3600  # 72h
 
@@ -102,6 +128,15 @@ def login_user(username: str, password: str) -> dict:
         )
         conn.commit()
         return {"token": token, "user": user, "expires_at": expires}
+    finally:
+        conn.close()
+
+
+def logout_token(token: str) -> None:
+    conn = get_users_db()
+    try:
+        conn.execute('DELETE FROM tokens WHERE token=?', (token,))
+        conn.commit()
     finally:
         conn.close()
 

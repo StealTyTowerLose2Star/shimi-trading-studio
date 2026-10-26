@@ -12,9 +12,7 @@ def require_user():
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer "):
         token = auth[7:]
-        # 本地自动登录: 尝试读取 .local_token 文件
-        if token == "local_token":
-            return _auto_local_user()
+        # [本地安全补丁] 移除 .local_token 自动登录通道: 不读取仓库内已提交令牌文件
         user = verify_token(token)
         if user:
             return user

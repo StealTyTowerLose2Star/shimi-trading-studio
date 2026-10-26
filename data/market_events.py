@@ -297,10 +297,11 @@ def fetch_yfinance_earnings() -> List[Dict]:
 import concurrent.futures
 
 _FETCH_TIMEOUT = {
-    "cninfo": 20,
+    "cninfo": 120,
     "eastmoney": 10,
     "finnhub": 15,
     "yfinance": 120,
+    "flash_news": 25,
 }
 
 
@@ -319,6 +320,43 @@ def _safe_fetch(name: str, fn, timeout: int = None) -> tuple:
     except Exception as e:
         print(f"[market_events] {name} 失败: {e}")
         return ([], False)
+
+
+# ─── A股新闻快讯 (财联社/东财7×24, 免 key) ─────────────────
+
+def fetch_flash_news() -> List[Dict]:
+    """从财联社电报 + 东财7×24 抓取全市场快讯并分类为事件
+
+    数据源: data/news_fetcher (移植自 a-stock-data, 免 key 真实来源)。
+    无法分类为已知事件类型的快讯丢弃 (防噪音), 与 fetch_us_events 同一契约。
+    """
+    events = []
+    try:
+        from data.news_fetcher import fetch_market_news
+        today = datetime.now().strftime("%Y-%m-%d")
+        for item in fetch_market_news(40):
+            title = (item.get("title") or "").strip()
+            content = (item.get("content") or "").strip()
+            if not title and not content:
+                continue
+            text = f"{title} {content}"
+            event_type = _classify_event(text)
+            if not event_type:
+                continue
+            t = item.get("time", "") or ""
+            events.append({
+                "date": t[:10] or today,
+                "time": t[11:16] if len(t) > 11 else "",
+                "market": "A",
+                "type": event_type,
+                "title": (title or content)[:100],
+                "source": item.get("source", "news"),
+                "impact": EVENT_TYPES.get(event_type, {}).get("impact", "low"),
+                "summary": content[:120],
+            })
+    except Exception:
+        pass
+    return events
 
 
 # ─── A股公告抓取 (东方财富) ──────────────────────
@@ -647,6 +685,11 @@ def scan_market_events() -> Dict:
     all_events.extend(em_events)
     sources_status["eastmoney"] = {"ok": em_ok, "count": len(em_events)}
 
+    # A股新闻快讯 - 财联社/东财7×24 (免 key)
+    news_events, news_ok = _safe_fetch("flash_news", fetch_flash_news)
+    all_events.extend(news_events)
+    sources_status["flash_news"] = {"ok": news_ok, "count": len(news_events)}
+
     # 美股新闻 - Finnhub
     us_events, fn_ok = _safe_fetch("finnhub", fetch_us_events)
     all_events.extend(us_events)
@@ -754,9 +797,12 @@ def scan_market_events() -> Dict:
     other_cn = [s for s in cn_signals if s not in st_signals and s not in hot_signals]
     cn_display = st_signals[:2] + hot_signals[:2] + other_cn[:4]
     em_signals = [s for s in signals if s["event"].get("source") == "eastmoney"]
+    news_signals = [s for s in signals if s["event"].get("source") in ("cls", "eastmoney724")]
+    news_signals.sort(key=lambda s: (0 if s["event"].get("impact") == "high" else 1,
+                                     s["event"].get("time", "")), reverse=False)
     us_signals = [s for s in signals if s["event"].get("market") == "US" and s["event"].get("source") != "yfinance"]
     yf_signals = [s for s in signals if s["event"].get("source") == "yfinance"]
-    display_signals = cn_display + em_signals[:4] + us_signals[:4] + yf_signals[:4]
+    display_signals = cn_display + em_signals[:4] + news_signals[:6] + us_signals[:4] + yf_signals[:4]
 
     # 统计
     long_count = sum(1 for s in signals for st in s["stocks"] if st["direction"] == "long")

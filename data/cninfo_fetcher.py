@@ -58,7 +58,7 @@ def _search_announcements(keyword, start_date, end_date, page=1, size=50):
     data = {
         "pageNum": str(page),
         "pageSize": str(size),
-        "column": "szse",
+        "column": "",
         "tabName": "fulltext",
         "plate": "",
         "stock": "",

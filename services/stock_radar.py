@@ -120,7 +120,7 @@ def _resample_monthly(df):
     date_col = "date" if "date" in df.columns else "trade_date"
     df[date_col] = pd.to_datetime(df[date_col])
     df = df.set_index(date_col)
-    monthly = df.resample("M").agg({
+    monthly = df.resample("ME").agg({
         "open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"
     }).dropna()
     return monthly.reset_index()
@@ -510,6 +510,145 @@ def analyze_fundamental(code: str) -> Dict[str, Any]:
 
 
 # ═══════════════════════════════════════════════
+# ④b 估值复算 (ai-berkshire financial_rigor.py 移植增强, MIT)
+# ═══════════════════════════════════════════════
+
+def _ttm_from_cumulative(pairs, field):
+    """累计财报序列 → TTM 值: 最新累计 + 上一年年报 - 去年同期累计。
+    pairs: [(end_date 'YYYYMMDD', value|None)] 升序; 数据不足返回 None (不补位)"""
+    vals = [(d, v) for d, v in pairs if v is not None]
+    if not vals:
+        return None
+    d_latest, v_latest = vals[-1]
+    y, md = d_latest[:4], d_latest[4:]
+    if md == "1231":
+        return float(v_latest)
+    prev = str(int(y) - 1)
+    annual = next((v for d, v in vals if d == prev + "1231"), None)
+    same_q = next((v for d, v in vals if d == prev + md), None)
+    if annual is None or same_q is None:
+        return None
+    return float(v_latest + annual - same_q)
+
+
+def analyze_valuation_check(code: str) -> Dict[str, Any]:
+    """估值复算/市值验算/多源交叉校验/三情景估值 (financial_rigor 移植, 见该文件头)。
+
+    数据全部来自现有 tushare 通道 (get_ts → real 模式 RealProShim 闸门):
+      daily_basic (close/total_share/total_mv/pe/pb) + fina_indicator (eps/bps/ocfps/roe/netprofit_yoy)
+    任一输入缺失 → 对应子项 "数据不足", 不补位不编造; 全部 Decimal 精确计算, 确定性可复现。
+    """
+    from services import financial_rigor as fr
+
+    out = {"market_cap_check": "数据不足", "pe_cross": "数据不足",
+           "pb_cross": "数据不足", "roe_compare": "数据不足",
+           "ocf_yield_pct": None, "three_scenario": "数据不足",
+           "inputs": {}}
+    try:
+        from data.fetcher_core import get_ts
+        pro = get_ts()
+        ts_code = code + (".SZ" if code.startswith(("0", "3")) else ".SH")
+
+        df_b = pro.daily_basic(ts_code=ts_code,
+                               fields="ts_code,trade_date,close,pe,pb,total_share,total_mv")
+        if df_b is None or df_b.empty:
+            return out
+        last = df_b.sort_values("trade_date").iloc[-1]
+        price = float(last.get("close")) if last.get("close") else None
+        pe_rep = float(last.get("pe")) if last.get("pe") else None
+        pb_rep = float(last.get("pb")) if last.get("pb") else None
+        total_share = float(last.get("total_share")) if last.get("total_share") else None  # 万股
+        total_mv = float(last.get("total_mv")) if last.get("total_mv") else None          # 万元
+        if not price or price <= 0:
+            return out
+        out["inputs"] = {"price": price, "trade_date": str(last.get("trade_date", "")),
+                         "pe_reported": pe_rep, "pb_reported": pb_rep,
+                         "total_share_wan": total_share, "total_mv_wanyuan": total_mv}
+
+        df_f = pro.fina_indicator(
+            ts_code=ts_code,
+            fields="end_date,eps,bps,ocfps,roe,netprofit_yoy")
+        eps_rows, bps_rows, ocf_rows = [], [], []
+        roe_rep = yoy_latest = None
+
+        def _num(v):
+            try:
+                return float(v) if v is not None and v == v else None
+            except (TypeError, ValueError):
+                return None
+
+        if df_f is not None and not df_f.empty:
+            df_f = df_f.sort_values("end_date")
+            for _, r in df_f.iterrows():
+                d = str(r.get("end_date", ""))
+                eps_rows.append((d, r.get("eps")))
+                bps_rows.append((d, r.get("bps")))
+                ocf_rows.append((d, r.get("ocfps")))
+            lf = df_f.iloc[-1]
+            roe_rep = _num(lf.get("roe"))
+            yoy_latest = _num(lf.get("netprofit_yoy"))
+            out["inputs"]["fina_end_date"] = str(lf.get("end_date", ""))
+            out["inputs"]["roe_reported"] = roe_rep
+            out["inputs"]["netprofit_yoy"] = yoy_latest
+
+        eps_ttm = _ttm_from_cumulative([(d, _num(v)) for d, v in eps_rows], "eps")
+        ocf_ttm = _ttm_from_cumulative([(d, _num(v)) for d, v in ocf_rows], "ocfps")
+        bps_latest = next((float(v) for d, v in reversed(bps_rows)
+                           if _num(v) is not None), None)
+        eps_annual = next((float(v) for d, v in reversed(eps_rows)
+                           if d.endswith("1231") and _num(v) is not None), None)
+
+        # ① 市值验算: price(元) × total_share(万股) = 万元 vs total_mv(万元)
+        if total_share and total_mv:
+            out["market_cap_check"] = fr.market_cap_check(price, total_share, total_mv)
+
+        # ② PE 交叉校验: 官方 daily_basic.pe vs 复算 price/eps_ttm (累计财报换算口径)
+        pe_calc = None
+        if eps_ttm and eps_ttm > 0:
+            pe_calc = fr.valuation_metrics(price, eps=eps_ttm).get("PE")
+        if pe_rep and pe_calc:
+            out["pe_cross"] = fr.cross_validate(
+                "PE", {"daily_basic官方": pe_rep, "复算eps_ttm": round(pe_calc, 2)},
+                tolerance_pct=15.0)
+
+        # ③ PB 交叉校验: 官方 daily_basic.pb vs 复算 price/bps(最近报告期)
+        if pb_rep and bps_latest and bps_latest > 0:
+            pb_calc = fr.valuation_metrics(price, bvps=bps_latest).get("PB")
+            out["pb_cross"] = fr.cross_validate(
+                "PB", {"daily_basic官方": pb_rep, "复算bps": round(pb_calc, 2)},
+                tolerance_pct=10.0)
+
+        # ④ ROE 对比: 官方(加权口径) vs 复算 eps_annual/bps (期末口径), 仅并列展示不定级
+        if roe_rep is not None and eps_annual and bps_latest and bps_latest > 0:
+            roe_calc = fr.valuation_metrics(1.0, eps=eps_annual, bvps=bps_latest).get("ROE")
+            out["roe_compare"] = {"roe_reported": roe_rep,
+                                  "roe_calc_simple": round(roe_calc, 2) if roe_calc else None,
+                                  "note": "官方为加权平均口径, 复算为期末口径, 并列参考"}
+
+        # ⑤ 经营现金流(TTM)收益率 — fina_indicator 无自由现金流字段, 用 ocfps 口径并注明
+        if ocf_ttm and ocf_ttm != 0:
+            out["ocf_yield_pct"] = round(
+                fr.valuation_metrics(price, fcf_per_share=ocf_ttm)["FCF_Yield"], 2)
+            out["inputs"]["ocf_note"] = "ocfps口径(经营现金流/股,TTM), 非自由现金流"
+
+        # ⑥ 三情景估值 (确定性规则: 增速=最新净利同比钳制[-20%,30%], ±偏移;
+        #    PE=当前官方PE, ×1.2/×0.8 带宽; eps_ttm≤0 的亏损股不做PE情景)
+        if eps_ttm and eps_ttm > 0 and pe_rep and pe_rep > 0 and yoy_latest is not None:
+            g_n = min(max(yoy_latest / 100.0, -0.20), 0.30)
+            out["three_scenario"] = fr.three_scenario_valuation(
+                price, eps_ttm,
+                round(g_n + 0.05, 4), round(g_n, 4), round(g_n - 0.10, 4),
+                round(pe_rep * 1.2, 2), round(pe_rep, 2), round(pe_rep * 0.8, 2),
+                years=3)
+            out["three_scenario"]["rule"] = (
+                "增速=最新netprofit_yoy钳制[-20%,30%], 乐观+5pct/悲观-10pct; "
+                "PE=当前官方PE, 乐观×1.2/悲观×0.8; 3年期")
+    except Exception:
+        pass
+    return out
+
+
+# ═══════════════════════════════════════════════
 # ④ 资金面
 # ═══════════════════════════════════════════════
 
@@ -754,6 +893,7 @@ def analyze_stock(code: str, name: str = "") -> Dict[str, Any]:
         ("trend", analyze_trend),
         ("fundamental", analyze_fundamental),
         ("capital_flow", analyze_capital_flow),
+        ("valuation_check", analyze_valuation_check),
     ]:
         try:
             results[analyzer_name] = analyzer_fn(code)

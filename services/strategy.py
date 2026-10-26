@@ -16,6 +16,22 @@ from realtime_scorer import (
 )
 
 
+def _exclude_st(daily, basic):
+    """候选池剔除名称含 ST 的证券（ST/*ST/退市风险警示，名称取自名录，大小写不敏感）。
+
+    daily 快照本身无名称列，按 basic 名录的 name 构建 ST 短码集合后过滤。
+    """
+    if not isinstance(daily, pd.DataFrame) or not isinstance(basic, dict):
+        return daily
+    st_codes = {c.replace(".SZ", "").replace(".SH", "").replace(".BJ", "")
+                for c, info in basic.items()
+                if "ST" in str((info or {}).get("name", "")).upper()}
+    if not st_codes:
+        return daily
+    short = daily["ts_code"].str.replace(r"\.(SZ|SH|BJ)$", "", regex=True)
+    return daily[~short.isin(st_codes)]
+
+
 # ============================================================
 # 策略扫描
 # ============================================================
@@ -51,9 +67,10 @@ def run_trend_scan():
             short = row["ts_code"].replace(".SZ","").replace(".SH","").replace(".BJ","")
             chg_map[short] = float(row["pct_chg"])
 
-    # 新预筛选：排除涨停 + 排除北证 → 按成交额取前 80
+    # 新预筛选：排除涨停 + 排除北证 + 剔除ST → 按成交额取前 80
     # 目的是找到温和放量上涨且有趋势潜力的股票，而非涨停板
     non_bj = daily[~daily["ts_code"].str.endswith(".BJ")] if isinstance(daily, pd.DataFrame) else daily
+    non_bj = _exclude_st(non_bj, basic)
     pool = non_bj[(non_bj["pct_chg"] >= 1.0) & (non_bj["pct_chg"] < 9.0)]
     # 兜底：如果筛选后不足 10 只，放宽下限
     if len(pool) < 10:
@@ -107,8 +124,9 @@ def run_hybrid_scan():
     if daily is None or isinstance(daily, dict):
         return {"picked": [], "total_scanned": 0}
 
-    # 排除北证标的
+    # 排除北证标的 + 剔除ST
     daily = daily[~daily["ts_code"].str.endswith(".BJ")]
+    daily = _exclude_st(daily, basic)
 
     # 新预筛选：温和上涨 + 高成交额，排除涨停
     pool = daily[(daily["pct_chg"] >= 1.0) & (daily["pct_chg"] < 8.0)]
@@ -186,8 +204,9 @@ def run_dragon_scan():
     if daily is None or isinstance(daily, dict):
         return {"picked": [], "total_scanned": 0}
 
-    # 排除北证标的
+    # 排除北证标的 + 剔除ST
     daily = daily[~daily["ts_code"].str.endswith(".BJ")]
+    daily = _exclude_st(daily, basic)
 
     # Build maps
     name_map = {}

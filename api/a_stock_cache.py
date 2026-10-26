@@ -40,12 +40,20 @@ def api_cache_summary():
         by_type[label] = count
         total += count
 
+    # 数据日期解析失败 (无凭据/上游拒绝) 不拖垮本地缓存状态: 显式标注"未同步"
+    try:
+        latest = get_latest_date()
+        if not isinstance(latest, str) or not latest:
+            latest = "未同步"
+    except Exception:
+        latest = "未同步"
+
     return jsonify({
         "strategy": "内存+可选Redis",
         "total_records": total,
         "by_type": by_type,
         "db_size_mb": 0,
-        "latest_trade_date": get_latest_date() or "未同步",
+        "latest_trade_date": latest,
         "timestamp": time.strftime("%H:%M:%S"),
     })
 

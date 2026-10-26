@@ -38,9 +38,11 @@ def create_app() -> Flask:
     """创建并配置 Flask 应用"""
     app = Flask(__name__)
     app.json = NumpyJSONProvider(app)
-    app.static_folder = os.path.dirname(os.path.abspath(__file__))
+    # [本地安全补丁] 静态根收窄到 public/ 白名单目录, 仓库源码/配置/数据库不再可静态下载
+    app.static_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "public")
     app.static_url_path = ""
-    CORS(app)
+    # [本地安全补丁] CORS 收紧为环境变量白名单, 默认仅本机
+    CORS(app, origins=os.getenv("SHIMI_CORS_ORIGINS", "http://127.0.0.1").split(","))
 
     # ─── 基础设施注册 ────────────────────────────────
     from middleware import register_middleware

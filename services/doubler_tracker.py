@@ -129,9 +129,6 @@ def update_progress():
 
     每日调用, 更新 current_price 和 peak_price
     """
-    import tushare as ts
-    import config
-
     conn = _get_conn()
     # 获取本月所有未验证的跟踪记录
     month = datetime.now().strftime("%Y%m")
@@ -144,7 +141,14 @@ def update_progress():
         conn.close()
         return {"updated": 0, "message": "no active tracking for this month"}
 
-    pro = ts.pro_api(config.TUSHARE_TOKEN)
+    try:
+        # 本地部署: HTTPS 验收闸门内的安全替代 (local_tushare_data)
+        from local_tushare_data import real_pro
+        pro = real_pro()
+    except ImportError:
+        import tushare as ts
+        import config
+        pro = ts.pro_api(config.TUSHARE_TOKEN)
     updated = 0
 
     for row in rows:

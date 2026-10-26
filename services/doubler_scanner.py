@@ -498,6 +498,9 @@ def scan_monthly_doublers():
                 ret = (close_last / close_first - 1) * 100
                 if ret >= 100:
                     info = stock_info.get(code, {})
+                    # 剔除ST/*ST (按当前名录名称过滤; 历史名称不可考, 口径为近似)
+                    if "ST" in str(info.get("name", "")).upper():
+                        continue
                     short = code.replace(".SZ","").replace(".SH","").replace(".BJ","")
                     all_doublers.append({
                         "month": month_key,
@@ -602,13 +605,16 @@ def recommend_current_month():
         vol = float(row["vol"])
         amount = float(row["amount"])
 
-        if "ST" in code or close <= 0 or vol <= 0:
+        if close <= 0 or vol <= 0:
             continue
         # 跳过北交所 (用户无交易权限)
         if code.endswith(".BJ"):
             continue
 
         info = info_map.get(code, {})
+        # 剔除ST/*ST (名称级; 此前检查ts_code永不匹配, 为无效过滤)
+        if "ST" in str(info.get("name", "")).upper():
+            continue
         b_row = basic_map.get(code, None)
 
         circ_mv = float(b_row["circ_mv"]) / 1e4 if b_row is not None and b_row["circ_mv"] is not None else 0

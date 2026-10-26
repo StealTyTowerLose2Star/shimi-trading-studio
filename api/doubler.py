@@ -30,9 +30,12 @@ def api_doubler_history():
 
 @bp.route("/history/refresh")
 def api_doubler_history_refresh():
-    """强制重新扫描历史翻倍股（耗时 ~2-3分钟）"""
+    """强制重新扫描历史翻倍股（月界日线成对取数, 按数据日缓存）"""
     cache_delete("doubler_history")
-    result = scan_monthly_doublers()
+    try:
+        result = scan_monthly_doublers()
+    except Exception as e:
+        return jsonify({"error": str(e)[:120], "data_status": "unavailable"}), 502
     cache_set("doubler_history", result, 3600)
     return jsonify(result)
 
@@ -44,6 +47,9 @@ def api_doubler_history_refresh():
 def api_doubler_recommend():
     """获取当月翻倍潜力股 (10维评分 + 启动前期检测 + 催化剂)"""
     result = cache_or_fetch("doubler_recommend_v4", recommend_current_month, 300)
+    # 错误契约: 上游失败 → 502 显式失败, 不 200 包错误
+    if isinstance(result, dict) and result.get("error"):
+        return jsonify({**result, "data_status": "unavailable"}), 502
     return jsonify(result)
 
 
@@ -51,8 +57,13 @@ def api_doubler_recommend():
 def api_doubler_recommend_refresh():
     """强制刷新当月推荐 (V5: 使用recommend_current_month, 10维评分+模式检测)"""
     cache_delete("doubler_recommend_v4")
-    result = recommend_current_month()
+    try:
+        result = recommend_current_month()
+    except Exception as e:
+        return jsonify({"error": str(e)[:120], "data_status": "unavailable"}), 502
     cache_set("doubler_recommend_v4", result, 300)
+    if isinstance(result, dict) and result.get("error"):
+        return jsonify({**result, "data_status": "unavailable"}), 502
     return jsonify(result)
 
 
@@ -63,10 +74,13 @@ def api_doubler_recommend_refresh():
 def api_doubler_plan_10k():
     """基于当月推荐池生成 1W 仓位方案"""
     recommend = cache_or_fetch("doubler_recommend_v4", recommend_current_month, 300)
+    if isinstance(recommend, dict) and recommend.get("error"):
+        return jsonify({**recommend, "data_status": "unavailable"}), 502
     if isinstance(recommend, dict) and "elite_picks" in recommend:
         plan = position_plan_10k(recommend["elite_picks"])
         return jsonify({"recommend_time": recommend.get("scan_time"), **plan})
-    return jsonify({"error": "recommend data unavailable"})
+    return jsonify({"error": "recommend data unavailable",
+                    "data_status": "unavailable"}), 502
 
 
 # ═══════════════════════════════════════════════════════════════

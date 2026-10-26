@@ -3,7 +3,7 @@
 """
 from flask import Blueprint, jsonify
 
-from cache import cache_or_fetch
+from cache import cache_or_fetch, cache_get
 from data.fetcher import (
     fetch_indices, fetch_sectors, fetch_sector_flow,
     fetch_hot_stocks, fetch_limit_up, fetch_sentiment,
@@ -13,40 +13,61 @@ from data.fetcher import (
 bp = Blueprint("market", __name__, url_prefix="/api")
 
 
+def _is_error_payload(data):
+    """cache_or_fetch 会把上游异常转成 {"error": ...} 普通返回体 — 识别之,
+    不得把错误字典当正常行情/情绪数据下发"""
+    return isinstance(data, dict) and "error" in data
+
+
+def _market_json(key, fn, ttl):
+    """只读行情端点统一错误契约: 上游失败 (cache_or_fetch 返回 error 字典,
+    或缓存层自身直接抛异常) → 502 + 可读 error; 有效数据(含合法空列表) → 200 原样"""
+    try:
+        data = cache_or_fetch(key, fn, ttl)
+    except Exception as e:
+        return jsonify({"error": f"{key} 获取失败: {str(e)[:100]}"}), 502
+    if _is_error_payload(data):
+        return jsonify({"error": str(data["error"])[:120]}), 502
+    return jsonify(data)
+
+
 @bp.route("/health")
 def health():
-    date = get_latest_date()
-    return jsonify({"status": "ok", "studio": "拾米交易工作室", "latest_trade_date": date})
+    # 存活检查不触发真实数据拉取，也不等价于数据源已接通。
+    return jsonify({"status": "ok", "service_status": "ready",
+                    "market_data_status": "not_checked", "studio": "拾米交易工作室",
+                    "latest_trade_date": None,
+                    "note": "仅服务存活，行情状态未知；不执行外部探测"})
 
 
 @bp.route("/indices")
 def api_indices():
-    return jsonify(cache_or_fetch("indices", fetch_indices, 30))
+    return _market_json("indices", fetch_indices, 30)
 
 
 @bp.route("/sectors")
 def api_sectors():
-    return jsonify(cache_or_fetch("sectors", fetch_sectors, 120))
+    return _market_json("sectors", fetch_sectors, 120)
 
 
 @bp.route("/sector-flow")
 def api_sector_flow():
-    return jsonify(cache_or_fetch("sector_flow", fetch_sector_flow, 60))
+    return _market_json("sector_flow", fetch_sector_flow, 60)
 
 
 @bp.route("/hot-stocks")
 def api_hot_stocks():
-    return jsonify(cache_or_fetch("hot_stocks", fetch_hot_stocks, 30))
+    return _market_json("hot_stocks", fetch_hot_stocks, 30)
 
 
 @bp.route("/limit-up")
 def api_limit_up():
-    return jsonify(cache_or_fetch("limit_up", fetch_limit_up, 60))
+    return _market_json("limit_up", fetch_limit_up, 60)
 
 
 @bp.route("/sentiment")
 def api_sentiment():
-    return jsonify(cache_or_fetch("sentiment", fetch_sentiment, 30))
+    return _market_json("sentiment", fetch_sentiment, 30)
 
 
 @bp.route("/stock/lookup")
@@ -56,9 +77,12 @@ def api_stock_lookup():
     q = request.args.get("q", "").strip()
     if len(q) < 2:
         return jsonify([])
-    basic = get_stock_basic()
-    if not isinstance(basic, dict):
-        return jsonify([])
+    try:
+        basic = get_stock_basic()
+    except Exception as error:
+        return jsonify(error=f"股票名录获取失败: {str(error)[:100]}"), 502
+    if not isinstance(basic, dict) or "error" in basic or not basic:
+        return jsonify(error="股票名录未取得，不能把失败当作无匹配"), 502
     results = []
     for code, info in basic.items():
         short = code.replace(".SZ", "").replace(".SH", "").replace(".BJ", "")
@@ -79,13 +103,19 @@ def api_dashboard():
     result = {}
     errors = []
 
-    # 每项独立容错: 单点故障不影响整体
+    # 每项独立容错: 单点故障不影响整体;
+    # cache_or_fetch 会把异常转成 {"error": ...} 返回体, 必须显式识别,
+    # 否则 _errors 永远为空、错误字典被当正常数据下发
     def safe_fetch(key, fn, ttl):
         try:
-            return cache_or_fetch(key, fn, ttl)
+            data = cache_or_fetch(key, fn, ttl)
         except Exception as e:
             errors.append({"key": key, "error": str(e)[:80]})
             return None
+        if _is_error_payload(data):
+            errors.append({"key": key, "error": str(data["error"])[:80]})
+            return None
+        return data
 
     result["indices"] = safe_fetch("indices", fetch_indices, 30)
     result["sectors"] = safe_fetch("sectors", fetch_sectors, 120)
@@ -93,19 +123,24 @@ def api_dashboard():
     result["limit_up"] = safe_fetch("limit_up", fetch_limit_up, 60)
     result["sentiment"] = safe_fetch("sentiment", fetch_sentiment, 30)
 
-    from services.strategy import run_trend_scan, run_hybrid_scan, run_dragon_scan
-    result["strategy_trend"] = safe_fetch("strategy_trend", run_trend_scan, 120)
-    result["strategy_hybrid"] = safe_fetch("strategy_hybrid", run_hybrid_scan, 120)
-    result["strategy_dragon"] = safe_fetch("strategy_dragon", run_dragon_scan, 120)
+    # 策略扫描是全市场重计算 (2026-10-25起经 /api/strategy/<name>[/refresh]
+    # 触发并按数据日缓存, 结果写穿 cache.py); dashboard 只读既有缓存不为聚合
+    # 阻塞数分钟 — 缓存未生成时该项 None (前端显示"数据未取得", 不记错误)
+    for _scan_key in ("strategy_trend", "strategy_hybrid", "strategy_dragon"):
+        _scan_val = cache_get(_scan_key)
+        result[_scan_key] = None if _is_error_payload(_scan_val) else _scan_val
     result["hot_stocks"] = safe_fetch("hot_stocks", fetch_hot_stocks, 30)
 
     total = round(time.time() - start, 1)
     if errors:
-        print(f"[拾米] ⚠️ Dashboard {total}s, {len(errors)} errors: {[e['key'] for e in errors]}")
+        print(f"[shimi] Dashboard degraded {total}s; failed keys: {[e['key'] for e in errors]}")
     else:
-        print(f"[拾米] ✅ Dashboard {total}s")
+        print(f"[shimi] Dashboard {total}s")
     result["_errors"] = errors if errors else None
-    return jsonify(result)
+    resp = jsonify(result)
+    if errors:
+        resp.headers["X-Shimi-Degraded"] = "true"  # 显式降级标记 (聚合含成功项时仍200)
+    return resp
 
 
 # ─── 个股K线数据 ──────────────────────────────
@@ -127,6 +162,12 @@ def api_stock_kline(code):
     try:
         from realtime_scorer import get_kline
         df = get_kline(code, days=days)
+    except Exception as e:
+        # 上游缺连接/权限/安全传输，不是应用内部错误或合法空数据。
+        return jsonify({"error": str(e)[:120], "code": code,
+                        "data_status": "unavailable"}), 502
+
+    try:
         if df is None or len(df) == 0:
             return jsonify({"error": "无数据", "code": code}), 404
 

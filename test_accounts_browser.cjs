@@ -1,0 +1,45 @@
+const { chromium } = require('playwright');
+const fs = require('fs');
+const path = require('path');
+(async () => {
+  const browser = await chromium.launch({channel:'msedge', headless:true});
+  const context = await browser.newContext({viewport:{width:1365,height:900}});
+  const page = await context.newPage();
+  const failures=[];
+  page.on('pageerror', error => failures.push(error.stack));
+  const username='qa_ui_'+Date.now();
+  try {
+    await page.goto('http://127.0.0.1:17890/', {waitUntil:'domcontentloaded'});
+    await page.locator('#loginBtn').click();
+    await page.getByText('还没有账号？点击注册 →', {exact:true}).click();
+    await page.locator('#regUser').fill(username);
+    await page.locator('#regPass').fill('QA-only-not-a-real-password');
+    await page.locator('#regName').fill('账号回归测试');
+    await page.getByRole('button',{name:'注册新账户', exact:true}).click();
+    await page.locator('#regError').filter({hasText:'注册成功'}).waitFor();
+    await page.locator('#loginPanel').waitFor({state:'visible'});
+    if(await page.locator('#loginUser').inputValue() !== username) throw new Error('用户名未回填');
+    await page.getByText('还没有账号？点击注册 →', {exact:true}).click();
+    await page.locator('#regPass').fill('QA-only-not-a-real-password');
+    await page.getByRole('button',{name:'注册新账户', exact:true}).click();
+    await page.locator('#regError').filter({hasText:'用户名已存在'}).waitFor();
+    await page.getByText('已有账号？返回登录 ←', {exact:true}).click();
+    await page.locator('#loginPass').fill('wrong-password');
+    await page.getByRole('button',{name:'登录',exact:true}).click();
+    await page.locator('#loginError').filter({hasText:'用户名或密码错误'}).waitFor();
+    await page.locator('#loginPass').fill('QA-only-not-a-real-password');
+    await page.getByRole('button',{name:'登录',exact:true}).click();
+    await page.locator('#logoutBtn').waitFor({state:'visible'});
+    const token=await page.evaluate(()=>JSON.parse(localStorage.getItem('shimi_auth')).token);
+    await page.reload({waitUntil:'domcontentloaded'});
+    await page.locator('#logoutBtn').waitFor({state:'visible'});
+    await page.screenshot({path:path.join(__dirname,'runtime','account-login-verified.png'),fullPage:false});
+    await page.locator('#logoutBtn').click();
+    await page.locator('#loginBtn').waitFor({state:'visible'});
+    if(await page.evaluate(()=>localStorage.getItem('shimi_auth')) !== null) throw new Error('退出未清本地会话');
+    const response=await context.request.get('http://127.0.0.1:17890/api/auth/me',{headers:{Authorization:'Bearer '+token}});
+    if(response.status()!==401) throw new Error('退出未撤销服务端会话');
+    if(failures.length) throw new Error('页面脚本异常: '+failures.join(';'));
+    console.log(JSON.stringify({result:'PASS',username,steps:['register','duplicate_error','wrong_password_error','login','refresh','logout','server_session_revoked'],pageErrors:failures}));
+  } finally { await browser.close(); }
+})().catch(error=>{console.error(error.message);process.exitCode=1;});
