@@ -88,7 +88,9 @@ class LocalAccountTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/auth/me', base_url='http://evil.invalid:17890').status_code, 403)
 
     def test_other_features_remain_closed(self):
-        for path in ['/api/trades', '/api/health/deps', '/api/sse/stream', '/api/auth/reset-code']:
+        # 交易日志 2026-10-26 启用(仅手动记账): /api/trades 移出封闭清单, 未登录须 401
+        self.assertEqual(self.client.get('/api/trades').status_code, 401)
+        for path in ['/api/health/deps', '/api/sse/stream', '/api/auth/reset-code']:
             self.assertEqual(self.client.get(path).status_code, 403)
         self.assertEqual(self.client.get('/static/.local_token').status_code, 404)
 

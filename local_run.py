@@ -466,12 +466,15 @@ else:
         '/api/plan-1w', '/api/plan-1w/summary',
         # 2026-10-26 事件总览启用: 巨潮催化剂+东财公告+财联社/东财7×24快讯 (全免 key)
         '/api/market/events', '/api/market/events/refresh',
+        # 2026-10-26 交易日志启用 (操作者授权: 仅手动记账, 无券商API/自动下单/买卖建议)
+        '/api/trades', '/api/trades/portfolio',
     }
     _DEMO_POST = {
         '/api/review/daily', '/api/review/weekly',
         '/api/a-stock/cache/refresh', '/api/a-stock/cache/refresh-recent',
         '/api/a-stock/cache/invalidate',
         '/api/market/events/refresh',
+        '/api/trades',
     }
 _LOCAL_REFRESH = {
     '/api/strategy/trend/refresh': _mock_strategy('trend'),
@@ -498,7 +501,7 @@ _MODULES_REAL = [
     {'name':'翻倍/观察跟踪', 'state':'真实只读(部分维度降级)', 'reason':'评分/月扫/10k方案/跟踪=Tushare真实数据；D9龙虎榜+资金流已实测接入；D7/D8公告催化剂2026-10-26起走巨潮(沪深北全量,已入白名单)；候选池已剔除ST'},
     {'name':'事件总览', 'state':'真实只读(免key源)', 'reason':'巨潮催化剂公告(沪深北全量)+东财公告+财联社电报+东财7×24快讯,2026-10-26接入出站白名单;finnhub/yfinance无凭据仍禁用并在sources_status显式标注;先知模型(合成训练数据)违反real-only保持不启用'},
     {'name':'缓存/监测', 'state':'真实只读', 'reason':'/api/monitor本机资源+/api/a-stock/cache/summary缓存状态已启用；/api/health/deps保持禁用(会探测付费源域名)'},
-    {'name':'交易记录/盈亏/组合', 'state':'未启用', 'reason':'交易写库与券商API任何模式均禁用；原分库关联缺陷未修复'},
+    {'name':'交易记录/盈亏/组合', 'state':'手动记账(已启用)', 'reason':'2026-10-26起: 流水簿记(买/卖,费用可选)+移动加权平均成本+持仓盈亏视图(tushare EOD真实现价,查不到显式行情不可用不用0冒充);仅本机手动录入,券商API/自动下单/买卖建议/webhook保持永禁'},
     {'name':'复盘/融资融券', 'state':'真实只读(部分)', 'reason':'margin_detail两融已实测接入；复盘引擎已启用,报告依赖建议推荐记录(T+3成熟),无记录时显式说明'},
     {'name':'消息推送/付费源/模型API', 'state':'禁用', 'reason':'webhook/finnhub/yfinance/模型API不启用；Tushare仅限个人非商业只读，不购买权限或升级套餐'},
 ]
@@ -541,19 +544,22 @@ if DATA_MODE == "real":
     app.view_functions['index'] = _real_index
 _KLINE_RE = re.compile(r"^/api/stock/\d{6}/kline$")
 _RADAR_RE = re.compile(r"^/api/stock/\d{6}/radar(/summary)?$")
+_TRADES_RE = re.compile(r"^/api/trades/\d+$")  # 交易日志单条记录 PUT/DELETE (手动记账)
 _ACCOUNT_METHODS = {
     '/api/auth/register': {'POST'}, '/api/auth/login': {'POST'},
     '/api/auth/me': {'GET', 'HEAD'}, '/api/auth/logout': {'POST'},
 }
 from local_accounts import install_local_accounts
 install_local_accounts(app, PORT)
+from local_trade_journal import install_trade_journal
+install_trade_journal(app, PORT)
 _DEMO_SCOPE_MOCK = ("本地只读模拟演示: 仅开放 GET /, /static/index.html, /api/health, "
                     "/api/indices, /api/dashboard, /api/stock/lookup, "
                     "/api/stock/<6位代码>/kline (days 1-200) 等白名单; "
                     "本地账号可用; 交易/真实扫描/推送/依赖探测仍未启用")
 _DEMO_SCOPE_REAL = ("本地真实只读模式: 白名单 GET 端点 (+复盘/缓存管理POST) + /api/us/quote; "
                     "当前适配器=Tushare日线EOD, 策略/雷达/翻倍/两融/复盘/监测/事件总览已启用(按数据日缓存); "
-                    "交易/推送/付费源/模型API 保持禁用")
+                    "交易记录=仅手动记账(本机写); 券商交易/推送/付费源/模型API 保持禁用")
 _DEMO_SCOPE = _DEMO_SCOPE_MOCK if DATA_MODE == "mock" else _DEMO_SCOPE_REAL
 
 
@@ -565,9 +571,10 @@ def _demo_whitelist():
         if request.method in _ACCOUNT_METHODS[path]:
             return None
         return jsonify(error='账号请求方法不支持'), 405
-    if (path in _DEMO_EXACT or _KLINE_RE.match(path)
+    if (path in _DEMO_EXACT or _KLINE_RE.match(path) or _TRADES_RE.match(path)
             or (DATA_MODE == "real" and _RADAR_RE.match(path))):
-        if request.method not in ("GET", "HEAD") and path not in _DEMO_POST:
+        if (request.method not in ("GET", "HEAD") and path not in _DEMO_POST
+                and not _TRADES_RE.match(path)):
             return jsonify({"error": "forbidden_demo_scope",
                             "message": _DEMO_SCOPE}), 403
         if path in _LOCAL_REFRESH:
@@ -637,6 +644,7 @@ if __name__ == "__main__":
         print("  数据: Tushare Pro 日线 EOD (收盘值,非实时); HTTPS+用途声明已实测验收 2026-10-24")
         print("  出站: 白名单制 — 仅 loopback + api.tushare.pro + 事件免key源(巨潮/东财公告/财联社/东财724) (+东财push2备用, 默认不走)")
         print("  启用: 行情/搜索K线/雷达/三策略/建议/翻倍/两融/复盘/缓存监测/事件总览 (按数据日6h缓存)")
+        print("  记账: 交易日志(仅手动) /api/trades + /api/trades/portfolio — 移动加权成本, EOD真实现价")
         # 后台预热: 三策略扫描 + 操作建议 (全局1s节流串行; 冷启动面板构建数分钟);
         # 重计算按数据日缓存, 预热完成后 dashboard/面板即读既有缓存
         import threading as _th
@@ -653,7 +661,7 @@ if __name__ == "__main__":
         _th.Thread(target=_prewarm, daemon=True, name="scan-prewarm").start()
     print(f"  URL:  http://127.0.0.1:{PORT}  (仅本机, 无公网)")
     print(f"  PID:  {os.getpid()}  停止: Ctrl+C 或 kill {os.getpid()}")
-    print("  禁用: 交易/券商API/推送/付费源/模型API；行情连接另行验收")
+    print("  禁用: 券商交易API/自动下单/推送/付费源/模型API；行情连接另行验收")
     print("  隔离: 进程级软隔离 (socket+DNS管控), 非系统级禁网")
     print("  DB:   保留既有runtime路径；不重置账号或业务记录")
     print("=" * 60, flush=True)

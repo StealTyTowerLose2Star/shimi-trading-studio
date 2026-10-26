@@ -79,9 +79,13 @@ class LocalModuleTests(unittest.TestCase):
         self.assertEqual(len(data['modules']), 11)
 
     def test_blocked_is_not_success_and_keys_are_not_exposed(self):
-        # 仍禁用: 美股看板(yfinance)、交易写库
-        for path in ['/api/us/dashboard', '/api/trades']:
-            self.assertEqual(self.client.get(path).status_code, 403, path)
+        # 仍禁用: 美股看板(yfinance)、券商交易写库(单数 /api/trade 上游遗留面)
+        self.assertEqual(self.client.get('/api/us/dashboard').status_code, 403)
+        self.assertEqual(self.client.post('/api/trade', json={}).status_code, 403)
+        # 交易日志 2026-10-26 启用(仅手动记账): 不再 403; 未登录一律 401, 绝不 200 包错误
+        self.assertEqual(self.client.get('/api/trades').status_code, 401)
+        self.assertEqual(self.client.post('/api/trades', json={}).status_code, 401)
+        self.assertEqual(self.client.get('/api/trades/portfolio').status_code, 401)
         # 事件总览 2026-10-26 启用 (免key源): 不再 403; 200 + cache/scanning 占位,
         # 后台扫描已打桩不触网; 响应绝不 200 包 error 字段
         r = self.client.get('/api/market/events')
