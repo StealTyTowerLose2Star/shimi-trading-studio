@@ -20,6 +20,8 @@ def _exclude_st(daily, basic):
     """候选池剔除名称含 ST 的证券（ST/*ST/退市风险警示，名称取自名录，大小写不敏感）。
 
     daily 快照本身无名称列，按 basic 名录的 name 构建 ST 短码集合后过滤。
+    名录缺失/非 dict 时不过滤 — 调用方必须用 _st_filter_fields 在结果中显式标注
+    (2026-10-27 验收返修: 不得静默当作已过滤)。
     """
     if not isinstance(daily, pd.DataFrame) or not isinstance(basic, dict):
         return daily
@@ -30,6 +32,24 @@ def _exclude_st(daily, basic):
         return daily
     short = daily["ts_code"].str.replace(r"\.(SZ|SH|BJ)$", "", regex=True)
     return daily[~short.isin(st_codes)]
+
+
+def _get_namelist():
+    """获取股票名录; 失败返回 None (不抛 — 扫描降级继续, 结果显式标注)"""
+    try:
+        basic = get_stock_basic()
+    except Exception as e:
+        print(f"[strategy] ST 名录获取失败, 名称级过滤未生效: {e}")
+        return None
+    return basic if isinstance(basic, dict) and basic else None
+
+
+def _st_filter_fields(basic):
+    """扫描结果的 ST 过滤状态字段: 名录可用 → applied; 缺失 → 显式降级声明"""
+    if basic:
+        return {"st_filter": "applied", "st_note": None}
+    return {"st_filter": "degraded_no_namelist",
+            "st_note": "ST 名录缺失，ST 过滤未生效（候选池未按名称剔除）"}
 
 
 # ============================================================
@@ -51,7 +71,7 @@ def run_trend_scan():
         }
     """
     daily = get_daily()
-    basic = get_stock_basic()
+    basic = _get_namelist()
     if daily is None or isinstance(daily, dict):
         return {"picked": [], "total_scanned": 0}
 
@@ -102,7 +122,7 @@ def run_trend_scan():
 
     results.sort(key=lambda x: x["trend_score"], reverse=True)
     return {"picked": results[:25], "total_scanned": len(stock_codes),
-            "engine": "TrendDetector (real)"}
+            "engine": "TrendDetector (real)", **_st_filter_fields(basic)}
 
 
 def run_hybrid_scan():
@@ -120,7 +140,7 @@ def run_hybrid_scan():
         }
     """
     daily = get_daily()
-    basic = get_stock_basic()
+    basic = _get_namelist()
     if daily is None or isinstance(daily, dict):
         return {"picked": [], "total_scanned": 0}
 
@@ -182,7 +202,7 @@ def run_hybrid_scan():
 
     results.sort(key=lambda x: x["score"], reverse=True)
     return {"picked": results[:25], "total_scanned": len(stock_codes),
-            "engine": "MergedScorer 7D (real)"}
+            "engine": "MergedScorer 7D (real)", **_st_filter_fields(basic)}
 
 
 def run_dragon_scan():
@@ -200,7 +220,7 @@ def run_dragon_scan():
         }
     """
     daily = get_daily()
-    basic = get_stock_basic()
+    basic = _get_namelist()
     if daily is None or isinstance(daily, dict):
         return {"picked": [], "total_scanned": 0}
 
@@ -257,4 +277,4 @@ def run_dragon_scan():
 
     results.sort(key=lambda x: x["leader_score"], reverse=True)
     return {"picked": results[:25], "total_scanned": len(stock_codes),
-            "engine": "LeaderScorer 5D (real)"}
+            "engine": "LeaderScorer 5D (real)", **_st_filter_fields(basic)}

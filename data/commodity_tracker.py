@@ -69,7 +69,9 @@ def scan_commodity_catalysts():
 
     sectors = fetch_sectors()
     if not sectors or not isinstance(sectors, list):
-        return {"stock_scores": {}}
+        # 2026-10-27: 板块数据失败/为空属缺源 (正常响应恒非空), 不得以 0 分冒充完整
+        return {"stock_scores": {}, "source_status": "unavailable",
+                "source_note": "板块数据不可用 (fetch_sectors 失败或空响应)"}
 
     stock_scores = {}
 
@@ -117,7 +119,8 @@ def scan_commodity_catalysts():
                                 "up_ratio": round(up_ratio, 1),
                             }
 
-    return {"stock_scores": stock_scores}
+    return {"stock_scores": stock_scores,
+            "source_status": "ok" if stock_scores else "empty"}
 
 
 def fetch_commodity_catalyst_scores():

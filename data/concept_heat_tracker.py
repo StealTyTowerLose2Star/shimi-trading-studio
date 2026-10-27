@@ -53,8 +53,15 @@ def detect_cross_industry_clusters(trade_date=None):
     多个超配行业同时出现 → 跨行业概念正在发酵
     """
     hot = _get_hot_stocks(trade_date, threshold=5.0)
-    if hot is None or len(hot) < 20:
-        return {"clusters": [], "stock_scores": {}}
+    if hot is None:
+        # 2026-10-27: 大涨股快照失败属缺源, 显式标注 (不以空集群冒充)
+        return {"clusters": [], "stock_scores": {},
+                "source_status": "unavailable",
+                "source_note": "大涨股快照不可用 (daily 数据失败)"}
+    if len(hot) < 20:
+        return {"clusters": [], "stock_scores": {},
+                "source_status": "empty",
+                "source_note": f"大涨(≥{threshold}%)股票仅 {len(hot)} 只, 不足成簇阈值"}
 
     ind_map = _get_industry_map()
     total_market = len(ind_map)  # ~5525
@@ -95,7 +102,9 @@ def detect_cross_industry_clusters(trade_date=None):
             }
 
     if len(overrep) < 3:
-        return {"clusters": [], "stock_scores": {}}
+        return {"clusters": [], "stock_scores": {},
+                "source_status": "empty",
+                "source_note": f"超配行业仅 {len(overrep)} 个, 不足成簇阈值"}
 
     # === 超配行业两两联动强度 ===
     inds = list(overrep.keys())
@@ -193,7 +202,8 @@ def detect_cross_industry_clusters(trade_date=None):
                     "stock_count": cluster["stock_count"],
                 }
 
-    return {"clusters": clusters, "stock_scores": stock_scores}
+    return {"clusters": clusters, "stock_scores": stock_scores,
+            "source_status": "ok" if clusters else "empty"}
 
 
 # ═══════════════════════════════════════════════
@@ -265,7 +275,9 @@ def scan_concept_heat():
             clusters = name_concept_clusters(clusters, max_search=2)
         except Exception as e:
             print(f"[C6] NLP naming skipped: {e}")
-    return {"stock_scores": result.get("stock_scores", {}), "clusters": clusters}
+    return {"stock_scores": result.get("stock_scores", {}), "clusters": clusters,
+            "source_status": result.get("source_status", "empty"),
+            "source_note": result.get("source_note", "")}
 
 
 def fetch_concept_catalyst_scores():

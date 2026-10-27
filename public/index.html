@@ -442,6 +442,8 @@ td[title]::after {
       <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">
         观星台 · 巨潮资讯 + Finnhub + yfinance + 东方财富 → 事件归类 → 标的映射 → 多空信号
       </div>
+      <!-- 源状态四态条 (2026-10-27): 正常/正常·空/不可用/禁用, 不可用绝不显示成正常 -->
+      <div id="marketEventsSources" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;font-size:11px"></div>
       <!-- 汇总统计 -->
       <div id="marketEventsSummary" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;padding:12px;background:rgba(139,92,246,.04);border-radius:10px;font-size:13px">
         <div><span style="color:var(--text-muted)">总事件</span><br><b id="meTotal">--</b></div>
@@ -1400,11 +1402,17 @@ function strategyDataOrUnavailable(data, ids) {
   return data;
 }
 
+function stFilterNote(data) {
+  // ST 名录缺失时显式降级标注 (2026-10-27): 不得静默当作已过滤
+  return data && data.st_filter === 'degraded_no_namelist'
+    ? ' · <span style="color:var(--red);font-weight:600">⚠ ST名录缺失,过滤未生效</span>' : '';
+}
+
 function renderTrend(data) {
   const tbody = $('trendBody');
   if (!strategyDataOrUnavailable(data,['trendBody','trendCount'])) return;
   const items = data.picked;
-  $('trendCount').textContent = `扫描 ${data.total_scanned} 条`;
+  $('trendCount').innerHTML = `扫描 ${data.total_scanned} 条${stFilterNote(data)}`;
   if (items.length === 0) {
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">暂无信号</td></tr>';
     return;
@@ -1423,7 +1431,7 @@ function renderHybrid(data) {
   const tbody = $('hybridBody');
   if (!strategyDataOrUnavailable(data,['hybridBody','hybridCount'])) return;
   const items = data.picked;
-  $('hybridCount').textContent = `扫描 ${data.total_scanned} 条`;
+  $('hybridCount').innerHTML = `扫描 ${data.total_scanned} 条${stFilterNote(data)}`;
   if (items.length === 0) {
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">暂无信号</td></tr>';
     return;
@@ -1443,7 +1451,7 @@ function renderDragon(data) {
   const tbody = $('dragonBody');
   if (!strategyDataOrUnavailable(data,['dragonBody','dragonCount'])) return;
   const items = data.picked;
-  $('dragonCount').textContent = `共 ${data.total_scanned} 只`;
+  $('dragonCount').innerHTML = `共 ${data.total_scanned} 只${stFilterNote(data)}`;
   if (items.length === 0) {
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">暂无涨停</td></tr>';
     return;
@@ -1688,6 +1696,12 @@ async function loadDoublerPanel() {
     if (!rec || rec.error) { moduleUnavailable(['doublerBody','doublerCount'],new Error('候选数据不可用')); return; }
 
     dateEl.textContent = '📅 ' + (rec.trade_date || '');
+    // 缺维度显式标注 (2026-10-27): 催化剂缺源/名录缺失时评分不完整, 不得显示成完整评分
+    const scoreWarns = [];
+    if (rec.score_complete === false) scoreWarns.push(rec.score_note || '催化剂维度缺源, 评分不完整(不含D7/D8/D10)');
+    if (rec.st_filter === 'degraded_no_namelist') scoreWarns.push(rec.st_note || 'ST名录缺失, 过滤未生效');
+    dateEl.innerHTML = '📅 ' + (rec.trade_date || '') + (scoreWarns.length
+      ? ' <span style="color:var(--red);font-weight:600">⚠ ' + scoreWarns.join('；') + '</span>' : '');
     let picks = (rec.elite_picks || []).slice(0, 12);
     picks = picks.filter(p => !p.name.includes('ST'));
 
@@ -1697,10 +1711,16 @@ async function loadDoublerPanel() {
     const potClr = (p) => p >= 15 ? '#ff6b35' : p >= 10 ? '#f0b429' : '#3b82f6';
 
     tbody.innerHTML = picks.map((p, i) => {
+      const catMissing = p.catalyst_d7 === null || p.catalyst_d7 === undefined;
       const catType = p.catalyst_type || '';
-      const catLabel = catType
-        ? `<span style="font-size:10px;padding:1px 4px;border-radius:3px;background:rgba(255,107,53,.12);color:#ff6b35">${catType}+${p.catalyst_d7||0}</span>`
-        : '<span style="color:var(--text-muted)">—</span>';
+      const catLabel = catMissing
+        ? '<span style="color:var(--red);font-size:10px" title="催化剂维度缺源，D7/D8不计入总分">缺源</span>'
+        : (catType
+          ? `<span style="font-size:10px;padding:1px 4px;border-radius:3px;background:rgba(255,107,53,.12);color:#ff6b35">${catType}+${p.catalyst_d7||0}</span>`
+          : '<span style="color:var(--text-muted)">—</span>');
+      const potCell = p.potential === null || p.potential === undefined
+        ? '<span style="color:var(--red);font-size:10px" title="缺维度，不估算">缺源</span>'
+        : `<span style="color:${potClr(p.potential)};font-weight:700">${p.potential}</span>`;
       const mtmClr = p.mtm_gain >= 20 ? '#ff6b35' : p.mtm_gain >= 0 ? '#22c55e' : '#ef4444';
       const buyRef = p.close;                // 入场价 = 现价
       const tpPrice = +(p.close * 1.40).toFixed(2); // 止盈 +40%
@@ -1716,7 +1736,7 @@ async function loadDoublerPanel() {
         <td style="font-size:11px;color:var(--text-muted)">${p.industry}</td>
         <td>${fmtMv(p.circ_mv_yi)}</td>
         <td style="color:${mtmClr}">${p.mtm_gain > 0 ? '+' : ''}${p.mtm_gain}%</td>
-        <td style="color:${potClr(p.potential)};font-weight:700">${p.potential}</td>
+        <td>${potCell}</td>
         <td>${catLabel}</td>
         <td><button onclick="addToPlan('${p.code}','${p.name}',${p.close},${p.score||0},'${(p.catalyst||{}).early_pattern||''}')" style="padding:3px 8px;border:1px solid var(--gold);border-radius:4px;background:rgba(240,180,41,.08);color:var(--gold);cursor:pointer;font-size:11px">+方案</button></td>
       </tr>`;
@@ -2128,6 +2148,33 @@ async function loadMarketEvents(forceRefresh) {
     $('meTimestamp').textContent = data.timestamp || '--';
     $('marketEventsCount').textContent = (s.total_events || 0) + '条事件';
     $('marketEventsTime').textContent = data.timestamp ? data.timestamp.slice(5) : '';
+
+    // 源状态四态条 (2026-10-27): 不可用/禁用显式区分, 不得以正常呈现
+    (function() {
+      var box = $('marketEventsSources');
+      if (!box) return;
+      var ss = data.sources_status || {};
+      var names = { cninfo: '巨潮公告', eastmoney: '东财公告', flash_news: '财联社/东财724', finnhub: 'Finnhub', yfinance: 'yfinance财报' };
+      var styles = {
+        ok:          { bg: 'rgba(34,197,94,.10)',  bd: 'var(--green)',  fg: 'var(--green)' },
+        empty:       { bg: 'rgba(59,130,246,.08)', bd: 'var(--blue)',   fg: 'var(--blue)' },
+        unavailable: { bg: 'rgba(239,68,68,.10)',  bd: 'var(--red)',    fg: 'var(--red)' },
+        disabled:    { bg: 'rgba(148,163,184,.08)', bd: 'var(--text-muted)', fg: 'var(--text-muted)' },
+      };
+      var chips = Object.keys(names).map(function(k) {
+        var e = ss[k];
+        var legacy = !(e && e.status);  // 旧缓存无四态字段 → 显式「未知」, 不冒充正常
+        var st = legacy ? 'unknown' : e.status;
+        var label = legacy ? '未知(旧缓存)' : (e.label || st);
+        var cnt = e && typeof e.count === 'number' ? e.count : 0;
+        var sty = styles[st] || styles.disabled;
+        var extra = (!legacy && (st === 'ok' || st === 'empty')) ? (' ' + cnt + '条') : '';
+        var title = e && e.reason ? e.reason : (e && e.detail ? JSON.stringify(e.detail) : '');
+        return '<span title="' + String(title).replace(/"/g, '&quot;') + '" style="padding:1px 8px;border-radius:4px;border:1px solid ' + sty.bd + ';background:' + sty.bg + ';color:' + sty.fg + '">' +
+               names[k] + ' ' + label + extra + '</span>';
+      });
+      box.innerHTML = chips.join('');
+    })();
 
     var signals = data.signals || [];
     var tbody = $('marketEventsBody');
@@ -3613,7 +3660,8 @@ async function loadUSMarketEvents() {
     $('usMETotal').textContent = usSignals.length;
     $('usMELong').textContent = usSignals.filter(function(s) { return (s.stocks||[])[0] && s.stocks[0].direction === 'long'; }).length;
     $('usMEShort').textContent = usSignals.filter(function(s) { return (s.stocks||[])[0] && s.stocks[0].direction === 'short'; }).length;
-    $('usMEYf').textContent = (yf.count || 0) + '条';
+    $('usMEYf').textContent = yf.status === 'disabled' ? '源禁用' :
+      (yf.status === 'unavailable' ? '源不可用' : (yf.count || 0) + '条');
     var tbody = $('usMarketEventsBody');
     if (!usSignals.length) {
       tbody.innerHTML = '<tr><td colspan=\"7\" style=\"text-align:center;color:var(--text-muted)\">暂无美股信号</td></tr>';

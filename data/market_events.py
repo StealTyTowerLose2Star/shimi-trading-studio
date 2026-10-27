@@ -136,35 +136,50 @@ def _save_events(events: List[Dict]):
 
 # ─── A股事件抓取 (巨潮资讯) ──────────────────────────
 
-def fetch_cn_events() -> List[Dict]:
-    """从巨潮资讯抓取A股公告/政策事件"""
+def _parse_cn_catalysts(catalysts) -> List[Dict]:
+    """巨潮催化剂公告 dict → 事件列表 (纯解析, 无 IO)"""
     events = []
+    today = datetime.now().strftime("%Y-%m-%d")
+    if isinstance(catalysts, dict):
+        # cninfo_fetcher 返回 {"events": [...], "total": N, "period": "..."}
+        evt_list = catalysts.get("events", [])
+        for item in evt_list:
+            if isinstance(item, dict):
+                code = item.get("sec_code", "")
+                # 补全6位代码格式
+                if len(code) == 5:
+                    code = "0" + code
+                cninfo_type = item.get("type", "")
+                events.append({
+                    "date": item.get("date", today),
+                    "market": "A",
+                    "type": _cninfo_type_to_event_type(cninfo_type),
+                    "title": item.get("title", "公告事件"),
+                    "code": code,
+                    "source": "cninfo",
+                    "impact": "high" if cninfo_type == "C8_ST摘帽" else "medium",
+                })
+    return events
+
+
+def fetch_cn_events_detailed() -> tuple:
+    """返回 (events, status): status ∈ ok/empty/unavailable
+    (2026-10-27 四态: cninfo_fetcher 全部关键词失败 → unavailable, 不得以空冒充)"""
     try:
         from data.cninfo_fetcher import fetch_monthly_catalysts
-        today = datetime.now().strftime("%Y-%m-%d")
         catalysts = fetch_monthly_catalysts(datetime.now().strftime("%Y%m"))
+    except Exception as e:
+        print(f"[market_events] cninfo 失败: {e}")
+        return [], "unavailable"
+    events = _parse_cn_catalysts(catalysts)
+    if isinstance(catalysts, dict) and catalysts.get("status") == "unavailable":
+        return [], "unavailable"
+    return events, ("ok" if events else "empty")
 
-        if isinstance(catalysts, dict):
-            # cninfo_fetcher 返回 {"events": [...], "total": N, "period": "..."}
-            evt_list = catalysts.get("events", [])
-            for item in evt_list:
-                if isinstance(item, dict):
-                    code = item.get("sec_code", "")
-                    # 补全6位代码格式
-                    if len(code) == 5:
-                        code = "0" + code
-                    cninfo_type = item.get("type", "")
-                    events.append({
-                        "date": item.get("date", today),
-                        "market": "A",
-                        "type": _cninfo_type_to_event_type(cninfo_type),
-                        "title": item.get("title", "公告事件"),
-                        "code": code,
-                        "source": "cninfo",
-                        "impact": "high" if cninfo_type == "C8_ST摘帽" else "medium",
-                    })
-    except Exception:
-        pass
+
+def fetch_cn_events() -> List[Dict]:
+    """从巨潮资讯抓取A股公告/政策事件 (失败返回 []; 状态区分用 detailed 变体)"""
+    events, _ = fetch_cn_events_detailed()
     return events
 
 
@@ -181,57 +196,72 @@ def _cninfo_type_to_event_type(cninfo_type: str) -> str:
 
 # ─── 美股事件抓取 (Finnhub) ─────────────────────────
 
-def fetch_us_events() -> List[Dict]:
-    """从 Finnhub 抓取美股新闻"""
+def _fetch_us_events_core() -> List[Dict]:
+    """Finnhub 抓取核心: 无凭据/非200/异常一律抛 (供状态判定)"""
+    import requests
+    finnhub_key = os.getenv("FINNHUB_KEY", "")
+    if not finnhub_key:
+        raise RuntimeError("FINNHUB_KEY 未配置")
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    url = f"https://finnhub.io/api/v1/news?category=general&token={finnhub_key}"
+    r = requests.get(url, timeout=10)
+    if r.status_code != 200:
+        raise RuntimeError(f"finnhub HTTP {r.status_code}")
+
     events = []
+    news = r.json()
+    for item in news[:30]:
+        headline = item.get("headline", "")
+        summary = item.get("summary", "")
+        text = f"{headline} {summary}".lower()
+
+        # 分类
+        event_type = _classify_event(text)
+        if not event_type:
+            continue
+
+        # 提取相关股票
+        related = item.get("related", "").split(",") if item.get("related") else []
+
+        # 时间戳转 HH:MM
+        ts = item.get("datetime", 0)
+        event_time = ""
+        if ts:
+            try:
+                from datetime import datetime as dt
+                event_time = dt.fromtimestamp(ts).strftime("%H:%M")
+            except Exception:
+                pass
+
+        events.append({
+            "date": today,
+            "time": event_time,  # HH:MM
+            "market": "US",
+            "type": event_type,
+            "title": headline[:100],
+            "codes": related[:5],
+            "source": "finnhub",
+            "impact": EVENT_TYPES.get(event_type, {}).get("impact", "low"),
+        })
+    return events
+
+
+def fetch_us_events_detailed() -> tuple:
+    """返回 (events, status): 无凭据 → disabled; 请求失败 → unavailable"""
+    if not os.getenv("FINNHUB_KEY", "").strip():
+        return [], "disabled"
     try:
-        import requests
-        finnhub_key = os.getenv("FINNHUB_KEY", "")
-        if not finnhub_key:
-            return events
+        events = _fetch_us_events_core()
+        return events, ("ok" if events else "empty")
+    except Exception as e:
+        print(f"[market_events] finnhub 失败: {e}")
+        return [], "unavailable"
 
-        today = datetime.now().strftime("%Y-%m-%d")
-        url = f"https://finnhub.io/api/v1/news?category=general&token={finnhub_key}"
-        r = requests.get(url, timeout=10)
-        if r.status_code != 200:
-            return events
 
-        news = r.json()
-        for item in news[:30]:
-            headline = item.get("headline", "")
-            summary = item.get("summary", "")
-            text = f"{headline} {summary}".lower()
-
-            # 分类
-            event_type = _classify_event(text)
-            if not event_type:
-                continue
-
-            # 提取相关股票
-            related = item.get("related", "").split(",") if item.get("related") else []
-
-            # 时间戳转 HH:MM
-            ts = item.get("datetime", 0)
-            event_time = ""
-            if ts:
-                try:
-                    from datetime import datetime as dt
-                    event_time = dt.fromtimestamp(ts).strftime("%H:%M")
-                except Exception:
-                    pass
-
-            events.append({
-                "date": today,
-                "time": event_time,  # HH:MM
-                "market": "US",
-                "type": event_type,
-                "title": headline[:100],
-                "codes": related[:5],
-                "source": "finnhub",
-                "impact": EVENT_TYPES.get(event_type, {}).get("impact", "low"),
-            })
-    except Exception:
-        pass
+def fetch_us_events() -> List[Dict]:
+    """从 Finnhub 抓取美股新闻 (失败/无凭据返回 []; 状态区分用 detailed 变体)"""
+    events, _ = fetch_us_events_detailed()
     return events
 
 
@@ -247,48 +277,78 @@ _YF_EARNINGS_WATCHLIST = [
 ]
 
 
-def fetch_yfinance_earnings() -> List[Dict]:
-    """从 yfinance 抓取未来30天美股财报日历"""
-    events = []
+def _yfinance_disabled_reason() -> Optional[str]:
+    """yfinance 源在本机的禁用原因; None 表示可尝试抓取。
+    本机 real 模式出站白名单不含 Yahoo 域名 → 永禁 (不发请求, 显式标注);
+    库未安装同理禁用 (不安装未验收依赖)。"""
     try:
-        import yfinance as yf
-        from datetime import date, timedelta
-
-        today = date.today()
-        cutoff = today + timedelta(days=30)
-
-        # 批量获取（比逐个Ticker快10倍+）
-        tickers_obj = yf.Tickers(" ".join(_YF_EARNINGS_WATCHLIST))
-        for symbol in _YF_EARNINGS_WATCHLIST:
-            try:
-                t = tickers_obj.tickers.get(symbol)
-                if not t:
-                    continue
-                cal = getattr(t, "calendar", None)
-                if not cal or "Earnings Date" not in cal:
-                    continue
-                dates = cal["Earnings Date"]
-                if not isinstance(dates, list):
-                    continue
-                for d in dates:
-                    if d and isinstance(d, date) and today <= d <= cutoff:
-                        eps_avg = cal.get("Earnings Average", 0) or 0
-                        eps_low = cal.get("Earnings Low", 0) or 0
-                        eps_high = cal.get("Earnings High", 0) or 0
-                        events.append({
-                            "date": d.strftime("%Y-%m-%d"),
-                            "market": "US",
-                            "type": "earnings",
-                            "title": f"{symbol} 财报公布 (EPS预估 ${eps_avg:.2f})",
-                            "codes": [symbol],
-                            "source": "yfinance",
-                            "impact": "high",
-                            "summary": f"EPS estimate: ${eps_avg:.2f} (range ${eps_low:.2f}-${eps_high:.2f})",
-                        })
-            except Exception:
-                continue
+        import yfinance  # noqa: F401
     except Exception:
-        pass
+        return "yfinance 库未安装 (本机不安装未验收依赖)"
+    if os.environ.get("SHIMI_DATA_MODE", "real").strip().lower() == "real":
+        return "yfinance/Yahoo 域名不在本机出站白名单 (real 模式永禁)"
+    return None
+
+
+def _fetch_yfinance_earnings_core() -> List[Dict]:
+    """yfinance 抓取核心: 库缺失/异常一律抛 (供状态判定)"""
+    import yfinance as yf
+    from datetime import date, timedelta
+
+    today = date.today()
+    cutoff = today + timedelta(days=30)
+    events = []
+
+    # 批量获取（比逐个Ticker快10倍+）
+    tickers_obj = yf.Tickers(" ".join(_YF_EARNINGS_WATCHLIST))
+    for symbol in _YF_EARNINGS_WATCHLIST:
+        try:
+            t = tickers_obj.tickers.get(symbol)
+            if not t:
+                continue
+            cal = getattr(t, "calendar", None)
+            if not cal or "Earnings Date" not in cal:
+                continue
+            dates = cal["Earnings Date"]
+            if not isinstance(dates, list):
+                continue
+            for d in dates:
+                if d and isinstance(d, date) and today <= d <= cutoff:
+                    eps_avg = cal.get("Earnings Average", 0) or 0
+                    eps_low = cal.get("Earnings Low", 0) or 0
+                    eps_high = cal.get("Earnings High", 0) or 0
+                    events.append({
+                        "date": d.strftime("%Y-%m-%d"),
+                        "market": "US",
+                        "type": "earnings",
+                        "title": f"{symbol} 财报公布 (EPS预估 ${eps_avg:.2f})",
+                        "codes": [symbol],
+                        "source": "yfinance",
+                        "impact": "high",
+                        "summary": f"EPS estimate: ${eps_avg:.2f} (range ${eps_low:.2f}-${eps_high:.2f})",
+                    })
+        except Exception:
+            continue
+    return events
+
+
+def fetch_yfinance_earnings_detailed() -> tuple:
+    """返回 (events, status): 禁用 → disabled; 请求失败 → unavailable"""
+    reason = _yfinance_disabled_reason()
+    if reason:
+        print(f"[market_events] yfinance 禁用: {reason}")
+        return [], "disabled"
+    try:
+        events = _fetch_yfinance_earnings_core()
+        return events, ("ok" if events else "empty")
+    except Exception as e:
+        print(f"[market_events] yfinance 失败: {e}")
+        return [], "unavailable"
+
+
+def fetch_yfinance_earnings() -> List[Dict]:
+    """从 yfinance 抓取未来30天美股财报日历 (失败/禁用返回 []; 状态区分用 detailed 变体)"""
+    events, _ = fetch_yfinance_earnings_detailed()
     return events
 
 
@@ -306,29 +366,73 @@ _FETCH_TIMEOUT = {
 
 
 def _safe_fetch(name: str, fn, timeout: int = None) -> tuple:
-    """带超时的安全抓取，返回 (events, ok)"""
+    """带超时的安全抓取: fn 返回 (events, status); 超时/异常 → ([], "unavailable")
+
+    status 四态 (2026-10-27 验收返修):
+      ok          — 成功且有事件
+      empty       — 成功但真实空结果 (不以空冒充失败, 也不以失败冒充空)
+      unavailable — 请求失败/超时/异常
+      disabled    — 凭据缺失或本机策略永禁 (由 detailed 变体直接返回, 不发请求)
+    """
     if timeout is None:
         timeout = _FETCH_TIMEOUT.get(name, 10)
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(fn)
-            events = future.result(timeout=timeout)
-            return (events, True)
+            events, status = future.result(timeout=timeout)
+            return (events, status)
     except concurrent.futures.TimeoutError:
         print(f"[market_events] {name} 超时 ({timeout}s)")
-        return ([], False)
+        return ([], "unavailable")
     except Exception as e:
         print(f"[market_events] {name} 失败: {e}")
-        return ([], False)
+        return ([], "unavailable")
 
 
 # ─── A股新闻快讯 (财联社/东财7×24, 免 key) ─────────────────
+
+def fetch_flash_news_detailed() -> tuple:
+    """返回 (events, status, sub_status): 两个子源全 unavailable → 整体 unavailable;
+    有事件 → ok; 否则 empty (至少一源响应但无可分类事件, 真实空)"""
+    from data.news_fetcher import fetch_market_news_detailed
+    try:
+        items, sub = fetch_market_news_detailed(40)
+    except Exception as e:
+        print(f"[market_events] flash_news 失败: {e}")
+        return [], "unavailable", {}
+    today = datetime.now().strftime("%Y-%m-%d")
+    events = []
+    for item in items:
+        title = (item.get("title") or "").strip()
+        content = (item.get("content") or "").strip()
+        if not title and not content:
+            continue
+        text = f"{title} {content}"
+        event_type = _classify_event(text)
+        if not event_type:
+            continue
+        t = item.get("time", "") or ""
+        events.append({
+            "date": t[:10] or today,
+            "time": t[11:16] if len(t) > 11 else "",
+            "market": "A",
+            "type": event_type,
+            "title": (title or content)[:100],
+            "source": item.get("source", "news"),
+            "impact": EVENT_TYPES.get(event_type, {}).get("impact", "low"),
+            "summary": content[:120],
+        })
+    if not items and sub and all(s == "unavailable" for s in sub.values()):
+        return [], "unavailable", sub
+    return events, ("ok" if events else "empty"), sub
+
 
 def fetch_flash_news() -> List[Dict]:
     """从财联社电报 + 东财7×24 抓取全市场快讯并分类为事件
 
     数据源: data/news_fetcher (移植自 a-stock-data, 免 key 真实来源)。
     无法分类为已知事件类型的快讯丢弃 (防噪音), 与 fetch_us_events 同一契约。
+    失败返回 [] (不抛); 状态区分用 fetch_flash_news_detailed。
     """
     events = []
     try:
@@ -361,73 +465,86 @@ def fetch_flash_news() -> List[Dict]:
 
 # ─── A股公告抓取 (东方财富) ──────────────────────
 
-def fetch_eastmoney_news() -> List[Dict]:
-    """从东方财富抓取A股最新公告/要闻"""
+def _fetch_eastmoney_news_core() -> List[Dict]:
+    """东财公告抓取核心: 非200/异常一律抛 (供状态判定)"""
+    import requests
+
+    url = "https://np-anotice-stock.eastmoney.com/api/security/ann"
+    params = {
+        "page_size": 20,
+        "page_index": 1,
+        "ann_type": "A",  # 全部类型
+    }
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://data.eastmoney.com/",
+    }
+    r = requests.get(url, params=params, headers=headers, timeout=10)
+    if r.status_code != 200:
+        raise RuntimeError(f"eastmoney HTTP {r.status_code}")
+
     events = []
+    data = r.json()
+    items = data.get("data", {}).get("list", [])
+    if not items:
+        return events
+
+    for item in items:
+        title = (item.get("title_ch") or item.get("title") or "").strip()
+        if not title:
+            continue
+
+        codes = item.get("codes", [])
+        if not codes:
+            continue
+
+        # 公告分类 → 事件类型
+        columns = item.get("columns", [])
+        col_name = columns[0].get("column_name", "") if columns else ""
+
+        etype = _em_column_to_type(col_name, title)
+        impact = _em_impact(col_name)
+
+        stock_codes = []
+        for c in codes:
+            code = c.get("stock_code", "")
+            name = c.get("short_name", "")
+            if code:
+                stock_codes.append(code)
+
+        if stock_codes:
+            # 使用 display_time（精确到分钟），格式化为 MM-DD HH:MM
+            raw_time = item.get("display_time", item.get("notice_date", ""))
+            event_date = raw_time[:10] if raw_time else ""
+            event_time = raw_time[11:16] if len(raw_time) > 11 else ""
+            events.append({
+                "date": event_date,
+                "time": event_time,  # HH:MM
+                "market": "A",
+                "type": etype,
+                "title": title[:100],
+                "code": stock_codes[0],
+                "codes": stock_codes,
+                "source": "eastmoney",
+                "impact": impact,
+                "summary": f"{col_name} | {';'.join(stock_codes[:5])}",
+            })
+    return events
+
+
+def fetch_eastmoney_news_detailed() -> tuple:
+    """返回 (events, status): status ∈ ok/empty/unavailable"""
     try:
-        import requests
+        events = _fetch_eastmoney_news_core()
+        return events, ("ok" if events else "empty")
+    except Exception as e:
+        print(f"[market_events] eastmoney 失败: {e}")
+        return [], "unavailable"
 
-        url = "https://np-anotice-stock.eastmoney.com/api/security/ann"
-        params = {
-            "page_size": 20,
-            "page_index": 1,
-            "ann_type": "A",  # 全部类型
-        }
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Referer": "https://data.eastmoney.com/",
-        }
-        r = requests.get(url, params=params, headers=headers, timeout=10)
-        if r.status_code != 200:
-            return events
 
-        data = r.json()
-        items = data.get("data", {}).get("list", [])
-        if not items:
-            return events
-
-        for item in items:
-            title = (item.get("title_ch") or item.get("title") or "").strip()
-            if not title:
-                continue
-
-            codes = item.get("codes", [])
-            if not codes:
-                continue
-
-            # 公告分类 → 事件类型
-            columns = item.get("columns", [])
-            col_name = columns[0].get("column_name", "") if columns else ""
-
-            etype = _em_column_to_type(col_name, title)
-            impact = _em_impact(col_name)
-
-            stock_codes = []
-            for c in codes:
-                code = c.get("stock_code", "")
-                name = c.get("short_name", "")
-                if code:
-                    stock_codes.append(code)
-
-            if stock_codes:
-                # 使用 display_time（精确到分钟），格式化为 MM-DD HH:MM
-                raw_time = item.get("display_time", item.get("notice_date", ""))
-                event_date = raw_time[:10] if raw_time else ""
-                event_time = raw_time[11:16] if len(raw_time) > 11 else ""
-                events.append({
-                    "date": event_date,
-                    "time": event_time,  # HH:MM
-                    "market": "A",
-                    "type": etype,
-                    "title": title[:100],
-                    "code": stock_codes[0],
-                    "codes": stock_codes,
-                    "source": "eastmoney",
-                    "impact": impact,
-                    "summary": f"{col_name} | {';'.join(stock_codes[:5])}",
-                })
-    except Exception:
-        pass
+def fetch_eastmoney_news() -> List[Dict]:
+    """从东方财富抓取A股最新公告/要闻 (失败返回 []; 状态区分用 detailed 变体)"""
+    events, _ = fetch_eastmoney_news_detailed()
     return events
 
 
@@ -670,35 +787,67 @@ def _check_negation(text: str, keyword: str, negation_pat: str) -> bool:
 
 # ─── 统一获取 + 生成信号 ──────────────────────────
 
+_SOURCE_STATUS_LABELS = {
+    "ok": "正常",
+    "empty": "正常·空",
+    "unavailable": "不可用",
+    "disabled": "禁用",
+}
+
+
+def _source_entry(status: str, count: int, reason: str = None, detail=None) -> Dict:
+    """sources_status 条目: status 四态 + count; ok 仅表「抓取成功」(ok/empty),
+    不可用/禁用绝不允许记 ok (2026-10-27 验收返修: 此前失败返回 [] 仍记 ok=True)"""
+    entry = {
+        "status": status,
+        "label": _SOURCE_STATUS_LABELS.get(status, status),
+        "count": count,
+        "ok": status in ("ok", "empty"),
+    }
+    if reason:
+        entry["reason"] = reason
+    if detail:
+        entry["detail"] = detail
+    return entry
+
+
 def scan_market_events() -> Dict:
     """全市场事件扫描 → 生成交易信号"""
     all_events = []
     sources_status = {}
 
     # A股事件 - 巨潮资讯
-    cn_events, cn_ok = _safe_fetch("cninfo", fetch_cn_events)
+    cn_events, cn_st = _safe_fetch("cninfo", fetch_cn_events_detailed)
     all_events.extend(cn_events)
-    sources_status["cninfo"] = {"ok": cn_ok, "count": len(cn_events)}
+    sources_status["cninfo"] = _source_entry(cn_st, len(cn_events))
 
     # A股事件 - 东方财富公告
-    em_events, em_ok = _safe_fetch("eastmoney", fetch_eastmoney_news)
+    em_events, em_st = _safe_fetch("eastmoney", fetch_eastmoney_news_detailed)
     all_events.extend(em_events)
-    sources_status["eastmoney"] = {"ok": em_ok, "count": len(em_events)}
+    sources_status["eastmoney"] = _source_entry(em_st, len(em_events))
 
     # A股新闻快讯 - 财联社/东财7×24 (免 key)
-    news_events, news_ok = _safe_fetch("flash_news", fetch_flash_news)
+    news_events, news_st, news_sub = fetch_flash_news_detailed()
     all_events.extend(news_events)
-    sources_status["flash_news"] = {"ok": news_ok, "count": len(news_events)}
+    sources_status["flash_news"] = _source_entry(news_st, len(news_events), detail=news_sub)
 
-    # 美股新闻 - Finnhub
-    us_events, fn_ok = _safe_fetch("finnhub", fetch_us_events)
-    all_events.extend(us_events)
-    sources_status["finnhub"] = {"ok": fn_ok, "count": len(us_events)}
+    # 美股新闻 - Finnhub (无凭据 → disabled, 不发请求)
+    if not os.getenv("FINNHUB_KEY", "").strip():
+        sources_status["finnhub"] = _source_entry(
+            "disabled", 0, reason="FINNHUB_KEY 未配置 (本机不配置付费源密钥)")
+    else:
+        us_events, fn_st = _safe_fetch("finnhub", fetch_us_events_detailed)
+        all_events.extend(us_events)
+        sources_status["finnhub"] = _source_entry(fn_st, len(us_events))
 
-    # 美股财报日历 - yfinance
-    yf_events, yf_ok = _safe_fetch("yfinance", fetch_yfinance_earnings)
-    all_events.extend(yf_events)
-    sources_status["yfinance"] = {"ok": yf_ok, "count": len(yf_events)}
+    # 美股财报日历 - yfinance (库缺失/real模式白名单外 → disabled, 不发请求)
+    yf_reason = _yfinance_disabled_reason()
+    if yf_reason:
+        sources_status["yfinance"] = _source_entry("disabled", 0, reason=yf_reason)
+    else:
+        yf_events, yf_st = _safe_fetch("yfinance", fetch_yfinance_earnings_detailed)
+        all_events.extend(yf_events)
+        sources_status["yfinance"] = _source_entry(yf_st, len(yf_events))
 
     # 去重
     seen = set()

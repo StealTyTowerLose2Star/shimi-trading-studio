@@ -580,7 +580,12 @@ def recommend_current_month():
     if daily is None or isinstance(daily, (dict, str)) or len(daily) == 0:
         return {"error": "daily data unavailable", "trade_date": today}
 
-    basic = get_stock_basic()
+    # 名录失败 → 显式降级: ST 过滤未生效须在结果中标注, 不得静默放行 (2026-10-27 验收返修)
+    try:
+        basic = get_stock_basic()
+    except Exception as e:
+        print(f"[doubler] ST 名录获取失败, 名称级过滤未生效: {e}")
+        basic = None
 
     # 量能数据
     basic_df = None
@@ -596,6 +601,7 @@ def recommend_current_month():
             basic_map[r["ts_code"]] = r
 
     info_map = basic if isinstance(basic, dict) else {}
+    st_namelist_ok = bool(info_map)  # 名录缺失时名称级 ST 过滤不适用, 结果须标注降级
 
     candidates = []
     for _, row in daily.iterrows():
@@ -667,6 +673,7 @@ def recommend_current_month():
     # D7/D8: 综合催化剂 (C1政策 + C2商品 + C3合同 + C5重组 + C6概念 + C7业绩)
     # ═══════════════════════════════════════════
     catalyst_scores = {}
+    catalyst_status = {}
     pre_surge = {"dragon_tiger": {}, "moneyflow": {}}
     try:
         from services.catalyst_engine import scan_all_catalysts
@@ -674,9 +681,21 @@ def recommend_current_month():
         ym = today[:6]
         cat_result = scan_all_catalysts(ym, trade_date=f"{today[:4]}-{today[4:6]}-{today[6:]}")
         catalyst_scores = cat_result.get("stock_scores", {})
+        catalyst_status = cat_result.get("sources_status", {}) or {}
         pre_surge = fetch_pre_surge_signals()
     except Exception as e:
         print(f"[doubler] catalyst skipped (ok): {e}")
+        catalyst_status = {}
+
+    # 催化剂维度完整性 (2026-10-27 验收返修): 任一子源 unavailable 或状态缺失
+    # → D7/D8/D10 显式 unknown(null), 不计入总分, 结果标注缺维度不完整;
+    # 绝不用 0 分冒充完整评分。正常有源时行为与此前逐分一致。
+    _cat_missing = [k for k in ("cninfo", "policy", "commodity", "concept")
+                    if (catalyst_status.get(k) or {}).get("status") == "unavailable"]
+    catalyst_complete = bool(catalyst_status) and not _cat_missing
+    catalyst_note = None if catalyst_complete else (
+        "催化剂维度缺源({}): D7/D8/D10 不计入总分, 评分为不完整结果".format(
+            "/".join(_cat_missing) if _cat_missing else "催化剂引擎异常"))
 
     # D0 启动前期过滤器 (批量版, 魔法师核心: 排除已涨过高的标的)
     early_stages = _early_stage_score_batch(base_top300)
@@ -686,16 +705,21 @@ def recommend_current_month():
     for c in base_top300:
         short = c["code"]
         cat = catalyst_scores.get(short, {})
-        d7 = cat.get("d7", 0)
-        d8 = cat.get("d8", 0)
-        cat_type = cat.get("top_event_type", "")
-        resonance = cat.get("resonance", False)
+        if catalyst_complete:
+            d7 = cat.get("d7", 0)
+            d8 = cat.get("d8", 0)
+            cat_type = cat.get("top_event_type", "")
+            resonance = cat.get("resonance", False)
+            # D10 共振
+            d10 = 2 if resonance else 0
+        else:
+            # 缺源: 催化剂维度显式 unknown(null), 不参与总分 (不以 0 冒充)
+            d7 = d8 = d10 = None
+            cat_type = ""
+            resonance = None
 
         # D9 前置信号 (增强: 基础+龙虎榜+资金流)
         d9 = _compute_enhanced_d9(c, pre_surge)
-
-        # D10 共振
-        d10 = 2 if resonance else 0
 
         # D0 启动前期评分
         stage = early_stages.get(short, {"score": 0, "level": "neutral", "reason": "", "exclude": False})
@@ -705,7 +729,8 @@ def recommend_current_month():
         if stage.get("exclude"):
             continue
 
-        c["score"] = c["base_score"] + d0 + d7 + d8 + d9 + d10
+        c["score"] = c["base_score"] + d0 + d9 + (d7 + d8 + d10 if catalyst_complete else 0)
+        c["score_complete"] = catalyst_complete
         c["catalyst"] = {"d0_early_stage": d0, "d7": d7, "d8": d8, "d9": d9, "d10": d10,
                         "cat_type": cat_type, "resonance": resonance,
                         "early_stage": stage["level"], "early_reason": stage["reason"],
@@ -717,10 +742,11 @@ def recommend_current_month():
         c["score_breakdown"]["resonance_d10"] = d10
         # 前端直接用的字段
         c["mtm_gain"] = stage.get("mtm_gain", round(c.get("pct_chg", 0), 1))
-        # 翻倍潜力 = (催化剂+前期信号) * 小盘弹性
+        # 翻倍潜力 = (催化剂+前期信号) * 小盘弹性; 缺源时显式 null (不完整, 不估算)
         size_boost = 1.5 if c.get("circ_mv_yi", 100) < 10 else (1.3 if c.get("circ_mv_yi", 100) < 20 else 1.0)
-        c["potential"] = round((d0 + d7 + d8 + d9 + d10) * size_boost, 1)
-        # 催化剂摘要 (前端显示用)
+        c["potential"] = (round((d0 + d7 + d8 + d9 + d10) * size_boost, 1)
+                          if catalyst_complete else None)
+        # 催化剂摘要 (前端显示用); 缺源时 null
         c["catalyst_type"] = cat_type
         c["catalyst_d7"] = d7
         filtered_candidates.append(c)
@@ -844,6 +870,12 @@ def recommend_current_month():
                                              key=lambda x: -x[1]["count"])[:10]},
         "scan_time": datetime.now().isoformat(),
         "time_window": time_window,
+        # 2026-10-27 验收返修: 缺源显式标注, 不以 0 分/未过滤冒充完整结果
+        "score_complete": catalyst_complete,
+        "score_note": catalyst_note,
+        "catalyst_status": catalyst_status,
+        "st_filter": "applied" if st_namelist_ok else "degraded_no_namelist",
+        "st_note": None if st_namelist_ok else "ST 名录缺失，ST 过滤未生效（候选池未按名称剔除）",
     }
 
     # 保存: 版本文件 (每月一份) + 当前文件 (锁定用)

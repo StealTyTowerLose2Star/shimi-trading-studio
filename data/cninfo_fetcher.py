@@ -109,11 +109,15 @@ def fetch_catalyst_announcements(start_date=None, end_date=None):
 
     all_events = []
     seen = set()  # dedup by (sec_code, title)
+    queried = 0   # 关键词查询次数 (2026-10-27 起统计, 供缺源判定)
+    failed = 0    # 查询失败次数 (result is None)
 
     for cat_type, config in CATALYST_SEARCHES.items():
         for keyword in config["keywords"]:
             result = _search_announcements(keyword, start_date, end_date, page=1, size=30)
+            queried += 1
             if result is None:
+                failed += 1
                 continue
 
             announcements = result.get("announcements") or []
@@ -154,11 +158,24 @@ def fetch_catalyst_announcements(start_date=None, end_date=None):
 
     all_events.sort(key=lambda x: x["date"], reverse=True)
 
+    # 源状态四态 (2026-10-27): 全部关键词查询失败 → unavailable (请求失败,
+    # 不得以 0 事件冒充真实空); 有事件 → ok; 无事件且无失败 → empty (真实空);
+    # 部分失败 → 状态按事件计, 但 failed>0 显式携带供上层标注降级
+    if queried and failed >= queried:
+        status = "unavailable"
+    elif all_events:
+        status = "ok"
+    else:
+        status = "empty"
+
     return {
         "events": all_events,
         "total": len(all_events),
         "period": f"{start_date}~{end_date}",
         "fetch_time": datetime.now().isoformat(),
+        "status": status,
+        "queried": queried,
+        "failed": failed,
     }
 
 

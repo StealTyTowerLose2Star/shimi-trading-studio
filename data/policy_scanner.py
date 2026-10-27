@@ -80,7 +80,7 @@ def _search_cninfo(keyword, start_date, end_date, size=15):
         j = r.json()
         return j.get("announcements") or []
     except Exception:
-        return []
+        return None  # 2026-10-27: 失败返回 None (区别于真实空 []), 供缺源判定
 
 
 def scan_policy_catalysts(days=14):
@@ -99,11 +99,17 @@ def scan_policy_catalysts(days=14):
 
     stock_hits = defaultdict(lambda: {"d7": 0, "themes": set()})
     themes_found = []
+    themes_queried = 0  # 主题查询次数 (2026-10-27 起统计, 供缺源判定)
+    themes_failed = 0   # 查询失败次数 (_search_cninfo 返回 None)
 
     for theme, config in POLICY_THEMES.items():
         # 每主题搜1个核心关键词以控制API调用量
         kw = config["keywords"][0]
         anns = _search_cninfo(kw, start, end, size=15)
+        themes_queried += 1
+        if anns is None:
+            themes_failed += 1
+            continue
         if not anns:
             continue
 
@@ -141,11 +147,23 @@ def scan_policy_catalysts(days=14):
             "policy_themes": list(info["themes"]),
         }
 
+    # 源状态 (2026-10-27): 全部主题查询失败 → unavailable (不得以空冒充);
+    # 有命中 → ok; 无命中且无失败 → empty; 部分失败显式携带计数
+    if themes_queried and themes_failed >= themes_queried:
+        _st = "unavailable"
+    elif scores:
+        _st = "ok"
+    else:
+        _st = "empty"
+
     return {
         "stock_scores": scores,
         "themes_found": themes_found,
         "method": "cninfo_policy_kw",
         "scan_period": f"{start}~{end}",
+        "source_status": _st,
+        "themes_queried": themes_queried,
+        "themes_failed": themes_failed,
     }
 
 

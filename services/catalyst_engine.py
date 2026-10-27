@@ -192,13 +192,19 @@ def scan_monthly_catalyst_scores(year_month, trade_date=None):
         prev_y -= 1
     
     all_events = []
+    month_status = {}  # {ym: ok/empty/unavailable} (2026-10-27 缺源判定)
     for ym in [f"{prev_y}{prev_m:02d}", year_month]:
         try:
             result = fetch_monthly_catalysts(ym)
             if result and "events" in result:
                 all_events.extend(result["events"])
+                # cninfo_fetcher 四态: 全部关键词失败=unavailable (不得以空冒充)
+                month_status[ym] = result.get("status") or ("ok" if result["events"] else "empty")
+            else:
+                month_status[ym] = "empty"
         except Exception as e:
             print(f"[catalyst] fetch {ym} error: {e}")
+            month_status[ym] = "unavailable"
     
     # 逐事件评分
     stock_events = defaultdict(list)
@@ -262,12 +268,34 @@ def scan_monthly_catalyst_scores(year_month, trade_date=None):
             "resonance": len(cat_types) >= 2,
         }
     
+    # cninfo 月度公告源状态: 两个月全 unavailable → unavailable; 全 empty → empty;
+    # 其余按事件计 (部分月份失败时显式携带 months 明细)
+    _mvals = list(month_status.values())
+    if _mvals and all(s == "unavailable" for s in _mvals):
+        _cn_st = "unavailable"
+    elif all_events:
+        _cn_st = "ok"
+    else:
+        _cn_st = "empty"
+
     return {
         "stock_scores": stock_scores,
         "total_events": len(all_events),
         "active_stocks": len(stock_scores),
         "period": year_month,
+        "sources_status": {"cninfo": {"status": _cn_st, "months": month_status}},
     }
+
+
+def _sub_source_status(result):
+    """子源结果 → 四态: error 键/非dict → unavailable; 自带 source_status 优先;
+    否则按 stock_scores 有无区分为 ok/empty (2026-10-27 缺源判定)"""
+    if not isinstance(result, dict) or result.get("error"):
+        return "unavailable"
+    st = result.get("source_status")
+    if st in ("ok", "empty", "unavailable"):
+        return st
+    return "ok" if result.get("stock_scores") else "empty"
 
 
 def scan_all_catalysts(year_month=None, trade_date=None):
@@ -275,16 +303,21 @@ def scan_all_catalysts(year_month=None, trade_date=None):
     综合扫描 C1(政策) + C3(合同) + C5(重组) + C7(业绩) 催化剂
 
     在 scan_monthly_catalyst_scores 基础上叠加 C1 政策扫描
+    sources_status: {cninfo, policy, commodity, concept} 四态 (ok/empty/unavailable),
+    任一 unavailable 即催化剂维度缺源 — 调用方 (doubler) 须显式标注评分不完整,
+    不得以缺源=0分冒充完整评分 (2026-10-27 验收返修)
     """
     # C3/C5/C7: cninfo公告催化剂
     result = scan_monthly_catalyst_scores(year_month, trade_date)
     stock_scores = result.get("stock_scores", {})
+    sources_status = dict(result.get("sources_status") or {})
 
     # C1: 政策催化剂 (最近14天)
     try:
         from data.policy_scanner import fetch_policy_catalyst_scores
         policy_result = fetch_policy_catalyst_scores()
         policy_scores = policy_result.get("stock_scores", {})
+        sources_status["policy"] = {"status": _sub_source_status(policy_result)}
 
         for code, ps in policy_scores.items():
             if code in stock_scores:
@@ -304,12 +337,14 @@ def scan_all_catalysts(year_month=None, trade_date=None):
                 }
     except Exception as e:
         print(f"[catalyst] C1 policy scan skipped: {e}")
+        sources_status["policy"] = {"status": "unavailable"}
 
     # C2: 商品景气催化剂
     try:
         from data.commodity_tracker import fetch_commodity_catalyst_scores
         comm_result = fetch_commodity_catalyst_scores()
         comm_scores = comm_result.get("stock_scores", {})
+        sources_status["commodity"] = {"status": _sub_source_status(comm_result)}
 
         for code, cs in comm_scores.items():
             if code in stock_scores:
@@ -326,12 +361,14 @@ def scan_all_catalysts(year_month=None, trade_date=None):
                 }
     except Exception as e:
         print(f"[catalyst] C2 commodity scan skipped: {e}")
+        sources_status["commodity"] = {"status": "unavailable"}
 
     # C6: 概念板块热度
     try:
         from data.concept_heat_tracker import fetch_concept_catalyst_scores
         concept_result = fetch_concept_catalyst_scores()
         concept_scores = concept_result.get("stock_scores", {})
+        sources_status["concept"] = {"status": _sub_source_status(concept_result)}
 
         for code, hs in concept_scores.items():
             if code in stock_scores:
@@ -348,7 +385,9 @@ def scan_all_catalysts(year_month=None, trade_date=None):
                 }
     except Exception as e:
         print(f"[catalyst] C6 concept scan skipped: {e}")
+        sources_status["concept"] = {"status": "unavailable"}
 
     result["stock_scores"] = stock_scores
     result["active_stocks"] = len(stock_scores)
+    result["sources_status"] = sources_status
     return result
