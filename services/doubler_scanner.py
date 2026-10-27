@@ -687,15 +687,22 @@ def recommend_current_month():
         print(f"[doubler] catalyst skipped (ok): {e}")
         catalyst_status = {}
 
-    # 催化剂维度完整性 (2026-10-27 验收返修): 任一子源 unavailable 或状态缺失
-    # → D7/D8/D10 显式 unknown(null), 不计入总分, 结果标注缺维度不完整;
-    # 绝不用 0 分冒充完整评分。正常有源时行为与此前逐分一致。
-    _cat_missing = [k for k in ("cninfo", "policy", "commodity", "concept")
-                    if (catalyst_status.get(k) or {}).get("status") == "unavailable"]
-    catalyst_complete = bool(catalyst_status) and not _cat_missing
-    catalyst_note = None if catalyst_complete else (
-        "催化剂维度缺源({}): D7/D8/D10 不计入总分, 评分为不完整结果".format(
-            "/".join(_cat_missing) if _cat_missing else "催化剂引擎异常"))
+    # 催化剂维度完整性 (2026-10-27 两轮验收返修):
+    # 第一轮只排除显式 unavailable — Codex 独立反例: 仅 cninfo=ok、缺其余三个
+    # 必需源键时 bool(dict) 仍误判完整。现对四个必需源逐一要求合法成功状态
+    # (ok/empty); 缺键/None 条目/disabled/unavailable/任何非法状态一律不完整:
+    # D7/D8/D10 显式 unknown(null) 不计入总分, 绝不用 0 分冒充完整评分。
+    _CAT_REQUIRED = ("cninfo", "policy", "commodity", "concept")
+    if not catalyst_status:
+        catalyst_complete = False
+        catalyst_note = "催化剂维度缺源(催化剂引擎异常): D7/D8/D10 不计入总分, 评分为不完整结果"
+    else:
+        _cat_missing = [k for k in _CAT_REQUIRED
+                        if (catalyst_status.get(k) or {}).get("status") not in ("ok", "empty")]
+        catalyst_complete = not _cat_missing
+        catalyst_note = None if catalyst_complete else (
+            "催化剂维度缺源({}): D7/D8/D10 不计入总分, 评分为不完整结果".format(
+                "/".join(_cat_missing)))
 
     # D0 启动前期过滤器 (批量版, 魔法师核心: 排除已涨过高的标的)
     early_stages = _early_stage_score_batch(base_top300)

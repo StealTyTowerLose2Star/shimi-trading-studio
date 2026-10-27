@@ -202,6 +202,64 @@ class TestPortfolioView(TradeJournalBase):
                                (12.0 - 10.05) * 100, places=2)
 
 
+class TestStrictNumericValidation(TradeJournalBase):
+    """2026-10-27 验收返修 (Codex 独立反例): 拒绝非整数股数/布尔/非有限数值,
+    舍入后复核正价格 — 反例原样值 qty=1.9 / fee='inf' / price=0.00001"""
+
+    BASE = {"date": "2026-10-27", "code": "000001", "side": "buy",
+            "price": 10, "qty": 100, "fee": 0}
+
+    def _reject(self, **change):
+        r = tj.add_entry(self.uid, dict(self.BASE, **change))
+        self.assertIn("error", r, change)
+        return r["error"]
+
+    def test_codex_counterexamples(self):
+        # Codex 原样反例值: qty=1.9 曾截断为 1 / fee='inf' 曾接受为 Infinity /
+        # price=0.00001 曾舍入为 0 仍入库
+        self.assertIn("正整数", self._reject(qty=1.9))
+        self.assertIn("有限", self._reject(fee="inf"))
+        self.assertIn("正数", self._reject(price=0.00001))
+        self.assertEqual(tj.list_entries(self.uid), [])   # 一律未入库
+
+    def test_bool_and_non_finite_rejected_everywhere(self):
+        for change in (dict(qty=True), dict(qty=False), dict(qty=float("nan")),
+                       dict(qty=float("inf")), dict(qty=1.5), dict(qty="1.9"),
+                       dict(qty="-5"), dict(qty="abc"),
+                       dict(price=True), dict(price="nan"), dict(price=float("inf")),
+                       dict(price=float("-inf")), dict(price=-3),
+                       dict(fee=True), dict(fee=False), dict(fee="nan"),
+                       dict(fee=float("inf")), dict(fee=float("-inf"))):
+            self._reject(**change)
+        self.assertEqual(tj.list_entries(self.uid), [])
+
+    def test_rounding_boundary(self):
+        self._reject(price=0.00004)                       # 舍入到 0.0000 → 拒绝
+        r = tj.add_entry(self.uid, dict(self.BASE, price=0.0001))
+        self.assertNotIn("error", r, r)
+        self.assertEqual(r["price"], 0.0001)              # 舍入后仍为正 → 接受
+
+    def test_legit_forms_still_accepted(self):
+        for qty in (100, 100.0, "100"):                   # int/整数值float/数字字符串
+            r = tj.add_entry(self.uid, dict(self.BASE, qty=qty))
+            self.assertNotIn("error", r, qty)
+            self.assertEqual(r["qty"], 100)
+            tj.delete_entry(r["id"], self.uid)
+        r = tj.add_entry(self.uid, dict(self.BASE, fee=None))   # fee 缺省 → 0
+        self.assertNotIn("error", r, r)
+        self.assertEqual(r["fee"], 0.0)
+
+    def test_update_path_same_rules(self):
+        r = tj.add_entry(self.uid, self.BASE)
+        self.assertNotIn("error", r, r)
+        for change in (dict(qty=2.5), dict(price=0.00001),
+                       dict(fee="inf"), dict(qty=False)):
+            u = tj.update_entry(r["id"], self.uid, change)
+            self.assertIn("error", u, change)
+        e = tj.list_entries(self.uid)[0]                  # 原记录未被破坏
+        self.assertEqual((e["qty"], e["price"], e["fee"]), (100, 10.0, 0.0))
+
+
 class TestCopywritingRedLine(unittest.TestCase):
     def test_no_advice_wording_in_module(self):
         """文案红线: 模块源码与响应模板不得含买卖建议导向字样"""

@@ -17,6 +17,9 @@
   手续费口径假设: 买入 0.025% (佣金万2.5), 卖出 0.075% (佣金万2.5+印花税万5)。
 - 指标: services/backtest_metrics (HKUDS/Vibe-Trading MIT 移植), 年化 252。
 - 成交额近似: 面板无 amount 列, 预筛选排序用 vol×close (量×价单调近似), 已标注。
+- ST 覆盖状态 (2026-10-27 验收返修): 响应带 st_filter=applied|degraded_no_namelist
+  + st_note — 名录缺失时回测仍返回但显式声明未筛 ST, 不冒充已过滤;
+  ST 名单为当前名录回填历史, 存在时点偏差, notes 保留「不宣称整体无未来信息」口径。
 - 仅研究用途, 不构成投资建议; 券商交易/自动下单/推送保持永禁。
 """
 import time
@@ -122,7 +125,8 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
 
     frames: {ts_code: DataFrame[date,open,high,low,close,volume,pct_chg] 升序}
     name_map: {短码: 名称} (交易明细展示用)
-    st_codes: 短码集合, 当前名录口径的 ST 剔除 (历史戴帽无法回溯, 见 notes)
+    st_codes: 短码集合, 当前名录口径的 ST 剔除 (历史戴帽无法回溯, 见 notes);
+      为空集时不做任何名称级 ST 剔除, notes 会如实声明 (不冒充已筛)
     """
     if strategy not in _SIGNAL_SPEC:
         raise ValueError(f"未知策略: {strategy}")
@@ -279,7 +283,10 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
         } for t in trades[-10:]],
         "notes": [
             f"防未来函数: 信号日T仅用≤T数据; 买入=T+1开盘价, 卖出=T+1+{hold}日开盘价",
-            "预筛选成交额用 vol×close 近似 (面板无amount列); ST剔除为当前名录口径, 历史戴帽未回溯",
+            "预筛选成交额用 vol×close 近似 (面板无amount列); " + (
+                "ST剔除为当前名录口径回填历史, 历史戴帽未回溯, 存在时点偏差 — 不宣称整体无未来信息"
+                if st_codes else
+                "未按名称剔除 ST (st_codes 为空); 若因名录缺失所致, 响应 st_filter 标 degraded_no_namelist"),
             f"每笔定额等权(初始资金/{top_n}), 现金不足跳过, 允许零碎股(仅用于指标)",
             "手续费口径假设: 买入万2.5 / 卖出万2.5+印花税万5; 停牌顺延复牌首日开盘价",
             f"面板限最近{PANEL_DAYS}个已发布开市日 (暖机{spec['warmup']}日), 年化=252",
@@ -291,21 +298,36 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
 # ─── 本地服务装配 ────────────────────────────────────────
 
 def _run_local(strategy, hold, top_n):
-    """取真实面板 + 名录, 跑回测。异常向上抛 (视图层转 502, 不补位)。"""
+    """取真实面板 + 名录, 跑回测。面板异常向上抛 (视图层转 502, 不补位)。
+
+    ST 名录口径 (2026-10-27 验收返修): 名录获取失败/为空不再静默当作已过滤 —
+    结果仍可计算, 但响应显式带 st_filter=degraded_no_namelist + st_note 声明
+    (与三策略扫描/翻倍同一降级协议), 绝不让貌似已筛 ST 的结果无标注流出。
+    """
     import local_tushare_data as _real
 
     frames = _real._cached(f"kline_panel:{PANEL_DAYS}", 600,
                            lambda: _real._kline_panel_frames(PANEL_DAYS))
-    basic = _real.real_get_stock_basic() or {}
+    try:
+        basic = _real.real_get_stock_basic()
+    except Exception:
+        basic = None
+    st_ok = isinstance(basic, dict) and len(basic) > 0
     name_map, st_codes = {}, set()
-    for code, info in basic.items():
-        short = str(code).split(".")[0]
-        name = str((info or {}).get("name", ""))
-        name_map[short] = name
-        if "ST" in name.upper():
-            st_codes.add(short)
-    return run_backtest(strategy, frames, name_map=name_map, st_codes=st_codes,
-                        hold=hold, top_n=top_n)
+    if st_ok:
+        for code, info in basic.items():
+            short = str(code).split(".")[0]
+            name = str((info or {}).get("name", ""))
+            name_map[short] = name
+            if "ST" in name.upper():
+                st_codes.add(short)
+    result = run_backtest(strategy, frames, name_map=name_map, st_codes=st_codes,
+                          hold=hold, top_n=top_n)
+    result["st_filter"] = "applied" if st_ok else "degraded_no_namelist"
+    result["st_note"] = (None if st_ok else
+                         "ST 名录缺失, 回测候选池未按名称剔除 ST (结果可能含 ST 标的); "
+                         "ST 名单为当前名录回填历史, 存在时点偏差 — 不宣称整体无未来信息")
+    return result
 
 
 def install_backtest(app):

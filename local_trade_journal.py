@@ -10,6 +10,7 @@ no buy/sell advice, no webhooks. 纯手动记账与算账, 不构成任何投资
 - 视图层以 app.view_functions 替换 trade 蓝图的 /api/trades 四个既有 handler
   (与 local_accounts 同一手法), 另加 /api/trades/portfolio 持仓视图
 """
+import math
 import re
 from datetime import datetime
 
@@ -49,8 +50,30 @@ def _ensure_table():
 
 # ─── 校验 ──────────────────────────────────────────────
 
+def _finite_number(value):
+    """严格数值化: 拒绝 bool/None、非数字、非有限值 (inf/nan); 返回 float 或 None。
+
+    2026-10-27 验收返修: float() 会接受 bool (True→1.0) 与 'inf'/'nan' 字符串,
+    记账字段必须显式排除。
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+    return v if math.isfinite(v) else None
+
+
 def _validate_payload(data, partial=False):
-    """返回 (clean, error)。partial=True 时只校验出现的字段 (PUT 用)。"""
+    """返回 (clean, error)。partial=True 时只校验出现的字段 (PUT 用)。
+
+    数值口径 (2026-10-27 验收返修, Codex 反例修复):
+    - qty: A股按整数股记账 — 拒绝布尔、非整数 (1.9 不得截断为 1)、非有限值;
+      int / 整数值 float / 纯数字字符串可接受。
+    - price/fee: 拒绝布尔与 inf/nan; price 舍入到 4 位小数后复核仍为正
+      (0.00001 舍入为 0 不得入库)。
+    """
     clean = {}
     if not isinstance(data, dict):
         return None, "请求体必须是JSON对象"
@@ -74,27 +97,41 @@ def _validate_payload(data, partial=False):
             return None, "side 仅支持 buy(买入)/sell(卖出)"
         clean["side"] = side
     if not partial or "price" in data:
-        try:
-            price = float(data.get("price"))
-        except (TypeError, ValueError):
-            return None, "price 须为数字"
-        if not (price > 0) or price != price or price == float("inf"):
-            return None, "price 须为正数"
-        clean["price"] = round(price, 4)
+        price = _finite_number(data.get("price"))
+        if price is None:
+            return None, "price 须为有限数字 (拒绝布尔/inf/nan)"
+        price = round(price, 4)
+        if not (price > 0):
+            return None, "price 舍入到4位小数后须仍为正数"
+        clean["price"] = price
     if not partial or "qty" in data:
-        try:
-            qty = int(data.get("qty"))
-        except (TypeError, ValueError):
-            return None, "qty 须为整数"
+        qty_raw = data.get("qty")
+        qty = None
+        if isinstance(qty_raw, bool):
+            return None, "qty 须为正整数 (拒绝布尔值)"
+        if isinstance(qty_raw, int):
+            qty = qty_raw
+        elif isinstance(qty_raw, float):
+            if math.isfinite(qty_raw) and qty_raw.is_integer():
+                qty = int(qty_raw)
+        elif isinstance(qty_raw, str):
+            s = qty_raw.strip()
+            if re.fullmatch(r"\d+", s):
+                qty = int(s)
+        if qty is None:
+            return None, "qty 须为正整数 (A股按整数股记账, 拒绝非整数)"
         if qty <= 0:
             return None, "qty 须为正整数"
         clean["qty"] = qty
     if "fee" in data or not partial:
-        try:
-            fee = float(data.get("fee") or 0)
-        except (TypeError, ValueError):
-            return None, "fee 须为数字"
-        if fee < 0 or fee != fee:
+        fee_raw = data.get("fee")
+        if fee_raw is None or fee_raw == "":
+            fee = 0.0
+        else:
+            fee = _finite_number(fee_raw)
+            if fee is None:
+                return None, "fee 须为有限数字 (拒绝布尔/inf/nan)"
+        if fee < 0:
             return None, "fee 不能为负"
         clean["fee"] = round(fee, 4)
     if "name" in data:

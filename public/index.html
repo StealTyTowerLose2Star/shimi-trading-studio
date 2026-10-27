@@ -2902,7 +2902,12 @@ function renderBacktest(d) {
       <td class="code-num">¥${t.exit_price}</td>
       <td class="code-num" style="color:${t.pnl >= 0 ? 'var(--green)' : 'var(--red)'};font-weight:600">${t.pnl >= 0 ? '+' : ''}¥${t.pnl} (${t.pnl_pct >= 0 ? '+' : ''}${t.pnl_pct}%)</td>
     </tr>`).join('') + '</tbody></table>';
-  document.getElementById('btNotes').innerHTML = (d.notes || []).map(n => '· ' + n).join('<br>') +
+  const stBanner = d.st_filter === 'degraded_no_namelist'
+    ? '<div style="color:var(--red);font-weight:700;margin-bottom:6px">⚠ ST名录缺失，回测未做ST过滤 — ' + (d.st_note || '') + '</div>'
+    : (d.st_filter == null
+       ? '<div style="color:var(--text-muted);font-size:11px;margin-bottom:4px">ST覆盖状态: 未知 (旧缓存, 刷新后重取)</div>'
+       : '');
+  document.getElementById('btNotes').innerHTML = stBanner + (d.notes || []).map(n => '· ' + n).join('<br>') +
     '<br><span style="color:var(--gold)">' + (d.disclaimer || '') + '</span>';
 }
 

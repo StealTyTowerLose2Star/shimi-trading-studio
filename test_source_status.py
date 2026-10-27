@@ -328,6 +328,36 @@ class TestDoublerCatalystGating(unittest.TestCase):
         for c in out["top30"]:
             self.assertIsNone(c["catalyst"]["d7"])
 
+    def test_codex_counterexample_missing_three_source_keys(self):
+        """Codex 独立反例 (2026-10-27 二轮): 仅 cninfo=ok、缺其余三个必需源键,
+        bool(dict) 不得误判完整 — 四必需源逐一要求合法成功状态"""
+        cat = {"stock_scores": {},
+               "sources_status": {"cninfo": {"status": "ok"}}}
+        out = self._run_doubler(cat_result=cat, basic=self._basic())
+        self.assertFalse(out["score_complete"])
+        self.assertIn("缺源", out["score_note"])
+        for k in ("policy", "commodity", "concept"):
+            self.assertIn(k, out["score_note"])
+        for c in out["top30"]:
+            self.assertIsNone(c["catalyst"]["d7"])
+            self.assertIsNone(c["potential"])
+
+    def test_disabled_and_illegal_status_marked_incomplete(self):
+        """disabled / 非法状态 / None 条目一律不完整 (合法成功仅 ok/empty)"""
+        variants = [
+            {"cninfo": {"status": "ok"}, "policy": {"status": "disabled"},
+             "commodity": {"status": "ok"}, "concept": {"status": "ok"}},
+            {"cninfo": {"status": "ok"}, "policy": {"status": "weird"},
+             "commodity": {"status": "empty"}, "concept": {"status": "ok"}},
+            {"cninfo": {"status": "ok"}, "policy": None,
+             "commodity": {"status": "ok"}, "concept": {"status": "empty"}},
+        ]
+        for ss in variants:
+            out = self._run_doubler(cat_result={"stock_scores": {}, "sources_status": ss},
+                                    basic=self._basic())
+            self.assertFalse(out["score_complete"], ss)
+            self.assertIn("policy", out["score_note"], ss)
+
 
 # ────────────────────────────────────────────────────────────
 # 3. ST 名录缺失显式降级

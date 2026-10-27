@@ -2,9 +2,13 @@
 金融严谨性工具 (估值复算/市值验算/多源交叉校验/三情景估值) — 纯标准库, 无网络无LLM。
 
 移植自 ai-berkshire (MIT License):
-  来源: https://github.com/xbtlin/ai-berkshire/blob/main/tools/financial_rigor.py
+  来源 (固定 commit): https://github.com/xbtlin/ai-berkshire/blob/f45bb8c01e1e887a870cf2098d25e6d0cea6c360/tools/financial_rigor.py
+    (f45bb8c, 2026-07-26 — 移植核对时该文件最新提交; 该提交仅修 Windows 控制台
+     打印崩溃, 本移植不涉 print 路径, 计算语义不受影响)
   上游作者: xbtlin / ai-berkshire
-  许可证: MIT (详见 https://github.com/xbtlin/ai-berkshire/blob/main/LICENSE)
+  许可证文件映射: 本文件 ← tools/financial_rigor.py;
+    MIT 许可证全文 ← 同 commit LICENSE
+    (https://github.com/xbtlin/ai-berkshire/blob/f45bb8c01e1e887a870cf2098d25e6d0cea6c360/LICENSE)
 
 本地适配 (2026-10-26, 拾米本地部署):
   - 原文件为 CLI 工具 (print 报告 + argparse); 本移植保留全部计算语义

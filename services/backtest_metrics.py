@@ -1,9 +1,13 @@
 """回测绩效指标 — 纯计算模块 (无项目内依赖, 无 IO)。
 
 移植自 HKUDS/Vibe-Trading (MIT License) `agent/backtest/metrics.py`:
-  来源: https://github.com/HKUDS/Vibe-Trading/blob/main/agent/backtest/metrics.py
+  来源 (固定 commit): https://github.com/HKUDS/Vibe-Trading/blob/3edaf5b5fc4c0257749fb9535672963cc9774065/agent/backtest/metrics.py
+    (3edaf5b, 2026-10-23 — 移植核对时该文件最新提交; 该提交仅改动
+     effective_bars_per_year, 本移植未含该函数, 所移植函数不受影响)
   上游版权: Copyright (c) HKUDS, MIT License
-  (许可证全文见 https://github.com/HKUDS/Vibe-Trading/blob/main/LICENSE)
+  许可证文件映射: 本文件 ← agent/backtest/metrics.py;
+    MIT 许可证全文 ← 同 commit LICENSE
+    (https://github.com/HKUDS/Vibe-Trading/blob/3edaf5b5fc4c0257749fb9535672963cc9774065/LICENSE)
 
 本地化适配 (计算公式与上游逐字一致, 仅做接口裁剪):
 - 去除 `from backtest.models import FillRecord, TradeRecord` 依赖; 成交/交易记录

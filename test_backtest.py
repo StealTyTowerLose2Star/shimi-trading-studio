@@ -13,6 +13,7 @@ import math
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -299,6 +300,55 @@ class TestAntiLookahead(unittest.TestCase):
         im3, co3 = _maps(frames3)
         s3 = lb._scan_day(spec, frames3, co3, im3, dates, 65, set())
         self.assertEqual(s1, s3)
+
+
+class TestStCoverageDeclaration(unittest.TestCase):
+    """2026-10-27 验收返修 (Codex): _run_local 用 basic or {}, ST 名录空时
+    结果貌似已筛 ST — 响应必须带 st_filter 覆盖状态显式声明"""
+
+    def test_notes_keep_no_lookahead_free_wording(self):
+        """ST 名单回填历史存在时点偏差: notes 保留「不宣称整体无未来信息」口径"""
+        r = lb.run_backtest("trend", _mk_frames(_mk_dates(90)),
+                            st_codes={"000003"}, hold=5, top_n=2,
+                            initial_cash=100000.0)
+        joined = "\n".join(r["notes"])
+        self.assertIn("时点偏差", joined)
+        self.assertIn("不宣称整体无未来信息", joined)
+
+    def test_empty_st_codes_notes_do_not_fake_filtering(self):
+        """st_codes 为空 = 未做任何名称级 ST 剔除, notes 如实声明"""
+        r = lb.run_backtest("trend", _mk_frames(_mk_dates(90)),
+                            st_codes=set(), hold=5, top_n=2,
+                            initial_cash=100000.0)
+        self.assertIn("未按名称剔除 ST", "\n".join(r["notes"]))
+
+    def _run_local_with(self, basic):
+        import local_tushare_data as real
+        frames = _mk_frames(_mk_dates(90))
+        if isinstance(basic, Exception):
+            gm = patch.object(real, "real_get_stock_basic", side_effect=basic)
+        else:
+            gm = patch.object(real, "real_get_stock_basic", return_value=basic)
+        with patch.object(real, "_cached", return_value=frames), gm:
+            return lb._run_local("trend", 5, 2)
+
+    def test_run_local_namelist_missing_marks_degraded(self):
+        """名录 None/空 dict/抛异常 → degraded_no_namelist + 显式声明, 不 502 不冒充"""
+        for bad in (None, {}, RuntimeError("namelist down")):
+            r = self._run_local_with(bad)
+            self.assertEqual(r["st_filter"], "degraded_no_namelist", bad)
+            self.assertIn("ST 名录缺失", r["st_note"])
+            self.assertIn("不宣称整体无未来信息", r["st_note"])
+            self.assertIn("未按名称剔除 ST", "\n".join(r["notes"]))
+
+    def test_run_local_namelist_ok_marks_applied(self):
+        r = self._run_local_with({
+            "000001.SZ": {"name": "平安银行"}, "000002.SZ": {"name": "万科A"},
+            "600000.SH": {"name": "浦发银行"}, "000003.SZ": {"name": "*ST测试"},
+            "430001.BJ": {"name": "北证一"}})
+        self.assertEqual(r["st_filter"], "applied")
+        self.assertIsNone(r["st_note"])
+        self.assertIn("ST剔除为当前名录口径", "\n".join(r["notes"]))
 
 
 if __name__ == "__main__":
