@@ -448,8 +448,8 @@ if DATA_MODE == "mock":
     _DEMO_EXACT |= {'/api/strategy/trend/refresh', '/api/strategy/hybrid/refresh',
                     '/api/strategy/dragon/refresh'}
 else:
-    # real 模式: 美股只读报价 (tushare us_daily 日线 EOD, 限1次/小时)
-    _DEMO_EXACT.add('/api/us/quote')
+    # real 模式: 美股只读报价/看板/扫描 (tushare us_daily 日线 EOD, 限1次/小时, 共享65min快照缓存)
+    _DEMO_EXACT |= {'/api/us/quote', '/api/us/dashboard', '/api/us/scan'}
     # 2026-10-25 模块启用 (全部 tushare 真实数据, 重计算按数据日6h缓存):
     # 三策略扫描/操作建议、缓存状态/本机监测、融资融券、复盘、翻倍/跟踪/方案
     _DEMO_EXACT |= {
@@ -503,7 +503,7 @@ _MODULES_REAL = [
     {'name':'账号', 'state':'本地可用', 'reason':'注册、登录、会话和退出已验证；找回密码未开放'},
     {'name':'A股行情(指数/板块/热门/涨停/情绪)', 'state':'真实只读(已实测)', 'reason':'Tushare日线EOD(收盘值非实时)；2026-10-24全端点实测与直连基准一致；失败时显式502不补位'},
     {'name':'搜索/K线/个股雷达', 'state':'真实只读(已实测)', 'reason':'Tushare名录与日K线(雷达含5年分位/基本面fina_indicator/换手率/融资余额，2026-10-25实测)；封板时间等盘中维度EOD口径退化'},
-    {'name':'美股报价', 'state':'真实只读(已实测)', 'reason':'Tushare us_daily日线收盘值(/api/us/quote?symbol=代码),限1次/小时缓存65min；美股看板/扫描未启用'},
+    {'name':'美股报价/看板/扫描', 'state':'真实只读(已实测)', 'reason':'Tushare us_daily关注池单日快照(/api/us/quote+看板+扫描共享65min缓存,接口限1次/小时;全市场调取超单次行数上限被截断,故按关注池多代码一次调取);指数为ETF代理口径;扫描=池内单日动量评分,无多日技术指标;盘前盘后真实行情不可用,不以EOD冒充'},
     {'name':'三策略扫描/操作建议', 'state':'真实只读(日级缓存)', 'reason':'趋势/混合/龙头=Tushare全市场快照+K线真实评分(2026-10-25实测)；按数据日6h缓存,refresh同日不重扫；建议共识写入本地推荐表(复盘数据源)；2026-10-27起各策略附回测视图(面板150日,T+1开盘价成交,防未来函数)'},
     {'name':'翻倍/观察跟踪', 'state':'真实只读(部分维度降级)', 'reason':'评分/月扫/10k方案/跟踪=Tushare真实数据；D9龙虎榜+资金流已实测接入；D7/D8公告催化剂2026-10-26起走巨潮(沪深北全量,已入白名单)；候选池已剔除ST'},
     {'name':'事件总览', 'state':'真实只读(免key源)', 'reason':'巨潮催化剂公告(沪深北全量)+东财公告+财联社电报+东财7×24快讯,2026-10-26接入出站白名单;finnhub/yfinance无凭据仍禁用并在sources_status显式标注;先知模型(合成训练数据)违反real-only保持不启用'},
@@ -533,6 +533,30 @@ if DATA_MODE == "real":
             status = {'invalid_symbol':400, 'not_found':404}.get(value['error'],502)
             return jsonify(value), status
         return jsonify(value)
+
+    def local_us_dashboard():
+        """美股看板 (指数ETF代理/热门/中概/异动): 同一 us_daily 快照聚合,
+        上游失败 → 502 显式错误, 不补位"""
+        try:
+            return jsonify(_real.real_us_dashboard())
+        except Exception as e:
+            return jsonify({"error": f"us_dashboard 获取失败: {str(e)[:100]}"}), 502
+
+    def local_us_scan():
+        """美股扫描 (hot|adr|gainers): 单日快照动量评分, 真实排序"""
+        mode = request.args.get('mode', 'hot')
+        if mode not in ('hot', 'adr', 'gainers'):
+            return jsonify({"error": "bad_request",
+                            "message": "mode 限 hot|adr|gainers"}), 400
+        try:
+            return jsonify(_real.real_us_scan(mode))
+        except Exception as e:
+            return jsonify({"error": f"us_scan 获取失败: {str(e)[:100]}"}), 502
+
+    # haitao 蓝图 (yfinance) 在 create_app 时已注册同名路由, @app.route 无法覆盖;
+    # 与 index 同法: 直接替换 view function, 美股看板/扫描改走 tushare 真实快照
+    app.view_functions['haitao_market.api_us_dashboard'] = local_us_dashboard
+    app.view_functions['haitao_scan.api_us_scan'] = local_us_scan
 
     def _real_index():
         """real 模式首页: 横幅按运行时凭据/用途声明状态动态生成 —
@@ -568,7 +592,7 @@ _DEMO_SCOPE_MOCK = ("本地只读模拟演示: 仅开放 GET /, /static/index.ht
                     "/api/indices, /api/dashboard, /api/stock/lookup, "
                     "/api/stock/<6位代码>/kline (days 1-200) 等白名单; "
                     "本地账号可用; 交易/真实扫描/推送/依赖探测仍未启用")
-_DEMO_SCOPE_REAL = ("本地真实只读模式: 白名单 GET 端点 (+复盘/缓存管理POST) + /api/us/quote; "
+_DEMO_SCOPE_REAL = ("本地真实只读模式: 白名单 GET 端点 (+复盘/缓存管理POST) + /api/us/quote+/api/us/dashboard+/api/us/scan; "
                     "当前适配器=Tushare日线EOD, 策略/雷达/翻倍/两融/复盘/监测/事件总览已启用(按数据日缓存); "
                     "交易记录=仅手动记账(本机写); 券商交易/推送/付费源/模型API 保持禁用")
 _DEMO_SCOPE = _DEMO_SCOPE_MOCK if DATA_MODE == "mock" else _DEMO_SCOPE_REAL

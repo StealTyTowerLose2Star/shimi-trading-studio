@@ -3178,8 +3178,8 @@ async function loadHaitaoDashboard() {
 
 function renderUSIndices(data) {
   const cards = document.getElementById('usIndicesRow').querySelectorAll('.idx-card');
-  const labels = ['S&P 500', '纳斯达克', '道琼斯', '费城半导体'];
-  const tickers = ['^GSPC', '^IXIC', '^DJI', 'SOXX'];
+  const labels = ['S&P 500 (SPY代理)', '纳斯达克100 (QQQ代理)', '道琼斯 (DIA代理)', '费城半导体 (SOXX)'];
+  const tickers = ['SPY', 'QQQ', 'DIA', 'SOXX'];
   
   data.forEach(idx => {
     const ti = tickers.indexOf(idx.ticker);

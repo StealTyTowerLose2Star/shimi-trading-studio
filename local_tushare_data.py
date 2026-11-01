@@ -38,7 +38,7 @@ import threading
 import time
 import urllib.request
 from urllib.parse import urlparse
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date, timedelta
 
 import pandas as pd
 
@@ -769,7 +769,14 @@ def real_us_quote(symbol):
     key = f"usq:{symbol}"
 
     def _fetch():
-        row = _us_last(symbol)
+        # 池内标的优先复用看板共享快照 (同一小时限流预算, 避免独立调用挤占)
+        ent = _cache.get("us_snapshot")
+        if ent and time.time() - ent[0] < ent[1] and not isinstance(ent[2], Exception):
+            row = ent[2][1].get(symbol)
+        else:
+            row = None
+        if row is None:
+            row = _us_last(symbol)
         if not row or row.get("close") is None:
             return None
         close = _number(row["close"], "us_close", positive=True)
@@ -797,6 +804,304 @@ def real_us_quote(symbol):
         return {"error": "not_found", "symbol": symbol,
                 "message": f"未查询到 {symbol} 的美股日线(EOD)"}
     return q
+
+
+# ─── 美股看板/扫描: us_daily 关注池单日快照 (2026-11-01 启用) ──────────
+# us_daily 官方限 1 次/小时。实测 2026-11-01: 按 trade_date 取全市场被截断
+# (单次行数上限, 美股全市场>上限, 池内31只仅命中4只) — 改为一次调用传
+# 逗号分隔多代码 (关注池+指数代理ETF, ~35只), 看板/扫描/池内报价共享同一
+# 快照, 成功/失败均缓存 65min, 限流窗口内绝不重复撞击;
+# 不做逐只多日历史 (每股历史=每股一次调用, 违反限流), 扫描为单日快照口径。
+
+from haitao.config import HOT_US_STOCKS as _US_HOT_POOL, CHINESE_ADR as _US_ADR_POOL
+
+# us_daily 无 ^GSPC 等指数代码 → ETF 代理口径, 看板与响应 note 显式标注
+_US_INDEX_PROXY = [("SPY", "S&P 500 (SPY ETF代理)"),
+                   ("QQQ", "纳斯达克100 (QQQ ETF代理)"),
+                   ("DIA", "道琼斯 (DIA ETF代理)"),
+                   ("SOXX", "费城半导体 (SOXX ETF代理)")]
+
+# 静态中文名 (免 us_basic 逐只调用); 缺名回退 ticker 本身, 不冒充
+_US_NAMES = {
+    "SPY": "标普500ETF", "QQQ": "纳指100ETF", "DIA": "道琼斯ETF", "IWM": "罗素2000ETF",
+    "SOXX": "半导体ETF", "XLF": "金融ETF", "XLE": "能源ETF",
+    "AAPL": "苹果", "MSFT": "微软", "GOOGL": "谷歌", "AMZN": "亚马逊", "META": "Meta",
+    "NVDA": "英伟达", "TSLA": "特斯拉", "AMD": "AMD", "AVGO": "博通", "PLTR": "Palantir",
+    "BABA": "阿里巴巴", "JD": "京东", "PDD": "拼多多", "BIDU": "百度", "NIO": "蔚来",
+    "XPEV": "小鹏汽车", "LI": "理想汽车", "TCOM": "携程", "BILI": "哔哩哔哩",
+    "NTES": "网易", "YUMC": "百胜中国", "BEKE": "贝壳", "IQ": "爱奇艺",
+    "DIDIY": "滴滴(粉单)", "TAL": "好未来", "EDU": "新东方", "ZLAB": "再鼎医药", "HTHT": "华住",
+}
+
+_US_POOL_ALL = sorted(set(_US_HOT_POOL) | set(_US_ADR_POOL)
+                      | {code for code, _ in _US_INDEX_PROXY})
+
+_US_DASH_NOTE = ("Tushare us_daily 关注池单日快照 (EOD收盘值, 非实时; 接口限1次/小时→共享65min缓存; "
+                 "全市场单日调取超单次行数上限被截断, 故按关注池多代码一次调取); "
+                 "指数为ETF代理口径(^指数代码无日线数据); 异动=池内|涨跌幅|Top15, "
+                 "真实盘前盘后行情不可用, 不以EOD冒充")
+
+_US_SCAN_NOTE = ("关注池单日快照动量口径: 评分=当日涨跌幅(50分)+相对池中位量能(30分)"
+                 "+相对成交额(20分), 无多日技术指标(逐只历史=逐只API调用, "
+                 "违反us_daily 1次/小时限流); 真实数据真实排序, 非原五维技术评分; "
+                 "扫描范围=关注池, 非全市场")
+
+
+def _us_now_eastern():
+    """美国东部当前时间 (手工夏令时: 3月第2个周日07:00UTC → 11月第1个周日06:00UTC);
+    不依赖 tzdata (Windows venv 未必安装)"""
+    now = datetime.now(timezone.utc)
+    y = now.year
+
+    def _nth_sunday(month, n):
+        d = date(y, month, 1)
+        return d + timedelta(days=(6 - d.weekday()) % 7 + 7 * (n - 1))
+
+    start = datetime(y, 3, _nth_sunday(3, 2).day, 7, tzinfo=timezone.utc)
+    end = datetime(y, 11, _nth_sunday(11, 1).day, 6, tzinfo=timezone.utc)
+    return now + timedelta(hours=-4 if start <= now < end else -5)
+
+
+def _us_easter(year):
+    """格里高利复活节 (Anonymous Gregorian algorithm) — 耶稣受难日=复活节-2天"""
+    a = year % 19
+    b, c = divmod(year, 100)
+    d, e = divmod(b, 4)
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = divmod(c, 4)
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    month, day = divmod(h + l - 7 * m + 114, 31)
+    return date(year, month, day + 1)
+
+
+def _us_holidays(year):
+    """NYSE 可推算常规休市日 (元旦/MLK/华盛顿诞辰/耶稣受难日/阵亡将士/六月节/
+    独立日/劳工节/感恩节/圣诞, 含周末补休); 特殊临时休市(国葬/飓风等)不可推算,
+    由快照空结果显式报 unavailable 处理"""
+    def _obs(m, d):
+        dt = date(year, m, d)
+        if dt.weekday() == 5:  # 周六 → 前一周五补休 (可能落在上一年的12/31)
+            return dt - timedelta(days=1)
+        if dt.weekday() == 6:  # 周日 → 周一补休
+            return dt + timedelta(days=1)
+        return dt
+
+    def _nth_wd(month, wd, n):
+        dt = date(year, month, 1)
+        return dt + timedelta(days=(wd - dt.weekday()) % 7 + 7 * (n - 1))
+
+    def _last_wd(month, wd):
+        dt = date(year, month + 1, 1) - timedelta(days=1)
+        return dt - timedelta(days=(dt.weekday() - wd) % 7)
+
+    return {_obs(1, 1), _nth_wd(1, 0, 3), _nth_wd(2, 0, 3),
+            _us_easter(year) - timedelta(days=2), _last_wd(5, 0),
+            _obs(6, 19), _obs(7, 4), _nth_wd(9, 0, 1),
+            _nth_wd(11, 3, 4), _obs(12, 25)}
+
+
+def _us_recent_trade_date(now_et=None):
+    """最近一个应有 EOD 数据的美股交易日 (周末+可推算假日回退, 至多回退10天).
+    美东当日 20:00 前视为当日数据未发布 → 回退上一交易日; 快照标签永远对应
+    已收盘的完整交易日。now_et 可注入 (测试), 缺省取当前美东时间"""
+    et = now_et or _us_now_eastern()
+    hol = (_us_holidays(et.year - 1) | _us_holidays(et.year)
+           | _us_holidays(et.year + 1))
+    d = et.date()
+    if not (d.weekday() < 5 and d not in hol and et.hour >= 20):
+        d -= timedelta(days=1)
+        for _ in range(10):
+            if d.weekday() < 5 and d not in hol:
+                return d
+            d -= timedelta(days=1)
+        raise MarketDataUnavailable("美股交易日解析失败: 回退10天均为周末/假日")
+    return d
+
+
+def _fetch_us_snapshot():
+    """一次 us_daily(ts_code=关注池逗号串, trade_date=) 调用 → (trade_date_iso, {symbol: row});
+    不用全市场 trade_date 单参数调取 (实测超单次行数上限被截断, 池内大面积缺数据)"""
+    cand = _us_recent_trade_date()
+    fields, items = _api("us_daily", {"ts_code": ",".join(_US_POOL_ALL),
+                                      "trade_date": cand.strftime("%Y%m%d")}, "")
+    rows = _rows(fields, items)
+    if not rows:
+        raise MarketDataUnavailable(
+            f"us_daily 关注池快照为空 (判定交易日 {cand.isoformat()} 可能为不可推算的"
+            f"特殊休市或数据未发布; 65min 后自动重试)")
+    snap = {}
+    for r in rows:
+        code = str(r.get("ts_code") or "").strip().upper()
+        if code and code not in snap:
+            snap[code] = r
+    if not snap:
+        raise MarketDataUnavailable("us_daily 快照全部记录缺少 ts_code, 结构无效")
+    return cand.isoformat(), snap
+
+
+def real_us_snapshot():
+    """全市场快照 (trade_date_iso, {symbol: row}); 成功/失败均缓存 65min —
+    us_daily 限 1 次/小时, 窗口内重试必然被拒, 失败缓存防反复撞击"""
+    key = "us_snapshot"
+    ent = _cache.get(key)
+    if ent and time.time() - ent[0] < ent[1]:
+        val = ent[2]
+        if isinstance(val, Exception):
+            raise val
+        return val
+    try:
+        val = _fetch_us_snapshot()
+    except (TushareError, MarketDataUnavailable) as e:
+        _cache[key] = (time.time(), 3900, e)
+        raise
+    _cache[key] = (time.time(), 3900, val)
+    return val
+
+
+def _us_quote_from_row(code, row, name=None):
+    """快照行 → 前端契约 {ticker,name,price,change,change_pct,volume,...};
+    必要数值缺失/非法 → MarketDataUnavailable (不填0冒充)"""
+    close = _number(row.get("close"), "us_close", positive=True)
+    pct = row.get("pct_change")
+    pre = row.get("pre_close")
+    if pct is None and pre is not None:
+        previous = _number(pre, "us_pre_close", positive=True)
+        pct = (close - previous) / previous * 100
+    pct = _number(pct, "us_change", optional=True)
+    vol = _number(row.get("vol"), "us_vol", nonnegative=True, optional=True)
+    amount = _number(row.get("amount"), "us_amount", nonnegative=True, optional=True)
+    q = {"ticker": code, "name": name or _US_NAMES.get(code, code),
+         "price": round(close, 2),
+         "change": (round(close * float(pct) / (100 + float(pct)), 2)
+                    if pct is not None else None),
+         "change_pct": round(float(pct), 2) if pct is not None else None,
+         "volume": int(vol) if vol is not None else None,
+         "amount": round(float(amount), 2) if amount is not None else None,
+         "trade_date": _fmt_date(str(row.get("trade_date", ""))),
+         "source": "tushare-us_daily"}
+    return q
+
+
+def _us_pool_quotes(snap, pool, missing):
+    quotes = []
+    for code in pool:
+        row = snap.get(code)
+        if row is None:
+            missing.append(code)  # 池内标的快照无数据 → 显式标注, 不填0
+            continue
+        try:
+            quotes.append(_us_quote_from_row(code, row))
+        except MarketDataUnavailable:
+            missing.append(code)
+    return quotes
+
+
+def real_us_dashboard():
+    """美股看板聚合: 指数(ETF代理)/热门/中概/异动 — 全部来自同一快照, 不逐只调API"""
+    trade_date, snap = real_us_snapshot()
+    missing = []
+    indices = []
+    for code, label in _US_INDEX_PROXY:
+        row = snap.get(code)
+        if row is None:
+            missing.append(code)
+            continue
+        try:
+            q = _us_quote_from_row(code, row, name=label)
+        except MarketDataUnavailable:
+            missing.append(code)
+            continue
+        indices.append({"ticker": q["ticker"], "name": label, "price": q["price"],
+                        "change": q["change"], "change_pct": q["change_pct"],
+                        "source": q["source"]})
+    hot = _us_pool_quotes(snap, _US_HOT_POOL, missing)
+    adr = _us_pool_quotes(snap, _US_ADR_POOL, missing)
+    movers = sorted((q for q in hot + adr if q.get("change_pct") is not None),
+                    key=lambda q: abs(q["change_pct"]), reverse=True)[:15]
+    out = {"trade_date": trade_date, "source": "tushare-us_daily",
+           "indices": indices, "hot_stocks": hot, "chinese_adr": adr,
+           "pre_post": {"top_movers": movers},
+           "note": _US_DASH_NOTE}
+    if missing:
+        out["missing"] = sorted(set(missing))
+    return out
+
+
+def _us_scan_item(q, med_vol, med_amount):
+    """单日快照动量评分 (0-100): 涨跌幅50 + 相对池中位量能30 + 相对成交额20"""
+    pct = q.get("change_pct")
+    vol = q.get("volume")
+    amount = q.get("amount")
+    signals = []
+    sc_pct = 0.0
+    if pct is not None:
+        sc_pct = max(0.0, min(50.0, (pct + 5) * 5))
+        if pct >= 3:
+            signals.append(f"强势 {pct:+.2f}%")
+        elif pct <= -3:
+            signals.append(f"重挫 {pct:+.2f}%")
+    vol_ratio = None
+    if vol and med_vol:
+        vol_ratio = vol / med_vol
+        if vol_ratio >= 2:
+            signals.append(f"放量 {vol_ratio:.1f}×池中位")
+        elif vol_ratio <= 0.5:
+            signals.append(f"缩量 {vol_ratio:.2f}×池中位")
+    sc_vol = max(0.0, min(30.0, (vol_ratio or 0.0) * 15))
+    sc_amount = 0.0
+    if amount and med_amount:
+        sc_amount = max(0.0, min(20.0, (amount / med_amount) * 10))
+    score = int(round(sc_pct + sc_vol + sc_amount))
+    if pct is None:
+        phase = "无涨跌幅数据"
+    elif pct >= 3 and (vol_ratio or 0) >= 1.5:
+        phase = "放量上涨"
+    elif pct >= 3:
+        phase = "强势上涨"
+    elif pct >= 0.5:
+        phase = "温和上涨"
+    elif pct <= -3 and (vol_ratio or 0) >= 1.5:
+        phase = "放量下跌"
+    elif pct <= -3:
+        phase = "明显下跌"
+    elif pct <= -0.5:
+        phase = "温和回调"
+    else:
+        phase = "横盘整理"
+    rating = ("关注 ⭐⭐" if score >= 70 else "关注 ⭐" if score >= 55
+              else "观望" if score >= 40 else "回避")
+    item = dict(q)
+    item.update({"score": score, "phase": phase, "rating": rating,
+                 "signals": signals})
+    return item
+
+
+def real_us_scan(mode="hot"):
+    """美股扫描 (hot|adr|gainers): 同一快照的单日动量/量能评分, 真实排序;
+    gainers=热门池当日收涨者按涨幅排序 (沿用原 haitao 语义)"""
+    trade_date, snap = real_us_snapshot()
+    pool = list(_US_ADR_POOL) if mode == "adr" else list(_US_HOT_POOL)
+    missing = []
+    quotes = _us_pool_quotes(snap, pool, missing)
+    vols = sorted(q["volume"] for q in quotes if q.get("volume"))
+    amts = sorted(q["amount"] for q in quotes if q.get("amount"))
+    med_vol = vols[len(vols) // 2] if vols else None
+    med_amount = amts[len(amts) // 2] if amts else None
+    results = [_us_scan_item(q, med_vol, med_amount) for q in quotes]
+    if mode == "gainers":
+        results = [r for r in results if (r.get("change_pct") or 0) > 0]
+        results.sort(key=lambda r: r["change_pct"], reverse=True)
+    else:
+        results.sort(key=lambda r: r["score"], reverse=True)
+    out = {"mode": mode, "count": len(results), "results": results,
+           "trade_date": trade_date, "source": "tushare-us_daily",
+           "note": _US_SCAN_NOTE}
+    if missing:
+        out["missing"] = sorted(missing)
+    return out
 
 
 # ─── 批量K线 (全市场日线面板 / 逐只) ─────────────────────────

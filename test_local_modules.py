@@ -79,8 +79,15 @@ class LocalModuleTests(unittest.TestCase):
         self.assertEqual(len(data['modules']), 11)
 
     def test_blocked_is_not_success_and_keys_are_not_exposed(self):
-        # 仍禁用: 美股看板(yfinance)、券商交易写库(单数 /api/trade 上游遗留面)
-        self.assertEqual(self.client.get('/api/us/dashboard').status_code, 403)
+        # 美股看板/扫描 2026-11-01 启用 (tushare us_daily 关注池快照, 1次/小时):
+        # 不再 403; 无凭据时必须显式 502, 绝不 200 包错误
+        for path in ['/api/us/dashboard', '/api/us/scan']:
+            r = self.client.get(path)
+            self.assertEqual(r.status_code, 502, path)
+            self.assertTrue(r.json.get('error'), path)
+        # 非法扫描 mode → 400, 不触网上游
+        self.assertEqual(self.client.get('/api/us/scan?mode=all').status_code, 400)
+        # 仍禁用: 券商交易写库(单数 /api/trade 上游遗留面)
         self.assertEqual(self.client.post('/api/trade', json={}).status_code, 403)
         # 交易日志 2026-10-26 启用(仅手动记账): 不再 403; 未登录一律 401, 绝不 200 包错误
         self.assertEqual(self.client.get('/api/trades').status_code, 401)
