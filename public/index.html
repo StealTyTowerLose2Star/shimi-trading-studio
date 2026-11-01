@@ -2284,7 +2284,7 @@ try {
     </tr>`;
   }).join('');
 } catch (err) {
-  $('adviceBody').innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--red)">⚠️ ' + err.message + '</td></tr>';
+  $('adviceBody').innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--red)">⚠️ ' + err.message + ' — 行情暂不可用（冷启动预热期或上游故障均为此显式状态，非空数据）；每 120s 自动重试，预热完成后自恢复</td></tr>';
 }
 }
 
