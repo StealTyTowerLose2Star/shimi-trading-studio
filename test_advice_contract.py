@@ -196,6 +196,37 @@ class TestDayCacheSkipsDegraded(unittest.TestCase):
                 real._cache.pop("daycache:advice_test_legacy:20261030", None)
 
 
+class TestSentimentNumericContract(AdviceBase):
+    """2026-11-01 工单: 情绪数值字段缺失/非数值显式失败, 真实 0 合法保留"""
+
+    def test_phase_only_rejected(self):
+        """仅含合法 phase → 抛市场情绪不可用, 不生成 market"""
+        with self.assertRaises(RuntimeError) as ctx:
+            self._run(_mapping(sentiment={"phase": "震荡市➡️"}))
+        self.assertIn("缺失或非数值", str(ctx.exception))
+
+    def test_real_zero_values_preserved(self):
+        """四字段齐全且含真实 0 → 原样保留各值"""
+        s = dict(SENTIMENT_OK, sentiment_score=0, up=0, down=0, limit_up=0)
+        out = self._run(_mapping(sentiment=s))
+        m = out["market"]
+        self.assertEqual(m["sentiment_score"], 0)
+        self.assertEqual((m["up"], m["down"], m["limit_up"]), (0, 0, 0))
+
+    def test_missing_or_nonnumeric_rejected(self):
+        """任一字段缺失/None/字符串/bool → 显式失败且无零值结果"""
+        for bad in (None, "60", True):
+            s = dict(SENTIMENT_OK)
+            s["limit_up"] = bad
+            with self.assertRaises(RuntimeError):
+                self._run(_mapping(sentiment=s))
+        for field in ("sentiment_score", "up", "down", "limit_up"):
+            s = dict(SENTIMENT_OK)
+            del s[field]
+            with self.assertRaises(RuntimeError):
+                self._run(_mapping(sentiment=s))
+
+
 class TestApiLayer502(unittest.TestCase):
     def test_error_dict_maps_to_502_unavailable(self):
         """generate_advice 抛出 → 外层 cache_or_fetch 错误字典 → 502 显式失败"""

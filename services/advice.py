@@ -99,6 +99,12 @@ def generate_advice():
     if _err(sentiment) or not isinstance(sentiment, dict) or "phase" not in sentiment:
         reason = sentiment.get("error") if isinstance(sentiment, dict) else type(sentiment).__name__
         raise RuntimeError(f"市场情绪不可用 (不做全0冒充): {reason}")
+    # 2026-11-01 工单返修: 仅 phase 合法不够 — 数值字段缺失/非数值同样显式失败,
+    # 不允许下游 .get(...,0) 把"缺数"伪装成真实零值 (真实 0 是合法值, 原样保留)
+    for _f in ("sentiment_score", "up", "down", "limit_up"):
+        _v = sentiment.get(_f)
+        if isinstance(_v, bool) or not isinstance(_v, (int, float)):
+            raise RuntimeError(f"市场情绪字段 {_f} 缺失或非数值 (不补0冒充): {_v!r}")
 
     scans = {"trend": trend, "hybrid": hybrid, "dragon": dragon}
     scans_status = {}
@@ -404,10 +410,10 @@ def generate_advice():
     result = {
         "market": {
             "phase": market_phase,
-            "sentiment_score": sentiment.get("sentiment_score", 0),
-            "up": sentiment.get("up", 0),
-            "down": sentiment.get("down", 0),
-            "limit_up": sentiment.get("limit_up", 0),
+            "sentiment_score": sentiment["sentiment_score"],
+            "up": sentiment["up"],
+            "down": sentiment["down"],
+            "limit_up": sentiment["limit_up"],
             **market_advice,
         },
         "top_sectors": top_sectors,
