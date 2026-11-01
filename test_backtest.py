@@ -329,7 +329,10 @@ class TestStCoverageDeclaration(unittest.TestCase):
             gm = patch.object(real, "real_get_stock_basic", side_effect=basic)
         else:
             gm = patch.object(real, "real_get_stock_basic", return_value=basic)
-        with patch.object(real, "_cached", return_value=frames), gm:
+        bench = {"name": "沪深300", "code": "000300.SH",
+                 "closes": {d: 100.0 for d in _mk_dates(90)}}
+        with patch.object(real, "_cached", return_value=frames), gm, \
+             patch.object(real, "real_index_series", return_value=bench):
             return lb._run_local("trend", 5, 2)
 
     def test_run_local_namelist_missing_marks_degraded(self):
@@ -349,6 +352,62 @@ class TestStCoverageDeclaration(unittest.TestCase):
         self.assertEqual(r["st_filter"], "applied")
         self.assertIsNone(r["st_note"])
         self.assertIn("ST剔除为当前名录口径", "\n".join(r["notes"]))
+
+
+class TestBenchmark(unittest.TestCase):
+    """2026-11-01 G1: 同窗口指数买入持有基准 — 数学/覆盖/不可用/策略不变性"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.dates = _mk_dates(90)
+        cls.frames = _mk_frames(cls.dates)
+        cls.base_result = lb.run_backtest("trend", cls.frames, hold=5, top_n=2,
+                                          initial_cash=100000.0)
+        cls.equity_dates = [p["date"] for p in cls.base_result["equity_curve"]]
+
+    def _run(self, benchmark):
+        return lb.run_backtest("trend", self.frames, hold=5, top_n=2,
+                               initial_cash=100000.0, benchmark=benchmark)
+
+    def test_constant_benchmark_zero_return(self):
+        closes = {d: 100.0 for d in self.equity_dates}
+        b = self._run({"name": "沪深300", "code": "000300.SH", "closes": closes})["benchmark"]
+        self.assertEqual(b["status"], "ok")
+        self.assertEqual(b["total_return_pct"], 0.0)
+        self.assertEqual(b["coverage"], 1.0)
+        self.assertEqual(b["excess_return_pp"], b["strategy_return_pct"])
+        for p in b["equity_curve"]:
+            self.assertEqual(p["equity"], 100000.0)
+
+    def test_rising_benchmark_hand_calc(self):
+        closes = {d: 100.0 for d in self.equity_dates}
+        closes[self.equity_dates[-1]] = 110.0
+        b = self._run({"name": "沪深300", "code": "000300.SH", "closes": closes})["benchmark"]
+        self.assertEqual(b["total_return_pct"], 10.0)
+        self.assertAlmostEqual(b["excess_return_pp"],
+                               b["strategy_return_pct"] - 10.0, places=2)
+        self.assertEqual(b["equity_curve"][-1]["equity"], 110000.0)
+
+    def test_partial_coverage_explicit(self):
+        half = self.equity_dates[: len(self.equity_dates) // 2]
+        closes = {d: 100.0 for d in half}
+        b = self._run({"name": "沪深300", "code": "000300.SH", "closes": closes})["benchmark"]
+        self.assertEqual(b["status"], "ok")
+        self.assertLess(b["coverage"], 1.0)
+        self.assertIn("coverage<1", b["note"])
+
+    def test_unavailable_no_zero_fill(self):
+        for bench in (None, {"note": "指数基准获取失败(不补0): x"}, {"closes": {}}):
+            b = self._run(bench)["benchmark"]
+            self.assertEqual(b["status"], "unavailable")
+            self.assertNotIn("total_return_pct", b)
+
+    def test_strategy_result_invariant_to_benchmark(self):
+        b = self._run({"name": "沪深300", "code": "000300.SH",
+                       "closes": {d: 100.0 for d in self.equity_dates}})
+        self.assertEqual(b["metrics"], self.base_result["metrics"])
+        self.assertEqual(b["equity_curve"], self.base_result["equity_curve"])
+        self.assertEqual(self.base_result["benchmark"]["status"], "unavailable")
 
 
 if __name__ == "__main__":

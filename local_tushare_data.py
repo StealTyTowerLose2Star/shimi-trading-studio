@@ -315,6 +315,15 @@ def _index_hist(ts_code, days=150):
     return _cached(f"idx_hist:{ts_code}", 3600, _fetch)
 
 
+def real_index_series(code, n=150, name="指数基准"):
+    """指数收盘价映射 {YYYY-MM-DD: close} (复用 _index_hist 1h缓存) —
+    回测同窗口买入持有基准 (2026-11-01 G1); 无数据由 _index_hist 显式抛错, 不补0"""
+    df = _index_hist(code, n)
+    closes = {_fmt_date(str(r["trade_date"])): float(r["close"])
+              for _, r in df.iterrows()}
+    return {"name": name, "code": code, "closes": closes}
+
+
 # ─── 行业板块 (复刻 data/fetcher_indices.py 原逻辑) ─────────────
 
 def _eod_meta(data_date, daily, data_kind):

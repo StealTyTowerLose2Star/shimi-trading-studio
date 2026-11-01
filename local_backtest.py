@@ -69,6 +69,50 @@ def _short(ts_code):
     return ts_code.split(".")[0]
 
 
+def _benchmark_block(benchmark, equity_dates, equity_vals, initial_cash):
+    """同窗口指数买入持有基准 (2026-11-01 G1 返修): 与策略净值同日起点归一,
+    输出基准收益/策略收益/超额pp + 覆盖率; 基准不可用显式标注, 不补0"""
+    if not benchmark or not benchmark.get("closes"):
+        note = ((benchmark or {}).get("note")
+                or "指数基准数据不可用, 不补0; 策略结果仍为本窗口真实计算")
+        return {"status": "unavailable", "note": note}
+    closes = benchmark["closes"]
+    base = None
+    last = None
+    matched = 0
+    valid = []
+    for d in equity_dates:
+        c = closes.get(d)
+        if c is not None:
+            last = c
+            matched += 1
+        if last is None:
+            continue            # 窗口内尚无任何基准值 → 该日不计入
+        if base is None:
+            base = last         # 首个可得基准收盘 = 买入持有起点
+        valid.append((d, last))
+    if base is None:
+        return {"status": "unavailable",
+                "note": "窗口内无指数基准交易日, 不补0; 策略结果仍为本窗口真实计算"}
+    total_return = valid[-1][1] / base - 1
+    strategy_return = equity_vals[-1] / initial_cash - 1
+    coverage = matched / len(equity_dates) if equity_dates else 0.0
+    return {
+        "status": "ok",
+        "name": benchmark.get("name", "指数基准"),
+        "code": benchmark.get("code"),
+        "total_return_pct": round(total_return * 100, 2),
+        "strategy_return_pct": round(strategy_return * 100, 2),
+        "excess_return_pp": round((strategy_return - total_return) * 100, 2),
+        "coverage": round(coverage, 3),
+        "equity_curve": [{"date": d, "equity": round(v / base * initial_cash, 2)}
+                         for d, v in valid],
+        "note": ("指数买入持有同窗口对照, 与策略同日起点归一; 基准不计交易费用(策略已计费), "
+                 "为简化对照口径; coverage<1 表示部分交易日无基准值(按最近可得值携带), "
+                 "覆盖率不足时超额结论仅供参考"),
+    }
+
+
 def _scan_day(spec, frames, cols, idx_maps, dates, t, st_codes):
     """第 t 个市场日 (信号日 T) 的截面信号 — 仅用 ≤T 数据 (防未来函数)。
 
@@ -120,13 +164,15 @@ def _scan_day(spec, frames, cols, idx_maps, dates, t, st_codes):
 
 
 def run_backtest(strategy, frames, name_map=None, st_codes=None,
-                 hold=5, top_n=5, initial_cash=INITIAL_CASH):
+                 hold=5, top_n=5, initial_cash=INITIAL_CASH, benchmark=None):
     """纯函数回测引擎 (离线可测): 输入全市场K线面板, 输出指标与成交明细。
 
     frames: {ts_code: DataFrame[date,open,high,low,close,volume,pct_chg] 升序}
     name_map: {短码: 名称} (交易明细展示用)
     st_codes: 短码集合, 当前名录口径的 ST 剔除 (历史戴帽无法回溯, 见 notes);
       为空集时不做任何名称级 ST 剔除, notes 会如实声明 (不冒充已筛)
+    benchmark: 可选 {name, code, closes:{YYYY-MM-DD:close}} 指数日线序列,
+      同窗口买入持有对照; 缺省/无数据 → benchmark.status=unavailable 显式标注
     """
     if strategy not in _SIGNAL_SPEC:
         raise ValueError(f"未知策略: {strategy}")
@@ -270,6 +316,7 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
             "panel_days": PANEL_DAYS, "warmup_days": spec["warmup"],
         },
         "metrics": metrics,
+        "benchmark": _benchmark_block(benchmark, equity_dates, equity_vals, initial_cash),
         "signals_total": signals_total,
         "trades_completed": len(trades),
         "trades_open": len(open_legs),
@@ -290,6 +337,8 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
             f"每笔定额等权(初始资金/{top_n}), 现金不足跳过, 允许零碎股(仅用于指标)",
             "手续费口径假设: 买入万2.5 / 卖出万2.5+印花税万5; 停牌顺延复牌首日开盘价",
             f"面板限最近{PANEL_DAYS}个已发布开市日 (暖机{spec['warmup']}日), 年化=252",
+            "候选池=当前名录, 已退市股票不在池中 (幸存者偏差未消除); 单窗口样本内结果, "
+            "无样本外验证 — 回测仅证明计算口径自洽, 不构成投资有效性证据",
         ],
         "disclaimer": "回测为历史数据研究视图, 不构成投资建议; 本地仅手动记账, 无交易能力",
     }
@@ -321,8 +370,12 @@ def _run_local(strategy, hold, top_n):
             name_map[short] = name
             if "ST" in name.upper():
                 st_codes.add(short)
+    try:
+        bench = _real.real_index_series("000300.SH", PANEL_DAYS, name="沪深300")
+    except Exception as e:
+        bench = {"note": f"指数基准获取失败(不补0): {str(e)[:80]}"}
     result = run_backtest(strategy, frames, name_map=name_map, st_codes=st_codes,
-                          hold=hold, top_n=top_n)
+                          hold=hold, top_n=top_n, benchmark=bench)
     result["st_filter"] = "applied" if st_ok else "degraded_no_namelist"
     result["st_note"] = (None if st_ok else
                          "ST 名录缺失, 回测候选池未按名称剔除 ST (结果可能含 ST 标的); "
