@@ -2240,17 +2240,25 @@ try {
   $('advAction').textContent = m.action || '--';
   $('advRisk').textContent = m.risk || '--';
   $('advRisk').style.color = m.risk && m.risk.includes('高') ? 'var(--red)' : (m.risk && m.risk.includes('极高') ? 'var(--red)' : 'var(--text-secondary)');
-  $('advSectors').textContent = (data.top_sectors || []).join('  ·  ') || '--';
+  const ss = data.sources_status || {};
+  $('advSectors').textContent = ss.sectors === 'unavailable'
+    ? '⚠ 板块数据不可用'
+    : ((data.top_sectors || []).join('  ·  ') || '--');
+  $('advSectors').style.color = ss.sectors === 'unavailable' ? 'var(--red)' : '';
   $('adviceGenerated').textContent = '🕐 ' + (data.generated_at || '');
 
   // Recommendations
   const tbody = $('adviceBody');
   const items = data.recommendations || [];
+  const noteHtml = data.note
+    ? '<tr><td colspan="12" style="text-align:center;color:' +
+      (data.degraded ? 'var(--red)' : 'var(--text-muted)') + ';font-size:12px">' +
+      (data.degraded ? '⚠️ ' : '') + data.note + '</td></tr>' : '';
   if (items.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--text-muted)">当前无多策略共振信号</td></tr>';
+    tbody.innerHTML = noteHtml || '<tr><td colspan="12" style="text-align:center;color:var(--text-muted)">当前无多策略共振信号</td></tr>';
     return;
   }
-  tbody.innerHTML = items.map(r => {
+  tbody.innerHTML = noteHtml + items.map(r => {
     const signalColor = r.consensus >= 3 ? 'var(--red)' : 'var(--gold)';
     const posColor = r.position === '25%' ? 'var(--red)' : 'var(--gold)';
     const reasonShort = (r.reason || '').substring(0, 40) + ((r.reason || '').length > 40 ? '...' : '');

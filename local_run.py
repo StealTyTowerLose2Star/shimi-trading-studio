@@ -403,7 +403,11 @@ else:
     _adv.fetch_sentiment = _real.real_fetch_sentiment
     _adv.fetch_sectors = _real.real_fetch_sectors
     _adv.get_kline = _real.real_get_kline
-    _api_advice.generate_advice = _real.real_day_cached("advice", _adv.generate_advice)
+    # 降级结果 (部分源失败, degraded=true) 不进 6h 日缓存 — 下轮请求重试上游,
+    # 避免 cold-start 瞬断被固化全天 (2026-11-01 /api/advice 空数据事故根因之一)
+    _api_advice.generate_advice = _real.real_day_cached(
+        "advice", _adv.generate_advice,
+        cacheable=lambda r: not (isinstance(r, dict) and r.get("degraded")))
 
     _kp.get_daily = _fetcher.get_daily
     _kp.get_stock_basic = _real.real_get_stock_basic

@@ -56,6 +56,13 @@ def generate_advice():
     汇总趋势、混合、龙头三大策略的推荐股票，计算共识度、动态仓位、
     ATR 止盈止损位，并结合市场情绪给出综合操作建议。
 
+    失败契约 (2026-11-01 返修, real-only):
+    - 市场情绪不可用 / 三策略扫描全失败 → 抛 RuntimeError (API 层 502 显式失败,
+      不做全 0/未知冒充有数据, 也不进任何缓存);
+    - 部分扫描或板块源失败 → 200 返回真实部分结果, 带 sources_status 逐项状态 +
+      degraded=true + note 原因; 降级结果由 local_run 包装层跳过 6h 日缓存;
+    - 扫描全部完成但无共识标的 → recommendations=[] + note 显式说明 (真实空结果)。
+
     Returns:
         dict: {
             "market": {
@@ -67,6 +74,8 @@ def generate_advice():
             "recommendations": list[dict] — TOP 5 推荐股票，每项含 code, name,
                 consensus, strategies, signal, price, entry_zone, stop_loss,
                 target_1/2/3, risk_reward, position, reason 等,
+            "sources_status": dict — sentiment/sectors/scan_* 各源 ok|unavailable,
+            "degraded": bool, "note": str|None,
             "generated_at": str
         }
     """
@@ -76,6 +85,38 @@ def generate_advice():
     dragon = cache_or_fetch("strategy_dragon", run_dragon_scan, 120)
     sentiment = cache_or_fetch("sentiment", fetch_sentiment, 30)
     sectors = cache_or_fetch("sectors", fetch_sectors, 120)
+
+    # ─── 上游失败显式化 (2026-11-01 返修) ──────────────────
+    # cache_or_fetch 上游失败时返回 {"error": ...} 字典而不是抛异常;
+    # 此前 .get(...,0/未知) 把失败静默吞成全 0/空列表, 再被 6h 日缓存固化
+    # (real-only 违规: 拿空当 0 冒充有数据)。现在:
+    #   市场情绪失败 → 抛异常 (API 层 502 显式"行情不可用", 不缓存);
+    #   三扫描全失败 → 抛异常; 部分失败 → 用可用扫描继续, 结果显式标注降级;
+    #   板块失败 → top_sectors 空 + sectors_status=unavailable (非致命)。
+    def _err(v):
+        return isinstance(v, dict) and "error" in v
+
+    if _err(sentiment) or not isinstance(sentiment, dict) or "phase" not in sentiment:
+        reason = sentiment.get("error") if isinstance(sentiment, dict) else type(sentiment).__name__
+        raise RuntimeError(f"市场情绪不可用 (不做全0冒充): {reason}")
+
+    scans = {"trend": trend, "hybrid": hybrid, "dragon": dragon}
+    scans_status = {}
+    for _k, _v in scans.items():
+        ok = (isinstance(_v, dict) and not _err(_v)
+              and isinstance(_v.get("picked"), list))
+        scans_status[_k] = "ok" if ok else "unavailable"
+        if not ok:
+            scans[_k] = {"picked": []}
+    if all(s == "unavailable" for s in scans_status.values()):
+        raise RuntimeError("三策略扫描均不可用 (不做空推荐冒充): "
+                           + "; ".join(f"{k}: {scans_src.get('error') if isinstance(scans_src, dict) else '?'}"
+                                       for k, scans_src in
+                                       (("trend", trend), ("hybrid", hybrid), ("dragon", dragon))))
+    trend, hybrid, dragon = scans["trend"], scans["hybrid"], scans["dragon"]
+
+    sectors_ok = isinstance(sectors, list)
+    degraded = (not sectors_ok) or any(s == "unavailable" for s in scans_status.values())
 
     market_phase = sentiment.get("phase", "未知")
     phase_advice = {
@@ -343,7 +384,22 @@ def generate_advice():
         })
 
     recommendations.sort(key=lambda x: (x["sort_score"], -x["price"]), reverse=True)
-    top_sectors = [s["name"] for s in (sectors[:5] if isinstance(sectors, list) else [])]
+    top_sectors = [s["name"] for s in (sectors[:5] if sectors_ok else [])
+                   if isinstance(s, dict) and s.get("name")]
+
+    # 空推荐显式说明原因 (不空白): 区分"扫描降级"与"扫描完成但无共识标的"
+    note = None
+    if degraded:
+        parts = []
+        if not sectors_ok:
+            parts.append("行业板块不可用")
+        miss = [k for k, s in scans_status.items() if s == "unavailable"]
+        if miss:
+            parts.append("策略扫描不可用: " + "/".join(miss))
+        note = ("降级结果 (部分源失败, 未进6h日缓存, 下轮重试): " + "；".join(parts))
+    elif not recommendations:
+        note = ("三策略扫描已完成, 当前无满足共识条件的推荐标的 "
+                "(共识<2 且非高分K线形态/事件共振) — 真实空结果, 非数据缺失")
 
     result = {
         "market": {
@@ -357,6 +413,16 @@ def generate_advice():
         "top_sectors": top_sectors,
         "recommendations": recommendations[:5],
         "generated_at": time.strftime("%H:%M:%S"),
+        # 2026-11-01 返修: 源状态显式化, 降级结果不固化进日缓存
+        "sources_status": {
+            "sentiment": "ok",
+            "sectors": "ok" if sectors_ok else "unavailable",
+            "scan_trend": scans_status["trend"],
+            "scan_hybrid": scans_status["hybrid"],
+            "scan_dragon": scans_status["dragon"],
+        },
+        "degraded": degraded,
+        "note": note,
     }
 
     # 保存推荐记录到数据库（供周日复盘用）

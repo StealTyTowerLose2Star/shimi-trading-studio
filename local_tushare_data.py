@@ -991,10 +991,14 @@ _day_locks = {}
 _day_locks_guard = threading.Lock()
 
 
-def real_day_cached(key, fn):
+def real_day_cached(key, fn, cacheable=None):
     """按 EOD 数据日键控的 6h 缓存包装: 同一数据日内重计算只跑一次
     (日线发布后当日不再变化, refresh 同日不重复消耗 API);
-    同键并发单飞 — 后来的线程等先算的写缓存后直接读"""
+    同键并发单飞 — 后来的线程等先算的写缓存后直接读
+
+    cacheable: 可选谓词 cacheable(result)->bool; 返回 False 时结果不写日缓存
+    (2026-11-01: 降级结果不固化 — 否则 cold-start 瞬断产生的部分源失败结果
+    会被 6h 日缓存钉住, 全天无恢复)"""
     def _run():
         d = _data_date()
         ckey = f"daycache:{key}:{d}"
@@ -1004,5 +1008,13 @@ def real_day_cached(key, fn):
         with _day_locks_guard:
             lock = _day_locks.setdefault(ckey, threading.Lock())
         with lock:
-            return _cached(ckey, 21600, fn)
+            if cacheable is None:
+                return _cached(ckey, 21600, fn)
+            ent = _cache.get(ckey)
+            if ent and time.time() - ent[0] < ent[1]:
+                return ent[2]
+            val = fn()
+            if cacheable(val):
+                _cache[ckey] = (time.time(), 21600, val)
+            return val
     return _run
