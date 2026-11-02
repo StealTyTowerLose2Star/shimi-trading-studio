@@ -2875,23 +2875,41 @@ function renderBacktest(d) {
   document.getElementById('btMetrics').innerHTML = items.map(it =>
     `<div style="padding:8px;background:rgba(255,255,255,.03);border-radius:8px"><div style="font-size:11px;color:var(--text-muted)">${it[0]}</div><div style="font-size:16px;font-weight:700;color:${it[2]}">${it[1]}</div></div>`
   ).join('');
-  // 净值曲线 (纯SVG polyline)
+  // 净值曲线 (纯SVG polyline) + 2026-11-02 G1 基准对照线
+  const bench = d.benchmark || {};
   const curve = d.equity_curve || [];
   const svg = document.getElementById('btChart');
   if (curve.length > 1) {
+    const bmap = {};
+    if (bench.status === 'ok') (bench.equity_curve || []).forEach(c => { bmap[c.date] = c.equity; });
+    const bvals = curve.map(c => bmap[c.date] != null ? bmap[c.date] : null);
+    const bNums = bvals.filter(v => v != null);
     const W = 660, H = 120, pad = 6;
     const vals = curve.map(c => c.equity);
-    const lo = Math.min(...vals, d.params.initial_cash), hi = Math.max(...vals, d.params.initial_cash);
+    const lo = Math.min(...vals, ...bNums, d.params.initial_cash), hi = Math.max(...vals, ...bNums, d.params.initial_cash);
     const span = Math.max(hi - lo, 1e-9);
-    const pts = curve.map((c, i) =>
-      (pad + i / (curve.length - 1) * (W - 2 * pad)).toFixed(1) + ',' + (H - pad - (c.equity - lo) / span * (H - 2 * pad)).toFixed(1)
-    ).join(' ');
-    const baseY = (H - pad - (d.params.initial_cash - lo) / span * (H - 2 * pad)).toFixed(1);
+    const xAt = i => (pad + i / (curve.length - 1) * (W - 2 * pad)).toFixed(1);
+    const yAt = v => (H - pad - (v - lo) / span * (H - 2 * pad)).toFixed(1);
+    const pts = curve.map((c, i) => xAt(i) + ',' + yAt(c.equity)).join(' ');
+    const baseY = yAt(d.params.initial_cash);
     const up = vals[vals.length - 1] >= d.params.initial_cash;
+    // 基准虚线: 断点(覆盖缺口)分段绘制, 不跨缺口连线
+    let benchSvg = '';
+    if (bNums.length > 1) {
+      let seg = [];
+      const flush = () => {
+        if (seg.length > 1) benchSvg += `<polyline points="${seg.join(' ')}" fill="none" stroke="#60a5fa" stroke-width="1.2" stroke-dasharray="4,3"/>`;
+        seg = [];
+      };
+      bvals.forEach((v, i) => { if (v == null) flush(); else seg.push(xAt(i) + ',' + yAt(v)); });
+      flush();
+      benchSvg += `<text x="${W - pad - 150}" y="${H - pad - 4}" font-size="9" fill="#60a5fa">蓝虚线=${bench.name || '指数'}基准</text>`;
+    }
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     svg.innerHTML =
       `<line x1="${pad}" y1="${baseY}" x2="${W - pad}" y2="${baseY}" stroke="#888" stroke-width="0.5" stroke-dasharray="3,3"/>` +
       `<polyline points="${pts}" fill="none" stroke="${up ? '#22c55e' : '#ef4444'}" stroke-width="1.5"/>` +
+      benchSvg +
       `<text x="${pad + 2}" y="${pad + 9}" font-size="9" fill="#888">${curve[0].date}</text>` +
       `<text x="${W - pad - 70}" y="${pad + 9}" font-size="9" fill="#888">${curve[curve.length - 1].date}</text>`;
   }
@@ -2915,7 +2933,10 @@ function renderBacktest(d) {
     : (d.st_filter == null
        ? '<div style="color:var(--text-muted);font-size:11px;margin-bottom:4px">ST覆盖状态: 未知 (旧缓存, 刷新后重取)</div>'
        : '');
-  document.getElementById('btNotes').innerHTML = stBanner + (d.notes || []).map(n => '· ' + n).join('<br>') +
+  const benchSummary = bench.status === 'ok'
+    ? '<div style="margin-bottom:6px;font-size:12px;color:var(--text-secondary)">📊 基准对照: ' + (bench.name || '指数') + '(' + (bench.code || '') + ') 买入持有 <b style="color:' + (bench.total_return_pct >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (bench.total_return_pct >= 0 ? '+' : '') + bench.total_return_pct + '%</b> · 策略 <b>' + (bench.strategy_return_pct >= 0 ? '+' : '') + bench.strategy_return_pct + '%</b> · 超额 <b style="color:' + (bench.excess_return_pp >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (bench.excess_return_pp >= 0 ? '+' : '') + bench.excess_return_pp + 'pp</b>' + (bench.coverage < 1 ? ' · 覆盖 ' + Math.round(bench.coverage * 100) + '%(不足,仅供参考)' : '') + '</div>'
+    : '<div style="margin-bottom:6px;font-size:12px;color:var(--text-muted)">📊 指数基准: ' + (bench.note || '不可用 (旧缓存, 刷新后重取)') + '</div>';
+  document.getElementById('btNotes').innerHTML = benchSummary + stBanner + (d.notes || []).map(n => '· ' + n).join('<br>') +
     '<br><span style="color:var(--gold)">' + (d.disclaimer || '') + '</span>';
 }
 
