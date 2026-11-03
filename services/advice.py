@@ -8,6 +8,7 @@
 """
 
 import time
+import math
 import pandas as pd
 from cache import cache_or_fetch
 from data.fetcher import fetch_sentiment, fetch_sectors
@@ -101,10 +102,12 @@ def generate_advice():
         raise RuntimeError(f"市场情绪不可用 (不做全0冒充): {reason}")
     # 2026-11-01 工单返修: 仅 phase 合法不够 — 数值字段缺失/非数值同样显式失败,
     # 不允许下游 .get(...,0) 把"缺数"伪装成真实零值 (真实 0 是合法值, 原样保留)
+    # 2026-11-02 Codex独验返修: NaN/+Inf/-Inf 也是 float 但非有效数值, 一并拒绝
     for _f in ("sentiment_score", "up", "down", "limit_up"):
         _v = sentiment.get(_f)
-        if isinstance(_v, bool) or not isinstance(_v, (int, float)):
-            raise RuntimeError(f"市场情绪字段 {_f} 缺失或非数值 (不补0冒充): {_v!r}")
+        if (isinstance(_v, bool) or not isinstance(_v, (int, float))
+                or not math.isfinite(_v)):
+            raise RuntimeError(f"市场情绪字段 {_f} 缺失/非数值/非有限数 (不补0冒充): {_v!r}")
 
     scans = {"trend": trend, "hybrid": hybrid, "dragon": dragon}
     scans_status = {}

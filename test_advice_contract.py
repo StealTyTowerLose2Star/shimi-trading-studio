@@ -203,7 +203,7 @@ class TestSentimentNumericContract(AdviceBase):
         """仅含合法 phase → 抛市场情绪不可用, 不生成 market"""
         with self.assertRaises(RuntimeError) as ctx:
             self._run(_mapping(sentiment={"phase": "震荡市➡️"}))
-        self.assertIn("缺失或非数值", str(ctx.exception))
+        self.assertIn("非数值", str(ctx.exception))
 
     def test_real_zero_values_preserved(self):
         """四字段齐全且含真实 0 → 原样保留各值"""
@@ -225,6 +225,15 @@ class TestSentimentNumericContract(AdviceBase):
             del s[field]
             with self.assertRaises(RuntimeError):
                 self._run(_mapping(sentiment=s))
+
+    def test_nonfinite_rejected_all_fields(self):
+        """Codex 2026-11-02 独验反例: NaN/+Inf/-Inf × 四字段 = 12 变体全部拒绝"""
+        for field in ("sentiment_score", "up", "down", "limit_up"):
+            for bad in (float("nan"), float("inf"), float("-inf")):
+                s = dict(SENTIMENT_OK)
+                s[field] = bad
+                with self.assertRaises(RuntimeError, msg=f"{field}={bad}"):
+                    self._run(_mapping(sentiment=s))
 
 
 class TestApiLayer502(unittest.TestCase):
