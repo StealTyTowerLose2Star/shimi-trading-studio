@@ -324,6 +324,27 @@ def real_index_series(code, n=150, name="指数基准"):
     return {"name": name, "code": code, "closes": closes}
 
 
+def real_concept_hot_stocks(trade_date=None, threshold=5.0):
+    """C6 概念引擎数据源 (2026-11-05 翻倍缺源修复): real 模式注入
+    data.concept_heat_tracker._get_hot_stocks, 替换原 tushare SDK 直连路径
+    (独立连接无共享缓存/节流, 与本地 real 架构不兼容致 concept=unavailable,
+    D7/D8/D10 不计入总分)。快照失败/无数据 → None (引擎显式标 unavailable)"""
+    try:
+        date = str(trade_date or _data_date()).replace("-", "")
+        df = _daily_snapshot(date)
+    except Exception:
+        return None
+    if df is None or len(df) == 0:
+        return None
+    return df[df["pct_chg"] >= threshold].copy()
+
+def real_concept_industry_map():
+    """C6 概念引擎数据源: 名录 {ts_code:{name,industry}} (与原 SDK 返回同构)"""
+    return {c: {"name": (i or {}).get("name", ""),
+                "industry": (i or {}).get("industry") or "未知"}
+            for c, i in real_get_stock_basic().items()}
+
+
 # ─── 行业板块 (复刻 data/fetcher_indices.py 原逻辑) ─────────────
 
 def _eod_meta(data_date, daily, data_kind):

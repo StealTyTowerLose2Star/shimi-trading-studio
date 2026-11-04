@@ -112,6 +112,15 @@ class LocalModuleTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/strategy/trend/refresh').status_code, 403)
         self.assertEqual(self.client.get('/static/.local_token').status_code, 404)
 
+    def test_concept_source_injected_local_adapter(self):
+        # 2026-11-05 翻倍C6修复: real 模式下概念引擎数据源必须是本地适配,
+        # 不再走被禁用的 tushare SDK; 无凭据时显式 None (不抛 SDK 禁用错误)
+        import data.concept_heat_tracker as cht
+        import local_tushare_data as real
+        self.assertIs(cht._get_hot_stocks, real.real_concept_hot_stocks)
+        self.assertIs(cht._get_industry_map, real.real_concept_industry_map)
+        self.assertIsNone(cht._get_hot_stocks())
+
     def test_search_and_kline_fail_closed_deterministic(self):
         r = self.client.get('/api/stock/lookup?q=600')
         self.assertEqual(r.status_code, 502)

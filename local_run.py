@@ -347,6 +347,13 @@ else:
     _rs.get_kline_batch = _real.real_get_kline_batch
     _pm.get_kline = _real.real_get_kline
 
+    # 2026-11-05 翻倍C6概念源修复: concept_heat_tracker 原走 tushare SDK
+    # (下方 pro_api 已禁用) → concept=unavailable, D7/D8/D10 不计入总分;
+    # 数据源函数级注入本地 real 适配 (共享快照/名录缓存与节流), 恢复完整评分
+    import data.concept_heat_tracker as _cht
+    _cht._get_hot_stocks = _real.real_concept_hot_stocks
+    _cht._get_industry_map = _real.real_concept_industry_map
+
     # pro_api 安全替代: stock_radar 等函数级 from data.fetcher_core import get_ts
     # 的调用方拿到 HTTPS 闸门内的 shim (daily/daily_basic/trade_cal/fina_indicator/
     # top_list/moneyflow); tushare SDK 本体禁用 — 其默认明文 HTTP 会泄露令牌
