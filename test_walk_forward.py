@@ -96,6 +96,21 @@ class TestWalkForward(unittest.TestCase):
         base = sum(w["trades_completed"] for w in self.wf["windows"])
         self.assertEqual(sum(w["trades_completed"] for w in wf100["windows"]), base)
 
+    def test_market_regime_gate(self):
+        # I3 结构假设: 基准持续深跌(有MA20历史后) → 全部暂停开仓;
+        # 常数基准 → 闸门不拦截, 与基线一致
+        closes = {d: (100.0 if i < 50 else 50.0) for i, d in enumerate(self.dates)}
+        wf = lb.run_walk_forward("trend", self.frames, n_windows=3, hold=5, top_n=2,
+                                 initial_cash=100000.0,
+                                 benchmark={"name": "x", "code": "x", "closes": closes},
+                                 spec_override={"require_index_above_ma": 20})
+        self.assertEqual(sum(w["trades_completed"] for w in wf["windows"]), 0)
+        wf2 = lb.run_walk_forward("trend", self.frames, n_windows=3, hold=5, top_n=2,
+                                  initial_cash=100000.0, benchmark=self.bench,
+                                  spec_override={"require_index_above_ma": 20})
+        base = sum(w["trades_completed"] for w in self.wf["windows"])
+        self.assertEqual(sum(w["trades_completed"] for w in wf2["windows"]), base)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

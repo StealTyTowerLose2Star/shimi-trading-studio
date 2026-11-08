@@ -47,7 +47,8 @@ _SIGNAL_SPEC = {
         "prescreen_sort": "amount",     # 按成交额近似 (vol×close) 降序
         "score_fn": trend_detect_df, "score_key": "total_score",
         "threshold": 30.0, "picked_top": 25,
-        "max_prior_gain_pct": None,   # I3 假设2: 设值后排除信号日前60日涨幅超标的标的
+        "max_prior_gain_pct": None,
+        "require_index_above_ma": None,   # I3 假设2: 设值后排除信号日前60日涨幅超标的标的
     },
     "hybrid": {
         "lookback": 120, "warmup": 60, "prescreen_top": 60,
@@ -56,6 +57,7 @@ _SIGNAL_SPEC = {
         "score_fn": hybrid_score_df, "score_key": "score",
         "threshold": 15.0, "picked_top": 25,
         "max_prior_gain_pct": None,
+        "require_index_above_ma": None,
     },
     "dragon": {
         "lookback": 60, "warmup": 20, "prescreen_top": 10,
@@ -64,6 +66,7 @@ _SIGNAL_SPEC = {
         "score_fn": dragon_leader_score_df, "score_key": "leader_score",
         "threshold": None, "picked_top": 25,
         "max_prior_gain_pct": None,
+        "require_index_above_ma": None,
     },
 }
 
@@ -238,6 +241,19 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
         first_t = max(first_t, later[0])
     last_t = len(dates) - 1
 
+    # 市场状态闸门 (I3 结构假设): 启用后, 指数收盘低于其 MA_N 的信号日暂停新开仓
+    # (持仓按原计划退出, 不受影响); 指数历史不足的日子不拦截
+    def _regime_ok(t):
+        n = spec.get("require_index_above_ma")
+        if not n or not benchmark or not benchmark.get("closes"):
+            return True
+        closes = benchmark["closes"]
+        upto = sorted(d for d in closes if d <= dates[t])
+        if len(upto) < n:
+            return True
+        ma = sum(closes[d] for d in upto[-n:]) / n
+        return closes[upto[-1]] >= ma
+
     for d in range(first_t, last_t + 1):
         day = dates[d]
         # ── 1) 开盘: 到期持仓卖出 ──
@@ -275,9 +291,9 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
             })
             del positions[c]
 
-        # ── 2) 开盘: 昨日 (T=d-1) 信号买入 ──
+        # ── 2) 开盘: 昨日 (T=d-1) 信号买入 (市场状态闸门: 弱市暂停新开仓) ──
         t = d - 1
-        if t >= first_t:
+        if t >= first_t and _regime_ok(t):
             if t not in scans:
                 scans[t] = _scan_day(spec, frames, cols, idx_maps, dates, t, st_codes)
             signals = scans[t][:top_n]
@@ -370,6 +386,8 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
             f"面板限最近{PANEL_DAYS}个已发布开市日 (暖机{spec['warmup']}日), 年化=252",
             "候选池=当前名录, 已退市股票不在池中 (幸存者偏差未消除); 单窗口样本内结果, "
             "无样本外验证 — 回测仅证明计算口径自洽, 不构成投资有效性证据",
+        ] + ([f"市场状态闸门: 指数收盘低于MA{spec['require_index_above_ma']}的信号日暂停新开仓 "
+              "(I3 结构假设启用); 指数历史不足日不拦截"] if spec.get("require_index_above_ma") else []),
         ],
         "disclaimer": "回测为历史数据研究视图, 不构成投资建议; 本地仅手动记账, 无交易能力",
     }
