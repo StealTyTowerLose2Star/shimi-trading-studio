@@ -80,6 +80,20 @@ class TestWalkForward(unittest.TestCase):
             lb.run_walk_forward("trend", self.frames, n_windows=3,
                                 spec_override={"not_a_param": 1})
 
+    def test_prior_gain_filter(self):
+        # I3 假设2: 合成稳定上涨趋势(+1%/日, 60日涨幅约81%)
+        # 有60日历史的信号日全部过滤; 仅首个无60日历史的信号日(dates[59])可过;
+        # max=100 → 放行; 默认 None 不改变基线行为
+        wf50 = lb.run_walk_forward("trend", self.frames, n_windows=3,
+                                   spec_override={"max_prior_gain_pct": 50.0},
+                                   include_trades=True)
+        sig_days = {t["signal_date"] for w in wf50["windows"] for t in w["trades_all"]}
+        self.assertTrue(sig_days and sig_days <= {self.dates[59]}, sig_days)
+        wf100 = lb.run_walk_forward("trend", self.frames, n_windows=3,
+                                    spec_override={"max_prior_gain_pct": 100.0})
+        base = sum(w["trades_completed"] for w in self.wf["windows"])
+        self.assertEqual(sum(w["trades_completed"] for w in wf100["windows"]), base)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -47,6 +47,7 @@ _SIGNAL_SPEC = {
         "prescreen_sort": "amount",     # 按成交额近似 (vol×close) 降序
         "score_fn": trend_detect_df, "score_key": "total_score",
         "threshold": 30.0, "picked_top": 25,
+        "max_prior_gain_pct": None,   # I3 假设2: 设值后排除信号日前60日涨幅超标的标的
     },
     "hybrid": {
         "lookback": 120, "warmup": 60, "prescreen_top": 60,
@@ -54,6 +55,7 @@ _SIGNAL_SPEC = {
         "prescreen_sort": "amount",
         "score_fn": hybrid_score_df, "score_key": "score",
         "threshold": 15.0, "picked_top": 25,
+        "max_prior_gain_pct": None,
     },
     "dragon": {
         "lookback": 60, "warmup": 20, "prescreen_top": 10,
@@ -61,6 +63,7 @@ _SIGNAL_SPEC = {
         "prescreen_sort": "pct_chg",    # 涨停板池按涨幅降序
         "score_fn": dragon_leader_score_df, "score_key": "leader_score",
         "threshold": None, "picked_top": 25,
+        "max_prior_gain_pct": None,
     },
 }
 
@@ -146,6 +149,10 @@ def _scan_day(spec, frames, cols, idx_maps, dates, t, st_codes):
     threshold = spec["threshold"]
     scored = []
     for c, i, _pct, _amt in cand:
+        if spec.get("max_prior_gain_pct") is not None and i >= 60:
+            prev = cols[c][1][i - 60]
+            if prev > 0 and (cols[c][1][i] / prev - 1) * 100 > spec["max_prior_gain_pct"]:
+                continue  # I3 假设2: 排除信号日前60日涨幅超标的标的 (追高过滤)
         f = frames[c]
         df_slice = f.iloc[max(0, i + 1 - lookback):i + 1]  # 截至 T 的尾部切片
         try:
