@@ -165,7 +165,8 @@ def _scan_day(spec, frames, cols, idx_maps, dates, t, st_codes):
 
 def run_backtest(strategy, frames, name_map=None, st_codes=None,
                  hold=5, top_n=5, initial_cash=INITIAL_CASH, benchmark=None,
-                 eval_start=None, eval_end=None, include_trades=False):
+                 eval_start=None, eval_end=None, include_trades=False,
+                 spec_override=None):
     """纯函数回测引擎 (离线可测): 输入全市场K线面板, 输出指标与成交明细。
 
     frames: {ts_code: DataFrame[date,open,high,low,close,volume,pct_chg] 升序}
@@ -177,10 +178,17 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
     eval_start/eval_end: 可选评估窗口 (YYYY-MM-DD) — walk-forward 用;
       eval_end 会先截断全部K线(防未来数据), eval_start 之前的日期不参与信号/净值
     include_trades: True 时结果附 trades_all 全量成交 (AI 归因用), 默认仅末10笔样本
+    spec_override: 可选策略参数覆盖 (I3 单变量假设验证, 如 {"threshold":35.0});
+      仅覆盖 _SIGNAL_SPEC 中已有键, 防止拼写错误悄悄新增无效参数
     """
     if strategy not in _SIGNAL_SPEC:
         raise ValueError(f"未知策略: {strategy}")
-    spec = _SIGNAL_SPEC[strategy]
+    spec = dict(_SIGNAL_SPEC[strategy])
+    if spec_override:
+        unknown = set(spec_override) - set(spec)
+        if unknown:
+            raise ValueError(f"未知策略参数: {sorted(unknown)}")
+        spec.update(spec_override)
     hold = int(min(max(hold or 5, 1), 20))
     top_n = int(min(max(top_n or 5, 1), 10))
     initial_cash = float(initial_cash)
@@ -364,7 +372,8 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
 
 def run_walk_forward(strategy, frames, n_windows=6, hold=5, top_n=5,
                      initial_cash=INITIAL_CASH, benchmark=None,
-                     name_map=None, st_codes=None, include_trades=False):
+                     name_map=None, st_codes=None, include_trades=False,
+                     spec_override=None):
     """walk-forward 多窗口评估 (2026-11-08 I1): 可信号日期区间均分为 n 个连续窗口,
     每窗口独立回测 (eval_start/eval_end 截断, 窗口内无未来数据);
     汇总窗口明细+正超额窗口数+中位超额, 供迭代门槛判定与 AI 归因"""
@@ -381,7 +390,7 @@ def run_walk_forward(strategy, frames, n_windows=6, hold=5, top_n=5,
         r = run_backtest(strategy, frames, name_map=name_map, st_codes=st_codes,
                          hold=hold, top_n=top_n, initial_cash=initial_cash,
                          benchmark=benchmark, eval_start=ws, eval_end=we,
-                         include_trades=include_trades)
+                         include_trades=include_trades, spec_override=spec_override)
         b = r["benchmark"]
         entry = {
             "window": w + 1, "start": ws, "end": we,

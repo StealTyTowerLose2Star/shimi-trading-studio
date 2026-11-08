@@ -69,6 +69,17 @@ class TestWalkForward(unittest.TestCase):
         with self.assertRaises(ValueError):
             lb.run_walk_forward("trend", self.frames, n_windows=30)
 
+    def test_spec_override_single_variable(self):
+        # I3 单变量假设: threshold 提高 → 信号不增; 未知参数显式拒绝
+        wf2 = lb.run_walk_forward("trend", self.frames, n_windows=3,
+                                  spec_override={"threshold": 99999.0})
+        total = sum(w["trades_completed"] for w in wf2["windows"])
+        base = sum(w["trades_completed"] for w in self.wf["windows"])
+        self.assertLessEqual(total, base)
+        with self.assertRaises(ValueError):
+            lb.run_walk_forward("trend", self.frames, n_windows=3,
+                                spec_override={"not_a_param": 1})
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

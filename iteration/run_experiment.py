@@ -55,13 +55,20 @@ def main():
     ap.add_argument("--hold", type=int, default=5)
     ap.add_argument("--top-n", type=int, default=5)
     ap.add_argument("--tag", default="baseline")
+    ap.add_argument("--set", dest="overrides", action="append", default=[],
+                    help="单变量假设: --set threshold=35 (可重复; 仅覆盖已有策略参数)")
     args = ap.parse_args()
+
+    spec_override = {}
+    for item in args.overrides:
+        key, _, val = item.partition("=")
+        spec_override[key] = float(val) if "." in val else int(val)
 
     frames, name_map, st_codes, bench = _load_real_inputs()
     wf = lb.run_walk_forward(args.strategy, frames, n_windows=args.windows,
                              hold=args.hold, top_n=args.top_n,
                              benchmark=bench, name_map=name_map, st_codes=st_codes,
-                             include_trades=True)
+                             include_trades=True, spec_override=spec_override or None)
 
     stamp = time.strftime("%Y%m%d-%H%M%S")
     outdir = ROOT / "iteration" / f"{stamp}-{args.strategy}-{args.tag}"
@@ -74,6 +81,7 @@ def main():
     experiment = {
         "strategy": args.strategy, "n_windows": args.windows,
         "hold": args.hold, "top_n": args.top_n,
+        "spec_override": spec_override or None,
         "panel_days": lb.PANEL_DAYS, "git_hash": git_hash,
         "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "st_filter": "applied" if st_codes else "degraded_no_namelist",
