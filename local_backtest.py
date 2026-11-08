@@ -388,7 +388,6 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
             "无样本外验证 — 回测仅证明计算口径自洽, 不构成投资有效性证据",
         ] + ([f"市场状态闸门: 指数收盘低于MA{spec['require_index_above_ma']}的信号日暂停新开仓 "
               "(I3 结构假设启用); 指数历史不足日不拦截"] if spec.get("require_index_above_ma") else []),
-        ],
         "disclaimer": "回测为历史数据研究视图, 不构成投资建议; 本地仅手动记账, 无交易能力",
     }
 
