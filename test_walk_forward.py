@@ -99,7 +99,7 @@ class TestWalkForward(unittest.TestCase):
     def test_market_regime_gate(self):
         # I3 结构假设: 基准持续深跌(有MA20历史后) → 全部暂停开仓;
         # 常数基准 → 闸门不拦截, 与基线一致
-        closes = {d: (100.0 if i < 50 else 50.0) for i, d in enumerate(self.dates)}
+        closes = {d: (100.0 - i) for i, d in enumerate(self.dates)}  # 持续下跌, 收盘恒低于MA20
         wf = lb.run_walk_forward("trend", self.frames, n_windows=3, hold=5, top_n=2,
                                  initial_cash=100000.0,
                                  benchmark={"name": "x", "code": "x", "closes": closes},
