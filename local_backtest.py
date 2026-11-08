@@ -164,7 +164,8 @@ def _scan_day(spec, frames, cols, idx_maps, dates, t, st_codes):
 
 
 def run_backtest(strategy, frames, name_map=None, st_codes=None,
-                 hold=5, top_n=5, initial_cash=INITIAL_CASH, benchmark=None):
+                 hold=5, top_n=5, initial_cash=INITIAL_CASH, benchmark=None,
+                 eval_start=None, eval_end=None, include_trades=False):
     """纯函数回测引擎 (离线可测): 输入全市场K线面板, 输出指标与成交明细。
 
     frames: {ts_code: DataFrame[date,open,high,low,close,volume,pct_chg] 升序}
@@ -173,6 +174,9 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
       为空集时不做任何名称级 ST 剔除, notes 会如实声明 (不冒充已筛)
     benchmark: 可选 {name, code, closes:{YYYY-MM-DD:close}} 指数日线序列,
       同窗口买入持有对照; 缺省/无数据 → benchmark.status=unavailable 显式标注
+    eval_start/eval_end: 可选评估窗口 (YYYY-MM-DD) — walk-forward 用;
+      eval_end 会先截断全部K线(防未来数据), eval_start 之前的日期不参与信号/净值
+    include_trades: True 时结果附 trades_all 全量成交 (AI 归因用), 默认仅末10笔样本
     """
     if strategy not in _SIGNAL_SPEC:
         raise ValueError(f"未知策略: {strategy}")
@@ -185,6 +189,11 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
 
     frames = {c: f.reset_index(drop=True) for c, f in frames.items()
               if f is not None and len(f) >= spec["warmup"]}
+    if eval_end:
+        # walk-forward 防未来数据: 先截断窗口之后的全部K线再计算
+        frames = {c: f[f["date"] <= eval_end].reset_index(drop=True)
+                  for c, f in frames.items()}
+        frames = {c: f for c, f in frames.items() if len(f) >= spec["warmup"]}
     if not frames:
         raise ValueError("面板为空或无足够历史")
 
@@ -206,6 +215,12 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
     scans = {}       # 信号日缓存: t -> [(code, score)]
 
     first_t = spec["warmup"] - 1     # 首个可评分信号日 (0-based)
+    if eval_start:
+        # 窗口内第一个 ≥eval_start 的市场日 (不小于暖机约束)
+        later = [i for i, d in enumerate(dates) if d >= eval_start]
+        if not later:
+            raise ValueError(f"评估起点超出面板日期范围: {eval_start}")
+        first_t = max(first_t, later[0])
     last_t = len(dates) - 1
 
     for d in range(first_t, last_t + 1):
@@ -320,6 +335,7 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
         "signals_total": signals_total,
         "trades_completed": len(trades),
         "trades_open": len(open_legs),
+        **({"trades_all": trades} if include_trades else {}),
         "equity_curve": [{"date": d, "equity": round(v, 2)}
                          for d, v in zip(equity_dates, equity_vals)],
         "trades_sample": [{
@@ -342,6 +358,59 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
         ],
         "disclaimer": "回测为历史数据研究视图, 不构成投资建议; 本地仅手动记账, 无交易能力",
     }
+
+
+# ─── 本地服务装配 ────────────────────────────────────────
+
+def run_walk_forward(strategy, frames, n_windows=6, hold=5, top_n=5,
+                     initial_cash=INITIAL_CASH, benchmark=None,
+                     name_map=None, st_codes=None, include_trades=False):
+    """walk-forward 多窗口评估 (2026-11-08 I1): 可信号日期区间均分为 n 个连续窗口,
+    每窗口独立回测 (eval_start/eval_end 截断, 窗口内无未来数据);
+    汇总窗口明细+正超额窗口数+中位超额, 供迭代门槛判定与 AI 归因"""
+    import statistics
+    spec = _SIGNAL_SPEC[strategy]
+    all_dates = sorted({d for f in frames.values() for d in f["date"].tolist()})
+    usable = all_dates[spec["warmup"] - 1:]
+    if len(usable) < n_windows * 2:
+        raise ValueError(f"可用交易日 {len(usable)} 不足以划分 {n_windows} 个窗口")
+    bounds = [round(i * len(usable) / n_windows) for i in range(n_windows + 1)]
+    windows = []
+    for w in range(n_windows):
+        ws, we = usable[bounds[w]], usable[bounds[w + 1] - 1]
+        r = run_backtest(strategy, frames, name_map=name_map, st_codes=st_codes,
+                         hold=hold, top_n=top_n, initial_cash=initial_cash,
+                         benchmark=benchmark, eval_start=ws, eval_end=we,
+                         include_trades=include_trades)
+        b = r["benchmark"]
+        entry = {
+            "window": w + 1, "start": ws, "end": we,
+            "strategy_return_pct": b.get("strategy_return_pct"),
+            "benchmark_return_pct": b.get("total_return_pct"),
+            "excess_pp": b.get("excess_return_pp"),
+            "benchmark_status": b.get("status"),
+            "trades_completed": r["trades_completed"],
+            "trades_open": r["trades_open"],
+            "win_rate": r["metrics"].get("win_rate"),
+            "max_drawdown": r["metrics"].get("max_drawdown"),
+        }
+        if include_trades:
+            entry["trades_all"] = r.get("trades_all", [])
+            entry["equity_curve"] = r["equity_curve"]
+        windows.append(entry)
+    valid = [w for w in windows if w["excess_pp"] is not None]
+    positive = sum(1 for w in valid if w["excess_pp"] > 0)
+    summary = {
+        "strategy": strategy, "n_windows": len(valid),
+        "positive_excess_windows": positive,
+        "median_excess_pp": (round(statistics.median(w["excess_pp"] for w in valid), 2)
+                             if valid else None),
+        "mean_excess_pp": (round(statistics.mean(w["excess_pp"] for w in valid), 2)
+                           if valid else None),
+        "gate_note": ("门槛参考 (I3 启用条件): 中位超额>0 且正超额窗口过半 "
+                      "(单窗口运气不算数); 本轮为基线测量, 不构成投资建议"),
+    }
+    return {"summary": summary, "windows": windows}
 
 
 # ─── 本地服务装配 ────────────────────────────────────────
