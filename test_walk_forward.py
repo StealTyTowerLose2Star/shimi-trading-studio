@@ -125,6 +125,29 @@ class TestWalkForward(unittest.TestCase):
                  if t["symbol"] == "000001" and t["holding_bars"] < 5]
         self.assertTrue(early)
 
+    def test_vol_price_confirm(self):
+        # E4: 阴线不入选 — 000001改全阴线(open>close)则其交易消失; 全阳线不受影响
+        frames = copy.deepcopy(self.frames)
+        f = frames["000001.SZ"]
+        f["open"] = f["close"] * 1.02
+        wf = lb.run_walk_forward("trend", frames, n_windows=3, hold=5, top_n=2,
+                                 initial_cash=100000.0,
+                                 spec_override={"vol_price_confirm": True}, include_trades=True)
+        symbols = {t["symbol"] for w in wf["windows"] for t in w["trades_all"]}
+        self.assertNotIn("000001", symbols)
+        wf2 = lb.run_walk_forward("trend", self.frames, n_windows=3, hold=5, top_n=2,
+                                  initial_cash=100000.0,
+                                  spec_override={"vol_price_confirm": True})
+        base = sum(w["trades_completed"] for w in self.wf["windows"])
+        self.assertEqual(sum(w["trades_completed"] for w in wf2["windows"]), base)
+
+    def test_breakout_no_pullback(self):
+        # E3: 合成数据当日最低恒低于前高 → 全部过滤(0交易); 默认关闭不受影响
+        wf = lb.run_walk_forward("trend", self.frames, n_windows=3, hold=5, top_n=2,
+                                 initial_cash=100000.0,
+                                 spec_override={"breakout_no_pullback": True})
+        self.assertEqual(sum(w["trades_completed"] for w in wf["windows"]), 0)
+
     def test_market_regime_gate(self):        # I3 结构假设: 基准持续深跌(有MA20历史后) → 全部暂停开仓;
         # 常数基准 → 闸门不拦截, 与基线一致
         closes = {d: (100.0 - i) for i, d in enumerate(self.dates)}  # 持续下跌, 收盘恒低于MA20
