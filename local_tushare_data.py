@@ -91,6 +91,32 @@ def _cached(key, ttl, fn, empty_ttl=None):
     return val
 
 
+# ─── 全市场单日快照磁盘缓存 (2026-11-10: 面板构建断点续传) ──
+# 网络瞬断导致面板构建反复从头再来: 成功的逐日快照落盘 (不可变EOD),
+# 跨进程/跨天永久复用; 失败的日期不落盘, 下次从缺口继续
+_SNAPSHOT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "data", "snapshot_cache")
+
+
+def _disk_get(key):
+    path = os.path.join(_SNAPSHOT_DIR, key.replace(":", "_") + ".pkl")
+    if not os.path.exists(path):
+        return None
+    try:
+        import pickle
+        with open(path, "rb") as f:
+            return pickle.load(f)
+    except Exception:
+        return None
+
+
+def _disk_set(key, val):
+    import pickle
+    os.makedirs(_SNAPSHOT_DIR, exist_ok=True)
+    with open(os.path.join(_SNAPSHOT_DIR, key.replace(":", "_") + ".pkl"), "wb") as f:
+        pickle.dump(val, f)
+
+
 def _api(api_name, params=None, fields=""):
     """tushare HTTP API 单点入口 → (fields, items); 失败一律抛 TushareError"""
     # 闸门1 传输: 仅 HTTPS (2026-10-24 已实测验收); 若被改回明文HTTP,
@@ -213,10 +239,14 @@ def _open_days(n=10):
 
 def _daily_snapshot(trade_date):
     """全市场单日日线 DataFrame; 该日无数据(盘中未发布) → None.
-    历史日缓存6h (不可变), 空结果 10min.
+    历史日缓存6h (不可变), 空结果 10min; 成功快照同时落盘永久复用 (断点续传)。
     仅当 API 实际回传且字段验证通过时, 在 DataFrame.attrs 记录
     retrieved_at_utc (UTC 明确时区, ISO8601); 缓存命中沿用原始取数时点,
     不用 HTTP 响应/本轮计算时间刷新; 失败/空结果不产生任何取数时点"""
+    disk = _disk_get(f"daily:{trade_date}")
+    if disk is not None:
+        return disk
+
     def _fetch():
         fields, items = _api("daily", {"trade_date": trade_date},
                              "ts_code,trade_date,open,high,low,close,"
@@ -225,6 +255,7 @@ def _daily_snapshot(trade_date):
             return None
         df = _validate_daily(pd.DataFrame(_rows(fields, items)), trade_date)
         df.attrs["retrieved_at_utc"] = datetime.now(timezone.utc).isoformat()
+        _disk_set(f"daily:{trade_date}", df)
         return df
     return _cached(f"daily:{trade_date}", 21600, _fetch, empty_ttl=600)
 

@@ -17,3 +17,4 @@ shimi.db
 *.log
 *.pid
 logs/
+snapshot_cache
