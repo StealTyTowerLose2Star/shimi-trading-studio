@@ -96,8 +96,36 @@ class TestWalkForward(unittest.TestCase):
         base = sum(w["trades_completed"] for w in self.wf["windows"])
         self.assertEqual(sum(w["trades_completed"] for w in wf100["windows"]), base)
 
-    def test_market_regime_gate(self):
-        # I3 结构假设: 基准持续深跌(有MA20历史后) → 全部暂停开仓;
+    def test_stop_loss_early_exit(self):
+        # E1: 买入后暴跌15% → 提前止损(持有<5日); 稳定上涨不受影响
+        frames = copy.deepcopy(self.frames)
+        frames["000001.SZ"].loc[frames["000001.SZ"].index >= 62,
+                                ["open", "high", "low", "close"]] *= 0.85
+        wf = lb.run_walk_forward("trend", frames, n_windows=3, hold=5, top_n=2,
+                                 initial_cash=100000.0,
+                                 spec_override={"stop_loss_pct": -0.07}, include_trades=True)
+        early = [t for w in wf["windows"] for t in w["trades_all"]
+                 if t["symbol"] == "000001" and t["holding_bars"] < 5]
+        self.assertTrue(early)
+        wf_base = lb.run_walk_forward("trend", self.frames, n_windows=3, hold=5, top_n=2,
+                                      initial_cash=100000.0,
+                                      spec_override={"stop_loss_pct": -0.07})
+        base = sum(w["trades_completed"] for w in self.wf["windows"])
+        self.assertEqual(sum(w["trades_completed"] for w in wf_base["windows"]), base)
+
+    def test_exit_below_ma(self):
+        # E2: 后期持续阴跌破MA20 → 提前离场(持有<5日)
+        frames = copy.deepcopy(self.frames)
+        f = frames["000001.SZ"]
+        f.loc[f.index >= 62, ["open", "high", "low", "close"]] *= 0.90
+        wf = lb.run_walk_forward("trend", frames, n_windows=3, hold=5, top_n=2,
+                                 initial_cash=100000.0,
+                                 spec_override={"exit_below_ma": 20}, include_trades=True)
+        early = [t for w in wf["windows"] for t in w["trades_all"]
+                 if t["symbol"] == "000001" and t["holding_bars"] < 5]
+        self.assertTrue(early)
+
+    def test_market_regime_gate(self):        # I3 结构假设: 基准持续深跌(有MA20历史后) → 全部暂停开仓;
         # 常数基准 → 闸门不拦截, 与基线一致
         closes = {d: (100.0 - i) for i, d in enumerate(self.dates)}  # 持续下跌, 收盘恒低于MA20
         wf = lb.run_walk_forward("trend", self.frames, n_windows=3, hold=5, top_n=2,

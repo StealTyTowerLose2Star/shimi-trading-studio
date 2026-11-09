@@ -48,7 +48,9 @@ _SIGNAL_SPEC = {
         "score_fn": trend_detect_df, "score_key": "total_score",
         "threshold": 30.0, "picked_top": 25,
         "max_prior_gain_pct": None,
-        "require_index_above_ma": None,   # I3 假设2: 设值后排除信号日前60日涨幅超标的标的
+        "require_index_above_ma": None,
+        "stop_loss_pct": None,        # E1: 如 -0.07 浮亏7%次日开盘提前卖出
+        "exit_below_ma": None,        # E2: 如 20 收盘跌破MA20次日开盘提前卖出   # I3 假设2: 设值后排除信号日前60日涨幅超标的标的
     },
     "hybrid": {
         "lookback": 120, "warmup": 60, "prescreen_top": 60,
@@ -58,6 +60,8 @@ _SIGNAL_SPEC = {
         "threshold": 15.0, "picked_top": 25,
         "max_prior_gain_pct": None,
         "require_index_above_ma": None,
+        "stop_loss_pct": None,        # E1: 如 -0.07 浮亏7%次日开盘提前卖出
+        "exit_below_ma": None,        # E2: 如 20 收盘跌破MA20次日开盘提前卖出
     },
     "dragon": {
         "lookback": 60, "warmup": 20, "prescreen_top": 10,
@@ -67,6 +71,8 @@ _SIGNAL_SPEC = {
         "threshold": None, "picked_top": 25,
         "max_prior_gain_pct": None,
         "require_index_above_ma": None,
+        "stop_loss_pct": None,        # E1: 如 -0.07 浮亏7%次日开盘提前卖出
+        "exit_below_ma": None,        # E2: 如 20 收盘跌破MA20次日开盘提前卖出
     },
 }
 
@@ -259,6 +265,22 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
         # ── 1) 开盘: 到期持仓卖出 ──
         for c in list(positions):
             p = positions[c]
+            # E1 固定止损 / E2 趋势破坏退出: 仅用 ≤d-1 收盘数据, 次日开盘成交
+            if p["exit_idx"] != d and d > 0:
+                prev_day = dates[d - 1]
+                m_prev = idx_maps[c].get(prev_day)
+                if m_prev is not None:
+                    prev_close = cols[c][1][m_prev]
+                    if spec.get("stop_loss_pct") is not None:
+                        entry_px = p["invest"] / p["qty"] / (1 + FEE_BUY)
+                        if prev_close <= entry_px * (1 + spec["stop_loss_pct"]):
+                            p["exit_idx"] = d
+                    if (p["exit_idx"] != d and spec.get("exit_below_ma")
+                            and m_prev + 1 >= spec["exit_below_ma"]):
+                        n = spec["exit_below_ma"]
+                        ma = cols[c][1][m_prev - n + 1:m_prev + 1].mean()
+                        if prev_close < ma:
+                            p["exit_idx"] = d
             if p["exit_idx"] is None or p["exit_idx"] != d:
                 continue
             m = idx_maps[c]
@@ -387,7 +409,9 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
             "候选池=当前名录, 已退市股票不在池中 (幸存者偏差未消除); 单窗口样本内结果, "
             "无样本外验证 — 回测仅证明计算口径自洽, 不构成投资有效性证据",
         ] + ([f"市场状态闸门: 指数收盘低于MA{spec['require_index_above_ma']}的信号日暂停新开仓 "
-              "(I3 结构假设启用); 指数历史不足日不拦截"] if spec.get("require_index_above_ma") else []),
+              "(I3 结构假设启用); 指数历史不足日不拦截"] if spec.get("require_index_above_ma") else [])
+          + ([f"提前退出: 浮亏达{spec['stop_loss_pct']:.0%}次日开盘止损" ] if spec.get("stop_loss_pct") else [])
+          + ([f"提前退出: 收盘跌破MA{spec['exit_below_ma']}次日开盘离场"] if spec.get("exit_below_ma") else []),
         "disclaimer": "回测为历史数据研究视图, 不构成投资建议; 本地仅手动记账, 无交易能力",
     }
 
