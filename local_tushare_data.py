@@ -58,7 +58,12 @@ SOURCE_USAGE_POLICY = {
     'purpose_confirmed_on': '2026-10-24',
 }
 
-_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+# 2026-11-10 实测: 直连大体积响应读超时, 本机代理(7890)同请求1秒返回。
+# 默认仍直连 (安全基线); 设 SHIMI_TUSHARE_PROXY=http://127.0.0.1:7890 走本机代理,
+# HTTPS+证书校验不变, 不降级为明文
+_PROXY_URL = os.environ.get("SHIMI_TUSHARE_PROXY", "").strip()
+_opener = urllib.request.build_opener(urllib.request.ProxyHandler(
+    {"http": _PROXY_URL, "https": _PROXY_URL} if _PROXY_URL else {}))
 _api_lock = threading.Lock()
 _last_call = [0.0]
 _cache = {}
