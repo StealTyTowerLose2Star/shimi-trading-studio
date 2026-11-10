@@ -454,7 +454,7 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
           + (["入场确认: 信号日最低价不破前高(20日)才入选(回踩过滤)"] if spec.get("breakout_no_pullback") else [])
           + (["入场确认: 阴线不入选(量价同向)"] if spec.get("vol_price_confirm") else [])
           + ([f"移动止损: 浮盈{spec['trailing_activate_pct']:.0%}后最高收盘回撤{spec['trailing_retrace_pct']:.0%}离场"]
-             if spec.get("trailing_retrace_pct") is not None else []),
+             if spec.get("trailing_retrace_pct") is not None else [])
           + ([f"波动率过滤: ATR14/收盘价>{spec['max_atr_pct']}%放弃"] if spec.get("max_atr_pct") else []),
         "disclaimer": "回测为历史数据研究视图, 不构成投资建议; 本地仅手动记账, 无交易能力",
     }
