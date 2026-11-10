@@ -53,7 +53,9 @@ _SIGNAL_SPEC = {
         "exit_below_ma": None,        # E2: 如 20 收盘跌破MA20次日开盘提前卖出
         "breakout_no_pullback": None, # E3: True=信号日最低价曾破前高(20日)则放弃
         "vol_price_confirm": None,    # E4: True=阴线不入选(放量须配阳线)
-        "max_atr_pct": None,          # ATR14/收盘价% 超过则放弃(波动率过滤)   # I3 假设2: 设值后排除信号日前60日涨幅超标的标的
+        "max_atr_pct": None,          # ATR14/收盘价% 超过则放弃(波动率过滤)
+        "trailing_activate_pct": None, # 移动止损: 浮盈达此值后启用 (如0.06)
+        "trailing_retrace_pct": None,  # 移动止损: 最高收盘回撤此值次日离场 (如0.05)   # I3 假设2: 设值后排除信号日前60日涨幅超标的标的
     },
     "hybrid": {
         "lookback": 120, "warmup": 60, "prescreen_top": 60,
@@ -68,6 +70,8 @@ _SIGNAL_SPEC = {
         "breakout_no_pullback": None, # E3: True=信号日最低价曾破前高(20日)则放弃
         "vol_price_confirm": None,    # E4: True=阴线不入选(放量须配阳线)
         "max_atr_pct": None,          # ATR14/收盘价% 超过则放弃(波动率过滤)
+        "trailing_activate_pct": None, # 移动止损: 浮盈达此值后启用 (如0.06)
+        "trailing_retrace_pct": None,  # 移动止损: 最高收盘回撤此值次日离场 (如0.05)
     },
     "dragon": {
         "lookback": 60, "warmup": 20, "prescreen_top": 10,
@@ -82,6 +86,8 @@ _SIGNAL_SPEC = {
         "breakout_no_pullback": None, # E3: True=信号日最低价曾破前高(20日)则放弃
         "vol_price_confirm": None,    # E4: True=阴线不入选(放量须配阳线)
         "max_atr_pct": None,          # ATR14/收盘价% 超过则放弃(波动率过滤)
+        "trailing_activate_pct": None, # 移动止损: 浮盈达此值后启用 (如0.06)
+        "trailing_retrace_pct": None,  # 移动止损: 最高收盘回撤此值次日离场 (如0.05)
     },
 }
 
@@ -296,6 +302,14 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
                 m_prev = idx_maps[c].get(prev_day)
                 if m_prev is not None:
                     prev_close = cols[c][1][m_prev]
+                    if (p["exit_idx"] != d and spec.get("trailing_retrace_pct") is not None):
+                        # 移动止损: 浮盈达 activate 后, 从最高收盘回撤 retrace 次日离场 (让利润奔跑)
+                        p["max_close"] = max(p.get("max_close", 0.0), prev_close)
+                        entry_px = p["invest"] / p["qty"] / (1 + FEE_BUY)
+                        activate = spec.get("trailing_activate_pct", 0.0)
+                        if (p["max_close"] >= entry_px * (1 + activate)
+                                and prev_close <= p["max_close"] * (1 - spec["trailing_retrace_pct"])):
+                            p["exit_idx"] = d
                     if spec.get("stop_loss_pct") is not None:
                         entry_px = p["invest"] / p["qty"] / (1 + FEE_BUY)
                         if prev_close <= entry_px * (1 + spec["stop_loss_pct"]):
@@ -439,6 +453,8 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
           + ([f"提前退出: 收盘跌破MA{spec['exit_below_ma']}次日开盘离场"] if spec.get("exit_below_ma") else [])
           + (["入场确认: 信号日最低价不破前高(20日)才入选(回踩过滤)"] if spec.get("breakout_no_pullback") else [])
           + (["入场确认: 阴线不入选(量价同向)"] if spec.get("vol_price_confirm") else [])
+          + ([f"移动止损: 浮盈{spec['trailing_activate_pct']:.0%}后最高收盘回撤{spec['trailing_retrace_pct']:.0%}离场"]
+             if spec.get("trailing_retrace_pct") is not None else []),
           + ([f"波动率过滤: ATR14/收盘价>{spec['max_atr_pct']}%放弃"] if spec.get("max_atr_pct") else []),
         "disclaimer": "回测为历史数据研究视图, 不构成投资建议; 本地仅手动记账, 无交易能力",
     }
