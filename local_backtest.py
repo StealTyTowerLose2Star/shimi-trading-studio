@@ -52,7 +52,8 @@ _SIGNAL_SPEC = {
         "stop_loss_pct": None,        # E1: 如 -0.07 浮亏7%次日开盘提前卖出
         "exit_below_ma": None,        # E2: 如 20 收盘跌破MA20次日开盘提前卖出
         "breakout_no_pullback": None, # E3: True=信号日最低价曾破前高(20日)则放弃
-        "vol_price_confirm": None,    # E4: True=阴线不入选(放量须配阳线)   # I3 假设2: 设值后排除信号日前60日涨幅超标的标的
+        "vol_price_confirm": None,    # E4: True=阴线不入选(放量须配阳线)
+        "max_atr_pct": None,          # ATR14/收盘价% 超过则放弃(波动率过滤)   # I3 假设2: 设值后排除信号日前60日涨幅超标的标的
     },
     "hybrid": {
         "lookback": 120, "warmup": 60, "prescreen_top": 60,
@@ -66,6 +67,7 @@ _SIGNAL_SPEC = {
         "exit_below_ma": None,        # E2: 如 20 收盘跌破MA20次日开盘提前卖出
         "breakout_no_pullback": None, # E3: True=信号日最低价曾破前高(20日)则放弃
         "vol_price_confirm": None,    # E4: True=阴线不入选(放量须配阳线)
+        "max_atr_pct": None,          # ATR14/收盘价% 超过则放弃(波动率过滤)
     },
     "dragon": {
         "lookback": 60, "warmup": 20, "prescreen_top": 10,
@@ -79,6 +81,7 @@ _SIGNAL_SPEC = {
         "exit_below_ma": None,        # E2: 如 20 收盘跌破MA20次日开盘提前卖出
         "breakout_no_pullback": None, # E3: True=信号日最低价曾破前高(20日)则放弃
         "vol_price_confirm": None,    # E4: True=阴线不入选(放量须配阳线)
+        "max_atr_pct": None,          # ATR14/收盘价% 超过则放弃(波动率过滤)
     },
 }
 
@@ -170,6 +173,16 @@ def _scan_day(spec, frames, cols, idx_maps, dates, t, st_codes):
                 continue  # I3 假设2: 排除信号日前60日涨幅超标的标的 (追高过滤)
         if spec.get("vol_price_confirm") and cols[c][1][i] <= cols[c][0][i]:
             continue  # E4: 量价同向确认 — 阴线不入选 (放量须配阳线)
+        if spec.get("max_atr_pct") is not None and i >= 14:
+            # ATR14/收盘价 波动率过滤: 波动过大标的放弃 (量化方法调研首推指标族)
+            f0 = frames[c]
+            hi = f0["high"].iloc[i - 13:i + 1].to_numpy(dtype=float)
+            lo = f0["low"].iloc[i - 13:i + 1].to_numpy(dtype=float)
+            pc = f0["close"].iloc[i - 14:i].to_numpy(dtype=float)
+            tr = np.maximum(hi - lo, np.maximum(np.abs(hi - pc), np.abs(lo - pc)))
+            price = cols[c][1][i]
+            if price > 0 and tr.mean() / price * 100 > spec["max_atr_pct"]:
+                continue
         if spec.get("breakout_no_pullback") and i >= 20:
             prev_high = frames[c]["high"].iloc[i - 20:i].max()
             if frames[c]["low"].iloc[i] <= prev_high:
@@ -425,7 +438,8 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
           + ([f"提前退出: 浮亏达{spec['stop_loss_pct']:.0%}次日开盘止损" ] if spec.get("stop_loss_pct") else [])
           + ([f"提前退出: 收盘跌破MA{spec['exit_below_ma']}次日开盘离场"] if spec.get("exit_below_ma") else [])
           + (["入场确认: 信号日最低价不破前高(20日)才入选(回踩过滤)"] if spec.get("breakout_no_pullback") else [])
-          + (["入场确认: 阴线不入选(量价同向)"] if spec.get("vol_price_confirm") else []),
+          + (["入场确认: 阴线不入选(量价同向)"] if spec.get("vol_price_confirm") else [])
+          + ([f"波动率过滤: ATR14/收盘价>{spec['max_atr_pct']}%放弃"] if spec.get("max_atr_pct") else []),
         "disclaimer": "回测为历史数据研究视图, 不构成投资建议; 本地仅手动记账, 无交易能力",
     }
 

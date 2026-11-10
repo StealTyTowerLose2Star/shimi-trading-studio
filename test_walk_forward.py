@@ -148,6 +148,22 @@ class TestWalkForward(unittest.TestCase):
                                  spec_override={"breakout_no_pullback": True})
         self.assertEqual(sum(w["trades_completed"] for w in wf["windows"]), 0)
 
+    def test_atr_filter(self):
+        # ATR过滤: 稳定低波动通过; 高振幅股被过滤
+        frames = copy.deepcopy(self.frames)
+        f = frames["000001.SZ"]
+        f["high"] = f["close"] * 1.5
+        f["low"] = f["close"] * 0.5
+        wf = lb.run_walk_forward("trend", frames, n_windows=3, hold=5, top_n=2,
+                                 initial_cash=100000.0,
+                                 spec_override={"max_atr_pct": 6.0}, include_trades=True)
+        symbols = {t["symbol"] for w in wf["windows"] for t in w["trades_all"]}
+        self.assertNotIn("000001", symbols)
+        wf2 = lb.run_walk_forward("trend", self.frames, n_windows=3, hold=5, top_n=2,
+                                  initial_cash=100000.0, spec_override={"max_atr_pct": 6.0})
+        base = sum(w["trades_completed"] for w in self.wf["windows"])
+        self.assertEqual(sum(w["trades_completed"] for w in wf2["windows"]), base)
+
     def test_market_regime_gate(self):        # I3 结构假设: 基准持续深跌(有MA20历史后) → 全部暂停开仓;
         # 常数基准 → 闸门不拦截, 与基线一致
         closes = {d: (100.0 - i) for i, d in enumerate(self.dates)}  # 持续下跌, 收盘恒低于MA20
