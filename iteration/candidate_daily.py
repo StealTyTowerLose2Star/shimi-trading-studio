@@ -1,0 +1,77 @@
+# -*- coding: utf-8 -*-
+"""I4 灰度观察名单 (2026-11-11 评审灰度方式): 每日生成"默认 vs 候选"信号对照,
+只记录不改动线上输出。观察 4 周, 允许交易窗口收益中位数>0 才转正式替换。
+
+候选 = require_index_above_ma=20 + max_atr_pct=6.0 + breakout_no_pullback=true
+默认 = _SIGNAL_SPEC 原参数 (仅代码路径与候选一致, 便于控制变量)
+输出: iteration/observe/log.jsonl 追加 + 当日 JSON
+"""
+import json
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "iteration"))
+
+import local_backtest as lb  # noqa: E402
+from run_experiment import _load_real_inputs  # noqa: E402
+
+CANDIDATE = {"require_index_above_ma": 20, "max_atr_pct": 6.0,
+             "breakout_no_pullback": True}
+
+
+def _prep(frames):
+    dates = sorted({d for f in frames.values() for d in f["date"].tolist()})
+    idx_maps = {c: {d: i for i, d in enumerate(f["date"].tolist())}
+                for c, f in frames.items()}
+    cols = {c: (f["open"].to_numpy(dtype=float), f["close"].to_numpy(dtype=float),
+                f["volume"].to_numpy(dtype=float), f["pct_chg"].to_numpy(dtype=float))
+            for c, f in frames.items()}
+    return dates, idx_maps, cols
+
+
+def _regime_ok(benchmark, day, n=20):
+    if not benchmark or not benchmark.get("closes"):
+        return True
+    closes = benchmark["closes"]
+    upto = sorted(d for d in closes if d <= day)
+    if len(upto) < n:
+        return True
+    ma = sum(closes[d] for d in upto[-n:]) / n
+    return closes[upto[-1]] >= ma
+
+
+def main():
+    frames, name_map, st_codes, bench = _load_real_inputs()
+    dates, idx_maps, cols = _prep(frames)
+    t = len(dates) - 1
+    day = dates[t]
+    spec_default = dict(lb._SIGNAL_SPEC["trend"])
+    spec_cand = dict(spec_default)
+    spec_cand.update(CANDIDATE)
+
+    default_picks = lb._scan_day(spec_default, frames, cols, idx_maps, dates, t, st_codes)
+    regime = _regime_ok(bench, day)
+    cand_picks = (lb._scan_day(spec_cand, frames, cols, idx_maps, dates, t, st_codes)
+                  if regime else [])
+    rec = {
+        "date": day,
+        "regime_ok": regime,
+        "default_picks": [{"code": lb._short(c), "score": round(s, 1)} for c, s in default_picks[:5]],
+        "candidate_picks": [{"code": lb._short(c), "score": round(s, 1)} for c, s in cand_picks[:5]],
+        "candidate_spec": CANDIDATE,
+        "note": "I4灰度观察: 候选=指数MA20闸门+ATR6+回踩确认; 默认=现参数; 仅对照记录不改动线上",
+    }
+    outdir = ROOT / "iteration" / "observe"
+    outdir.mkdir(exist_ok=True)
+    with open(outdir / "log.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    (outdir / f"{day}.json").write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps(rec, ensure_ascii=False, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
