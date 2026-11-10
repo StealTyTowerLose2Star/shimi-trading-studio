@@ -152,8 +152,8 @@ class TestWalkForward(unittest.TestCase):
         # 移动止损: 冲高10%激活后回撤6% → 提前离场(持有<5日)
         frames = copy.deepcopy(self.frames)
         f = frames["000001.SZ"]
-        f.loc[f.index == 62, ["open", "high", "low", "close"]] = f.loc[61, ["open", "high", "low", "close"]] * 1.10
-        f.loc[f.index == 63, ["open", "high", "low", "close"]] = f.loc[62, ["open", "high", "low", "close"]] * 0.94
+        f.loc[f.index == 62, ["open", "high", "low", "close"]] = (f.loc[61, ["open", "high", "low", "close"]] * 1.10).to_numpy()
+        f.loc[f.index == 63, ["open", "high", "low", "close"]] = (f.loc[62, ["open", "high", "low", "close"]] * 0.94).to_numpy()
         wf = lb.run_walk_forward("trend", frames, n_windows=3, hold=5, top_n=2,
                                  initial_cash=100000.0,
                                  spec_override={"trailing_activate_pct": 0.06,
