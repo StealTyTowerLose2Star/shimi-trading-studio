@@ -179,6 +179,21 @@ class TestWalkForward(unittest.TestCase):
         base = sum(w["trades_completed"] for w in self.wf["windows"])
         self.assertEqual(sum(w["trades_completed"] for w in wf2["windows"]), base)
 
+    def test_ma_rising_gate(self):
+        # 趋势强化: 常数基准(MA走平) → 拦截; 上行基准(MA上升) → 放行
+        flat = lb.run_walk_forward("trend", self.frames, n_windows=3, hold=5, top_n=2,
+                                   initial_cash=100000.0, benchmark=self.bench,
+                                   spec_override={"require_index_above_ma": 20,
+                                                  "require_index_ma_rising": 5})
+        self.assertEqual(sum(w["trades_completed"] for w in flat["windows"]), 0)
+        rising_closes = {d: 100.0 + i for i, d in enumerate(self.dates)}
+        wf2 = lb.run_walk_forward("trend", self.frames, n_windows=3, hold=5, top_n=2,
+                                  initial_cash=100000.0,
+                                  benchmark={"name": "x", "code": "x", "closes": rising_closes},
+                                  spec_override={"require_index_above_ma": 20,
+                                                 "require_index_ma_rising": 5})
+        self.assertGreater(sum(w["trades_completed"] for w in wf2["windows"]), 0)
+
     def test_market_regime_gate(self):        # I3 结构假设: 基准持续深跌(有MA20历史后) → 全部暂停开仓;
         # 常数基准 → 闸门不拦截, 与基线一致
         closes = {d: (100.0 - i) for i, d in enumerate(self.dates)}  # 持续下跌, 收盘恒低于MA20
