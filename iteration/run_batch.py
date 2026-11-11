@@ -18,6 +18,14 @@ import local_backtest as lb  # noqa: E402
 from run_experiment import _load_real_inputs  # noqa: E402
 
 
+def _data_date_safe():
+    import local_tushare_data as _real
+    try:
+        return _real._data_date()
+    except Exception:
+        return None
+
+
 def main():
     batch_path = Path(sys.argv[1])
     spec = json.loads(batch_path.read_text(encoding="utf-8"))
@@ -48,6 +56,8 @@ def main():
             "hold": v.get("hold", 5), "top_n": v.get("top_n", 5),
             "spec_override": override or None,
             "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "data_date": _data_date_safe(),
+            "universe_note": "候选池=当前名录(幸存者偏差); ST当前名录回填历史(时点偏差); EOD收盘值",
         }, ensure_ascii=False, indent=2), encoding="utf-8")
         lines = [f"# walk-forward: trend ({tag})",
                  f"- 正超额窗口: {s['positive_excess_windows']}/{s['n_windows']} · "

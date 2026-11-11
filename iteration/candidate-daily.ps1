@@ -7,6 +7,7 @@ foreach ($name in @("TUSHARE_TOKEN","SHIMI_MARKET_USE","SHIMI_TUSHARE_PROXY")) {
         if ($v) { [Environment]::SetEnvironmentVariable($name, $v, "Process") }
     }
 }
+$env:PYTHONIOENCODING = "utf-8"
 $logDir = "D:\Codex_Space\Jobs\shimi-local\logs"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $log = Join-Path $logDir ("candidate-daily-{0}.log" -f (Get-Date -Format "yyyyMMdd"))

@@ -492,6 +492,7 @@ def run_walk_forward(strategy, frames, n_windows=6, hold=5, top_n=5,
             "benchmark_status": b.get("status"),
             "trades_completed": r["trades_completed"],
             "trades_open": r["trades_open"],
+            "signals_total": r["signals_total"],
             "win_rate": r["metrics"].get("win_rate"),
             "max_drawdown": r["metrics"].get("max_drawdown"),
         }
@@ -508,6 +509,9 @@ def run_walk_forward(strategy, frames, n_windows=6, hold=5, top_n=5,
                              if valid else None),
         "mean_excess_pp": (round(statistics.mean(w["excess_pp"] for w in valid), 2)
                            if valid else None),
+        "active_windows": sum(1 for w in windows if w["trades_completed"] > 0),
+        "total_trades": sum(w["trades_completed"] for w in windows),
+        "total_signals": sum(w["signals_total"] for w in windows),
         "gate_note": ("门槛参考 (I3 启用条件): 中位超额>0 且正超额窗口过半 "
                       "(单窗口运气不算数); 本轮为基线测量, 不构成投资建议"),
     }

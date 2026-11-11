@@ -48,6 +48,14 @@ def _load_real_inputs():
     return frames, name_map, st_codes, bench
 
 
+def _data_date_safe():
+    import local_tushare_data as _real
+    try:
+        return _real._data_date()
+    except Exception:
+        return None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--strategy", default="trend", choices=list(lb._STRATEGIES))
@@ -84,6 +92,7 @@ def main():
         "spec_override": spec_override or None,
         "panel_days": lb.PANEL_DAYS, "git_hash": git_hash,
         "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "data_date": _data_date_safe(),
         "st_filter": "applied" if st_codes else "degraded_no_namelist",
         "data_note": "Tushare EOD 真实面板; 候选池=当前名录(幸存者偏差披露见 notes); "
                      "窗口间无未来数据(eval_end截断); 基准=沪深300买入持有同窗口",

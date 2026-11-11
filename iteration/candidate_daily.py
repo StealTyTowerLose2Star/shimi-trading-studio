@@ -22,6 +22,22 @@ CANDIDATE = {"require_index_above_ma": 20, "max_atr_pct": 6.0,
              "breakout_no_pullback": True}
 
 
+def _data_governance(day):
+    """数据时点治理字段: 业务日期 vs 抓取时间(UTC)+股票池口径"""
+    import local_tushare_data as _real
+    retrieved = None
+    try:
+        snap = _real._daily_snapshot(day.replace("-", ""))
+        retrieved = getattr(snap, "attrs", {}).get("retrieved_at_utc") if snap is not None else None
+    except Exception:
+        retrieved = None
+    return {
+        "data_date": day,
+        "retrieved_at_utc": retrieved,
+        "universe_note": "候选池=当前名录(含幸存者偏差); ST为当前名录回填历史(时点偏差); EOD收盘值",
+    }
+
+
 def _prep(frames):
     dates = sorted({d for f in frames.values() for d in f["date"].tolist()})
     idx_maps = {c: {d: i for i, d in enumerate(f["date"].tolist())}
@@ -62,6 +78,12 @@ def main():
         "default_picks": [{"code": lb._short(c), "score": round(s, 1)} for c, s in default_picks[:5]],
         "candidate_picks": [{"code": lb._short(c), "score": round(s, 1)} for c, s in cand_picks[:5]],
         "candidate_spec": CANDIDATE,
+        "activity": {
+            "default_signals": len(default_picks),
+            "candidate_signals": len(cand_picks),
+            "candidate_active": bool(regime and cand_picks),
+        },
+        "data_governance": _data_governance(day),
         "note": "I4灰度观察: 候选=指数MA20闸门+ATR6+回踩确认; 默认=现参数; 仅对照记录不改动线上",
     }
     outdir = ROOT / "iteration" / "observe"
