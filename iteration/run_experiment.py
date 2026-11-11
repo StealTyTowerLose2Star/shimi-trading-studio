@@ -24,11 +24,11 @@ sys.path.insert(0, str(ROOT))
 import local_backtest as lb  # noqa: E402
 
 
-def _load_real_inputs():
+def _load_real_inputs(d0=None):
     """与 _run_local 同源: 面板 + 名录 + ST + 基准 (真实数据, 失败向上抛不补位)"""
     import local_tushare_data as _real
-    frames = _real._cached(f"kline_panel:{lb.PANEL_DAYS}", 600,
-                           lambda: _real._kline_panel_frames(lb.PANEL_DAYS))
+    frames = _real._cached(f"kline_panel:{lb.PANEL_DAYS}:{d0}", 600,
+                           lambda: _real._kline_panel_frames(lb.PANEL_DAYS, d0))
     try:
         basic = _real.real_get_stock_basic()
     except Exception:

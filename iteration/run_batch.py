@@ -31,10 +31,11 @@ def main():
     spec = json.loads(batch_path.read_text(encoding="utf-8"))
     base_override = spec.get("base", {}).get("set", {})
     variants = spec["variants"]
+    d0 = spec.get("d0")
 
     t0 = time.time()
     print("loading real inputs once...", flush=True)
-    frames, name_map, st_codes, bench = _load_real_inputs()
+    frames, name_map, st_codes, bench = _load_real_inputs(d0)
     print(f"loaded in {time.time() - t0:.0f}s, running {len(variants)} variants", flush=True)
 
     for v in variants:

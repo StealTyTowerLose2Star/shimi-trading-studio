@@ -1189,11 +1189,14 @@ def _open_days_range(n):
     return _cached(f"trade_cal_range:{n}", 21600, _fetch)[:n]
 
 
-def _kline_panel_frames(days):
+def _kline_panel_frames(days, d0=None):
     """最近 days 个已发布开市日的全市场日线面板 → {ts_code: kline契约DataFrame}
     每交易日快照走 _daily_snapshot (6h缓存, 跨模块共享); 无数据日跳过(不补位)"""
-    d0 = _data_date()
-    dates = [d for d in _open_days_range(days + 5) if d <= d0][:days]
+    anchor = d0
+    d0 = d0 or _data_date()
+    # 锚定历史 d0 时, 自然日窗口需覆盖 d0 之前的 days 个开市日 (默认只回溯近 n 日不够)
+    span = days + 5 if anchor is None else days * 2
+    dates = [d for d in _open_days_range(span) if d <= d0][:days]
     if not dates:
         raise MarketDataUnavailable("面板区间内无已发布交易日")
     series = {}
