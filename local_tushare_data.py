@@ -351,9 +351,12 @@ def _index_hist(ts_code, days=150):
     return _cached(f"idx_hist:{ts_code}", 3600, _fetch)
 
 
-def real_index_series(code, n=150, name="指数基准"):
+def real_index_series(code, n=150, name="指数基准", d0=None):
     """指数收盘价映射 {YYYY-MM-DD: close} (复用 _index_hist 1h缓存) —
-    回测同窗口买入持有基准 (2026-11-01 G1); 无数据由 _index_hist 显式抛错, 不补0"""
+    回测同窗口买入持有基准 (2026-11-01 G1); 无数据由 _index_hist 显式抛错, 不补0。
+    d0=历史锚点时, 取数范围回溯到锚点之前 (覆盖锚定面板全程)"""
+    if d0:
+        n = (datetime.now() - datetime.strptime(d0, "%Y%m%d")).days + 10
     df = _index_hist(code, n)
     closes = {_fmt_date(str(r["trade_date"])): float(r["close"])
               for _, r in df.iterrows()}

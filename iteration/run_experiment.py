@@ -42,7 +42,7 @@ def _load_real_inputs(d0=None):
             if "ST" in name.upper():
                 st_codes.add(short)
     try:
-        bench = _real.real_index_series("000300.SH", lb.PANEL_DAYS, name="沪深300")
+        bench = _real.real_index_series("000300.SH", lb.PANEL_DAYS, name="沪深300", d0=d0)
     except Exception as e:
         bench = {"note": f"指数基准获取失败(不补0): {str(e)[:80]}"}
     return frames, name_map, st_codes, bench
