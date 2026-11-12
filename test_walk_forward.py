@@ -179,6 +179,19 @@ class TestWalkForward(unittest.TestCase):
         base = sum(w["trades_completed"] for w in self.wf["windows"])
         self.assertEqual(sum(w["trades_completed"] for w in wf2["windows"]), base)
 
+    def test_index_gain_filter(self):
+        # 强趋势过滤: 指数20日涨幅<3%拦截; 强上行放行
+        flat = lb.run_walk_forward("trend", self.frames, n_windows=3, hold=5, top_n=2,
+                                   initial_cash=100000.0, benchmark=self.bench,
+                                   spec_override={"require_index_gain_20d": 0.03})
+        self.assertEqual(sum(w["trades_completed"] for w in flat["windows"]), 0)
+        rising_closes = {d: 100.0 + i for i, d in enumerate(self.dates)}
+        wf2 = lb.run_walk_forward("trend", self.frames, n_windows=3, hold=5, top_n=2,
+                                  initial_cash=100000.0,
+                                  benchmark={"name": "x", "code": "x", "closes": rising_closes},
+                                  spec_override={"require_index_gain_20d": 0.03})
+        self.assertGreater(sum(w["trades_completed"] for w in wf2["windows"]), 0)
+
     def test_ma_rising_gate(self):
         # 趋势强化: 常数基准(MA走平) → 拦截; 上行基准(MA上升) → 放行
         flat = lb.run_walk_forward("trend", self.frames, n_windows=3, hold=5, top_n=2,

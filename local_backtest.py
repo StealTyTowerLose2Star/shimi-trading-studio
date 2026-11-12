@@ -50,6 +50,7 @@ _SIGNAL_SPEC = {
         "max_prior_gain_pct": None,
         "require_index_above_ma": None,
         "require_index_ma_rising": None,  # 额外要求MA_N较N日前上升(趋势强化,过滤震荡)
+        "require_index_gain_20d": None,   # 强趋势过滤: 指数近20日涨幅不足此值(如0.03)暂停开仓
         "stop_loss_pct": None,        # E1: 如 -0.07 浮亏7%次日开盘提前卖出
         "exit_below_ma": None,        # E2: 如 20 收盘跌破MA20次日开盘提前卖出
         "breakout_no_pullback": None, # E3: True=信号日最低价曾破前高(20日)则放弃
@@ -67,6 +68,7 @@ _SIGNAL_SPEC = {
         "max_prior_gain_pct": None,
         "require_index_above_ma": None,
         "require_index_ma_rising": None,  # 额外要求MA_N较N日前上升(趋势强化,过滤震荡)
+        "require_index_gain_20d": None,   # 强趋势过滤: 指数近20日涨幅不足此值(如0.03)暂停开仓
         "stop_loss_pct": None,        # E1: 如 -0.07 浮亏7%次日开盘提前卖出
         "exit_below_ma": None,        # E2: 如 20 收盘跌破MA20次日开盘提前卖出
         "breakout_no_pullback": None, # E3: True=信号日最低价曾破前高(20日)则放弃
@@ -84,6 +86,7 @@ _SIGNAL_SPEC = {
         "max_prior_gain_pct": None,
         "require_index_above_ma": None,
         "require_index_ma_rising": None,  # 额外要求MA_N较N日前上升(趋势强化,过滤震荡)
+        "require_index_gain_20d": None,   # 强趋势过滤: 指数近20日涨幅不足此值(如0.03)暂停开仓
         "stop_loss_pct": None,        # E1: 如 -0.07 浮亏7%次日开盘提前卖出
         "exit_below_ma": None,        # E2: 如 20 收盘跌破MA20次日开盘提前卖出
         "breakout_no_pullback": None, # E3: True=信号日最低价曾破前高(20日)则放弃
@@ -300,6 +303,12 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
             ma_prev = sum(closes[d] for d in upto[-n - rising:-rising]) / n
             if ma <= ma_prev:
                 return False
+        # 强趋势过滤 (A路线): 指数近20日涨幅不足阈值时暂停开仓 (弱/平趋势不做)
+        gain_n = spec.get("require_index_gain_20d")
+        if gain_n is not None and len(upto) > 20:
+            gain = closes[upto[-1]] / closes[upto[-21]] - 1
+            if gain < gain_n:
+                return False
         return True
 
     for d in range(first_t, last_t + 1):
@@ -461,6 +470,7 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
         ] + ([f"市场状态闸门: 指数收盘低于MA{spec['require_index_above_ma']}的信号日暂停新开仓 "
               "(I3 结构假设启用); 指数历史不足日不拦截"] if spec.get("require_index_above_ma") else [])
           + ([f"趋势强化: 另需MA{spec['require_index_above_ma']}较{spec['require_index_ma_rising']}日前上升"] if spec.get("require_index_ma_rising") else [])
+          + ([f"强趋势过滤: 指数20日涨幅<{spec['require_index_gain_20d']:.0%}暂停开仓"] if spec.get("require_index_gain_20d") is not None else []),
           + ([f"提前退出: 浮亏达{spec['stop_loss_pct']:.0%}次日开盘止损" ] if spec.get("stop_loss_pct") else [])
           + ([f"提前退出: 收盘跌破MA{spec['exit_below_ma']}次日开盘离场"] if spec.get("exit_below_ma") else [])
           + (["入场确认: 信号日最低价不破前高(20日)才入选(回踩过滤)"] if spec.get("breakout_no_pullback") else [])
