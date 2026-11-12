@@ -19,7 +19,8 @@ import local_backtest as lb  # noqa: E402
 from run_experiment import _load_real_inputs  # noqa: E402
 
 CANDIDATE = {"require_index_above_ma": 20, "max_atr_pct": 6.0,
-             "breakout_no_pullback": True}
+             "breakout_no_pullback": True,
+             "require_index_ma_rising": 5, "require_index_gain_20d": 0.03}
 
 
 def _data_governance(day):
