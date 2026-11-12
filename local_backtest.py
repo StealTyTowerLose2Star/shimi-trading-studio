@@ -287,15 +287,15 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
     # 市场状态闸门 (I3 结构假设): 启用后, 指数收盘低于其 MA_N 的信号日暂停新开仓
     # (持仓按原计划退出, 不受影响); 指数历史不足的日子不拦截
     def _regime_ok(t):
-        n = spec.get("require_index_above_ma")
-        if not n or not benchmark or not benchmark.get("closes"):
+        if not benchmark or not benchmark.get("closes"):
             return True
         closes = benchmark["closes"]
         upto = sorted(d for d in closes if d <= dates[t])
+        n = spec.get("require_index_above_ma") or 20
         if len(upto) < n:
             return True
         ma = sum(closes[d] for d in upto[-n:]) / n
-        if closes[upto[-1]] < ma:
+        if spec.get("require_index_above_ma") and closes[upto[-1]] < ma:
             return False
         # 趋势强化: 额外要求 MA_N 斜率向上 (过滤刚站上均线但仍震荡的阶段)
         rising = spec.get("require_index_ma_rising")
