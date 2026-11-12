@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""I4 灰度观察名单 (2026-11-11 评审灰度方式): 每日生成"默认 vs 候选"信号对照,
-只记录不改动线上输出。观察 4 周, 允许交易窗口收益中位数>0 才转正式替换。
+"""I4 灰度观察名单: 每日生成"默认 vs 候选"信号对照, 只记录不改动线上输出。
+观察结果提交本人评审, 不依据单一收益指标自动转正式。
 
-候选 = require_index_above_ma=20 + max_atr_pct=6.0 + breakout_no_pullback=true
+候选 = 指数MA20 + MA20较5日前上升 + 指数20日涨幅3% + ATR6 + 回踩确认
 默认 = _SIGNAL_SPEC 原参数 (仅代码路径与候选一致, 便于控制变量)
 输出: iteration/observe/log.jsonl 追加 + 当日 JSON
 """
@@ -49,15 +49,10 @@ def _prep(frames):
     return dates, idx_maps, cols
 
 
-def _regime_ok(benchmark, day, n=20):
-    if not benchmark or not benchmark.get("closes"):
-        return True
-    closes = benchmark["closes"]
-    upto = sorted(d for d in closes if d <= day)
-    if len(upto) < n:
-        return True
-    ma = sum(closes[d] for d in upto[-n:]) / n
-    return closes[upto[-1]] >= ma
+def _regime_ok(benchmark, day, spec=None):
+    """观察名单与回测共用 index_regime_ok (I4返修: 五项门槛全部执行,
+    不再只判收盘≥MA)"""
+    return lb.index_regime_ok(benchmark, day, spec or CANDIDATE)
 
 
 def main():
@@ -85,7 +80,7 @@ def main():
             "candidate_active": bool(regime and cand_picks),
         },
         "data_governance": _data_governance(day),
-        "note": "I4灰度观察: 候选=指数MA20闸门+ATR6+回踩确认; 默认=现参数; 仅对照记录不改动线上",
+        "note": "I4灰度观察: 候选=指数MA20+MA20较5日前上升+指数20日涨幅3%+ATR6+回踩确认; 仅对照记录, 不自动转正式",
     }
     outdir = ROOT / "iteration" / "observe"
     outdir.mkdir(exist_ok=True)

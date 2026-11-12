@@ -222,5 +222,85 @@ class TestWalkForward(unittest.TestCase):
         self.assertEqual(sum(w["trades_completed"] for w in wf2["windows"]), base)
 
 
+class TestIndexRegimeGate(unittest.TestCase):
+    def setUp(self):
+        self.dates = _mk_dates(90)
+        self.spec = {"require_index_above_ma": 20,
+                     "require_index_ma_rising": 5,
+                     "require_index_gain_20d": 0.03}
+
+    def _bench(self, values):
+        return {"name": "x", "code": "x",
+                "closes": dict(zip(self.dates, values))}
+
+    def test_strong_uptrend_passes(self):
+        bench = self._bench([100.0 + i for i in range(90)])
+        self.assertTrue(lb.index_regime_ok(bench, self.dates[-1], self.spec))
+
+    def test_flat_and_falling_are_rejected(self):
+        for values in ([100.0] * 90, [200.0 - i for i in range(90)]):
+            with self.subTest(first=values[0]):
+                bench = self._bench(values)
+                self.assertFalse(lb.index_regime_ok(bench, self.dates[-1], self.spec))
+
+    def test_above_ma_but_falling_slope_is_rejected(self):
+        values = [200.0 - i for i in range(89)] + [150.0]
+        bench = self._bench(values)
+        closes = bench["closes"]
+        day = self.dates[-1]
+        upto = sorted(d for d in closes if d <= day)
+        ma_now = sum(closes[d] for d in upto[-20:]) / 20
+        ma_prev = sum(closes[d] for d in upto[-25:-5]) / 20
+        self.assertGreater(closes[day], ma_now)
+        self.assertLess(ma_now, ma_prev)
+        self.assertGreater(closes[day] / closes[upto[-21]] - 1, 0.03)
+        self.assertFalse(lb.index_regime_ok(bench, day, self.spec))
+
+    def test_insufficient_twenty_day_gain_is_rejected(self):
+        bench = self._bench([100.0 + i * 0.05 for i in range(90)])
+        day = self.dates[-1]
+        upto = sorted(d for d in bench["closes"] if d <= day)
+        self.assertLess(bench["closes"][day] / bench["closes"][upto[-21]] - 1, 0.03)
+        self.assertFalse(lb.index_regime_ok(bench, day, self.spec))
+
+    def test_missing_benchmark_and_insufficient_history_are_rejected(self):
+        self.assertFalse(lb.index_regime_ok(None, self.dates[-1], self.spec))
+        self.assertTrue(lb.index_regime_ok(None, self.dates[-1], {}))
+        cases = [({"require_index_above_ma": 20}, 19),
+                 ({"require_index_ma_rising": 5}, 24),
+                 ({"require_index_gain_20d": 0.03}, 20)]
+        for spec, length in cases:
+            with self.subTest(spec=spec):
+                bench = self._bench([100.0 + i for i in range(90)])
+                bench["closes"] = dict(list(bench["closes"].items())[:length])
+                self.assertFalse(lb.index_regime_ok(bench, self.dates[length - 1], spec))
+
+    def test_future_data_does_not_change_gate(self):
+        day = self.dates[39]
+        bench = self._bench([100.0 + i for i in range(90)])
+        disturbed = copy.deepcopy(bench)
+        for d in self.dates[40:]:
+            disturbed["closes"][d] = 1.0
+        self.assertEqual(lb.index_regime_ok(bench, day, self.spec),
+                         lb.index_regime_ok(disturbed, day, self.spec))
+
+    def test_observation_and_backtest_share_daily_gate(self):
+        from iteration import candidate_daily
+        scenarios = ([100.0 + i for i in range(90)], [100.0] * 90,
+                     [200.0 - i for i in range(89)] + [150.0])
+        for values in scenarios:
+            bench = self._bench(values)
+            for day in self.dates:
+                with self.subTest(first=values[0], day=day):
+                    self.assertEqual(candidate_daily._regime_ok(bench, day, self.spec),
+                                     lb.index_regime_ok(bench, day, self.spec))
+        flat = self._bench([100.0] * 90)
+        self.assertFalse(candidate_daily._regime_ok(flat, self.dates[-1]))
+        wf = lb.run_walk_forward("trend", _mk_frames(self.dates), n_windows=3,
+                                 hold=5, top_n=2, initial_cash=100000.0,
+                                 benchmark=flat, spec_override=dict(candidate_daily.CANDIDATE))
+        self.assertEqual(sum(w["trades_completed"] for w in wf["windows"]), 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

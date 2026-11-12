@@ -98,6 +98,45 @@ _SIGNAL_SPEC = {
 }
 
 
+def index_regime_ok(benchmark, day, spec):
+    """统一指数门槛 (I4返修: 回测与观察名单共用):
+    - require_index_above_ma: 收盘需 ≥ MA_N
+    - require_index_ma_rising: MA_N 需较 M 日前严格上升
+    - require_index_gain_20d: 近 20 日涨幅 ≥ X
+    门槛启用后, 基准缺失或历史不足一律显式拒绝"""
+    gate_enabled = any((spec.get("require_index_above_ma"),
+                        spec.get("require_index_ma_rising"),
+                        spec.get("require_index_gain_20d") is not None))
+    if not benchmark or not benchmark.get("closes"):
+        return not gate_enabled
+    closes = benchmark["closes"]
+    upto = sorted(d for d in closes if d <= day)
+    n = spec.get("require_index_above_ma")
+    if n:
+        if len(upto) < n:
+            return False
+        ma = sum(closes[d] for d in upto[-n:]) / n
+        if closes[upto[-1]] < ma:
+            return False
+    rising = spec.get("require_index_ma_rising")
+    if rising:
+        ma_n = n or 20
+        if len(upto) < ma_n + rising:
+            return False
+        ma_prev = sum(closes[d] for d in upto[-ma_n - rising:-rising]) / ma_n
+        ma_now = sum(closes[d] for d in upto[-ma_n:]) / ma_n
+        if ma_now <= ma_prev:
+            return False
+    gain_n = spec.get("require_index_gain_20d")
+    if gain_n is not None:
+        if len(upto) < 21:
+            return False
+        base = closes[upto[-21]]
+        if base <= 0 or closes[upto[-1]] / base - 1 < gain_n:
+            return False
+    return True
+
+
 def _short(ts_code):
     return ts_code.split(".")[0]
 
@@ -284,32 +323,9 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
         first_t = max(first_t, later[0])
     last_t = len(dates) - 1
 
-    # 市场状态闸门 (I3 结构假设): 启用后, 指数收盘低于其 MA_N 的信号日暂停新开仓
-    # (持仓按原计划退出, 不受影响); 指数历史不足的日子不拦截
+    # 市场状态闸门只暂停新开仓, 持仓按原计划退出; 与观察名单共用全部指数门槛
     def _regime_ok(t):
-        if not benchmark or not benchmark.get("closes"):
-            return True
-        closes = benchmark["closes"]
-        upto = sorted(d for d in closes if d <= dates[t])
-        n = spec.get("require_index_above_ma") or 20
-        if len(upto) < n:
-            return True
-        ma = sum(closes[d] for d in upto[-n:]) / n
-        if spec.get("require_index_above_ma") and closes[upto[-1]] < ma:
-            return False
-        # 趋势强化: 额外要求 MA_N 斜率向上 (过滤刚站上均线但仍震荡的阶段)
-        rising = spec.get("require_index_ma_rising")
-        if rising and len(upto) >= n + rising:
-            ma_prev = sum(closes[d] for d in upto[-n - rising:-rising]) / n
-            if ma <= ma_prev:
-                return False
-        # 强趋势过滤 (A路线): 指数近20日涨幅不足阈值时暂停开仓 (弱/平趋势不做)
-        gain_n = spec.get("require_index_gain_20d")
-        if gain_n is not None and len(upto) > 20:
-            gain = closes[upto[-1]] / closes[upto[-21]] - 1
-            if gain < gain_n:
-                return False
-        return True
+        return index_regime_ok(benchmark, dates[t], spec)
 
     for d in range(first_t, last_t + 1):
         day = dates[d]
@@ -467,9 +483,9 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
             f"面板限最近{PANEL_DAYS}个已发布开市日 (暖机{spec['warmup']}日), 年化=252",
             "候选池=当前名录, 已退市股票不在池中 (幸存者偏差未消除); 单窗口样本内结果, "
             "无样本外验证 — 回测仅证明计算口径自洽, 不构成投资有效性证据",
-        ] + ([f"市场状态闸门: 指数收盘低于MA{spec['require_index_above_ma']}的信号日暂停新开仓 "
-              "(I3 结构假设启用); 指数历史不足日不拦截"] if spec.get("require_index_above_ma") else [])
-          + ([f"趋势强化: 另需MA{spec['require_index_above_ma']}较{spec['require_index_ma_rising']}日前上升"] if spec.get("require_index_ma_rising") else [])
+        ] + ([f"市场状态闸门: 指数收盘低于MA{spec['require_index_above_ma']}的信号日暂停新开仓; "
+              "门槛启用后基准缺失或历史不足日同样暂停"] if spec.get("require_index_above_ma") else [])
+          + ([f"趋势强化: 另需MA{spec.get('require_index_above_ma') or 20}较{spec['require_index_ma_rising']}日前严格上升"] if spec.get("require_index_ma_rising") else [])
           + ([f"强趋势过滤: 指数20日涨幅<{spec['require_index_gain_20d']:.0%}暂停开仓"] if spec.get("require_index_gain_20d") is not None else [])
           + ([f"提前退出: 浮亏达{spec['stop_loss_pct']:.0%}次日开盘止损" ] if spec.get("stop_loss_pct") else [])
           + ([f"提前退出: 收盘跌破MA{spec['exit_below_ma']}次日开盘离场"] if spec.get("exit_below_ma") else [])
