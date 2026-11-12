@@ -470,7 +470,7 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
         ] + ([f"市场状态闸门: 指数收盘低于MA{spec['require_index_above_ma']}的信号日暂停新开仓 "
               "(I3 结构假设启用); 指数历史不足日不拦截"] if spec.get("require_index_above_ma") else [])
           + ([f"趋势强化: 另需MA{spec['require_index_above_ma']}较{spec['require_index_ma_rising']}日前上升"] if spec.get("require_index_ma_rising") else [])
-          + ([f"强趋势过滤: 指数20日涨幅<{spec['require_index_gain_20d']:.0%}暂停开仓"] if spec.get("require_index_gain_20d") is not None else []),
+          + ([f"强趋势过滤: 指数20日涨幅<{spec['require_index_gain_20d']:.0%}暂停开仓"] if spec.get("require_index_gain_20d") is not None else [])
           + ([f"提前退出: 浮亏达{spec['stop_loss_pct']:.0%}次日开盘止损" ] if spec.get("stop_loss_pct") else [])
           + ([f"提前退出: 收盘跌破MA{spec['exit_below_ma']}次日开盘离场"] if spec.get("exit_below_ma") else [])
           + (["入场确认: 信号日最低价不破前高(20日)才入选(回踩过滤)"] if spec.get("breakout_no_pullback") else [])
