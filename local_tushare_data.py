@@ -356,7 +356,8 @@ def real_index_series(code, n=150, name="指数基准", d0=None):
     回测同窗口买入持有基准 (2026-11-01 G1); 无数据由 _index_hist 显式抛错, 不补0。
     d0=历史锚点时, 取数范围回溯到锚点之前 (覆盖锚定面板全程)"""
     if d0:
-        n = (datetime.now() - datetime.strptime(d0, "%Y%m%d")).days + 10
+        # 需覆盖锚点之前的整个面板期间 (PANEL_DAYS 个开市日), 不是只到锚点
+        n = (datetime.now() - datetime.strptime(d0, "%Y%m%d")).days + 2 * 150
     df = _index_hist(code, n)
     closes = {_fmt_date(str(r["trade_date"])): float(r["close"])
               for _, r in df.iterrows()}
@@ -1197,8 +1198,12 @@ def _kline_panel_frames(days, d0=None):
     每交易日快照走 _daily_snapshot (6h缓存, 跨模块共享); 无数据日跳过(不补位)"""
     anchor = d0
     d0 = d0 or _data_date()
-    # 锚定历史 d0 时, 自然日窗口需覆盖 d0 之前的 days 个开市日 (默认只回溯近 n 日不够)
-    span = days + 5 if anchor is None else days * 2
+    # 锚定历史 d0 时, 自然日窗口需覆盖 d0 之前的 days 个开市日;
+    # 越早的锚点需要越大跨度 (开市日≈自然日0.7倍)
+    if anchor is None:
+        span = days + 5
+    else:
+        span = days + int((datetime.now() - datetime.strptime(anchor, "%Y%m%d")).days * 0.75) + 10
     dates = [d for d in _open_days_range(span) if d <= d0][:days]
     if not dates:
         raise MarketDataUnavailable("面板区间内无已发布交易日")
