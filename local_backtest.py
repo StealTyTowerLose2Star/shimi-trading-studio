@@ -51,6 +51,7 @@ _SIGNAL_SPEC = {
         "require_index_above_ma": None,
         "require_index_ma_rising": None,  # 额外要求MA_N较N日前上升(趋势强化,过滤震荡)
         "require_index_gain_20d": None,   # 强趋势过滤: 指数近20日涨幅不足此值(如0.03)暂停开仓
+        "max_per_industry": None,       # 板块集中度: 同一板块持仓不超过N只
         "stop_loss_pct": None,        # E1: 如 -0.07 浮亏7%次日开盘提前卖出
         "exit_below_ma": None,        # E2: 如 20 收盘跌破MA20次日开盘提前卖出
         "breakout_no_pullback": None, # E3: True=信号日最低价曾破前高(20日)则放弃
@@ -69,6 +70,7 @@ _SIGNAL_SPEC = {
         "require_index_above_ma": None,
         "require_index_ma_rising": None,  # 额外要求MA_N较N日前上升(趋势强化,过滤震荡)
         "require_index_gain_20d": None,   # 强趋势过滤: 指数近20日涨幅不足此值(如0.03)暂停开仓
+        "max_per_industry": None,       # 板块集中度: 同一板块持仓不超过N只
         "stop_loss_pct": None,        # E1: 如 -0.07 浮亏7%次日开盘提前卖出
         "exit_below_ma": None,        # E2: 如 20 收盘跌破MA20次日开盘提前卖出
         "breakout_no_pullback": None, # E3: True=信号日最低价曾破前高(20日)则放弃
@@ -87,6 +89,7 @@ _SIGNAL_SPEC = {
         "require_index_above_ma": None,
         "require_index_ma_rising": None,  # 额外要求MA_N较N日前上升(趋势强化,过滤震荡)
         "require_index_gain_20d": None,   # 强趋势过滤: 指数近20日涨幅不足此值(如0.03)暂停开仓
+        "max_per_industry": None,       # 板块集中度: 同一板块持仓不超过N只
         "stop_loss_pct": None,        # E1: 如 -0.07 浮亏7%次日开盘提前卖出
         "exit_below_ma": None,        # E2: 如 20 收盘跌破MA20次日开盘提前卖出
         "breakout_no_pullback": None, # E3: True=信号日最低价曾破前高(20日)则放弃
@@ -258,7 +261,7 @@ def _scan_day(spec, frames, cols, idx_maps, dates, t, st_codes):
 def run_backtest(strategy, frames, name_map=None, st_codes=None,
                  hold=5, top_n=5, initial_cash=INITIAL_CASH, benchmark=None,
                  eval_start=None, eval_end=None, include_trades=False,
-                 spec_override=None):
+                 spec_override=None, industry_map=None):
     """纯函数回测引擎 (离线可测): 输入全市场K线面板, 输出指标与成交明细。
 
     frames: {ts_code: DataFrame[date,open,high,low,close,volume,pct_chg] 升序}
@@ -400,6 +403,11 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
                     continue                       # 已持仓不加仓
                 if cash < per_trade_cash:
                     continue                       # 现金不足定额, 跳过
+                if spec.get("max_per_industry") is not None and industry_map:
+                    ind = industry_map.get(c) or industry_map.get(_short(c))
+                    if ind and sum(1 for pc in positions
+                                   if (industry_map.get(pc) or industry_map.get(_short(pc))) == ind) >= spec["max_per_industry"]:
+                        continue                   # 板块集中度限制: 同一板块持仓不超过N只
                 m = idx_maps[c]
                 i = m.get(day)
                 if i is None:
@@ -487,6 +495,7 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
               "门槛启用后基准缺失或历史不足日同样暂停"] if spec.get("require_index_above_ma") else [])
           + ([f"趋势强化: 另需MA{spec.get('require_index_above_ma') or 20}较{spec['require_index_ma_rising']}日前严格上升"] if spec.get("require_index_ma_rising") else [])
           + ([f"强趋势过滤: 指数20日涨幅<{spec['require_index_gain_20d']:.0%}暂停开仓"] if spec.get("require_index_gain_20d") is not None else [])
+          + ([f"板块集中度: 同一板块持仓不超过{spec['max_per_industry']}只"] if spec.get("max_per_industry") is not None else [])
           + ([f"提前退出: 浮亏达{spec['stop_loss_pct']:.0%}次日开盘止损" ] if spec.get("stop_loss_pct") else [])
           + ([f"提前退出: 收盘跌破MA{spec['exit_below_ma']}次日开盘离场"] if spec.get("exit_below_ma") else [])
           + (["入场确认: 信号日最低价不破前高(20日)才入选(回踩过滤)"] if spec.get("breakout_no_pullback") else [])
@@ -503,7 +512,7 @@ def run_backtest(strategy, frames, name_map=None, st_codes=None,
 def run_walk_forward(strategy, frames, n_windows=6, hold=5, top_n=5,
                      initial_cash=INITIAL_CASH, benchmark=None,
                      name_map=None, st_codes=None, include_trades=False,
-                     spec_override=None):
+                     spec_override=None, industry_map=None):
     """walk-forward 多窗口评估 (2026-11-08 I1): 可信号日期区间均分为 n 个连续窗口,
     每窗口独立回测 (eval_start/eval_end 截断, 窗口内无未来数据);
     汇总窗口明细+正超额窗口数+中位超额, 供迭代门槛判定与 AI 归因"""
@@ -520,7 +529,8 @@ def run_walk_forward(strategy, frames, n_windows=6, hold=5, top_n=5,
         r = run_backtest(strategy, frames, name_map=name_map, st_codes=st_codes,
                          hold=hold, top_n=top_n, initial_cash=initial_cash,
                          benchmark=benchmark, eval_start=ws, eval_end=we,
-                         include_trades=include_trades, spec_override=spec_override)
+                         include_trades=include_trades, spec_override=spec_override,
+                         industry_map=industry_map)
         b = r["benchmark"]
         entry = {
             "window": w + 1, "start": ws, "end": we,
