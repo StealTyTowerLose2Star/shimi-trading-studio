@@ -34,7 +34,8 @@ def _load_real_inputs(d0=None):
     ds_path = ds_dir / f"d0-{d0 or 'latest'}.pkl"
     if ds_path.exists():
         with open(ds_path, "rb") as f:
-            return pickle.load(f)
+            data = pickle.load(f)
+            return data if len(data) == 5 else (*data, {})
 
     import local_tushare_data as _real
     frames = _real._cached(f"kline_panel:{lb.PANEL_DAYS}:{d0}", 600,
@@ -55,9 +56,10 @@ def _load_real_inputs(d0=None):
         bench = _real.real_index_series("000300.SH", lb.PANEL_DAYS, name="沪深300", d0=d0)
     except Exception as e:
         bench = {"note": f"指数基准获取失败(不补0): {str(e)[:80]}"}
+    industry_map = {c: (info or {}).get("industry", "") for c, info in (basic or {}).items()} if isinstance(basic, dict) else {}
     with open(ds_path, "wb") as f:
-        pickle.dump((frames, name_map, st_codes, bench), f)
-    return frames, name_map, st_codes, bench
+        pickle.dump((frames, name_map, st_codes, bench, industry_map), f)
+    return frames, name_map, st_codes, bench, industry_map
 
 
 def _data_date_safe():

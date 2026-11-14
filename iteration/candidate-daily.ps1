@@ -8,8 +8,10 @@ foreach ($name in @("TUSHARE_TOKEN","SHIMI_MARKET_USE","SHIMI_TUSHARE_PROXY")) {
     }
 }
 $env:PYTHONIOENCODING = "utf-8"
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $logDir = "D:\Codex_Space\Jobs\shimi-local\logs"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $log = Join-Path $logDir ("candidate-daily-{0}.log" -f (Get-Date -Format "yyyyMMdd"))
 & "D:\Codex_Space\Jobs\shimi-local\venv\Scripts\python.exe" -u "D:\Codex_Space\Jobs\shimi-local\iteration\candidate_daily.py" 2>&1 |
     Out-File -Append -Encoding utf8 $log
+exit $LASTEXITCODE

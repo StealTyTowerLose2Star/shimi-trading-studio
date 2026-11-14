@@ -56,7 +56,7 @@ def _regime_ok(benchmark, day, spec=None):
 
 
 def main():
-    frames, name_map, st_codes, bench = _load_real_inputs()
+    frames, name_map, st_codes, bench, _industry_map = _load_real_inputs()
     dates, idx_maps, cols = _prep(frames)
     t = len(dates) - 1
     day = dates[t]

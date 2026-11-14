@@ -35,7 +35,7 @@ def main():
 
     t0 = time.time()
     print("loading real inputs once...", flush=True)
-    frames, name_map, st_codes, bench = _load_real_inputs(d0)
+    frames, name_map, st_codes, bench, industry_map = _load_real_inputs(d0)
     print(f"loaded in {time.time() - t0:.0f}s, running {len(variants)} variants", flush=True)
 
     for v in variants:
@@ -46,7 +46,8 @@ def main():
         wf = lb.run_walk_forward("trend", frames, n_windows=v.get("windows", 6),
                                  hold=v.get("hold", 5), top_n=v.get("top_n", 5),
                                  benchmark=bench, name_map=name_map, st_codes=st_codes,
-                                 include_trades=True, spec_override=override or None)
+                                 include_trades=True, spec_override=override or None,
+                                 industry_map=industry_map)
         outdir = ROOT / "iteration" / f"{time.strftime('%Y%m%d-%H%M%S')}-trend-{tag}"
         outdir.mkdir(parents=True, exist_ok=False)
         s = wf["summary"]
