@@ -25,7 +25,17 @@ import local_backtest as lb  # noqa: E402
 
 
 def _load_real_inputs(d0=None):
-    """与 _run_local 同源: 面板 + 名录 + ST + 基准 (真实数据, 失败向上抛不补位)"""
+    """与 _run_local 同源: 面板 + 名录 + ST + 基准 (真实数据, 失败向上抛不补位)。
+    2026-11-14 本人要求数据本地化: 实验数据集一次性落盘 iteration/datasets/d0-*.pkl,
+    同 d0 的后续实验(参数/指标调整)完全不再调用 API; 仅新 d0 或新增数据字段才联网"""
+    import pickle
+    ds_dir = ROOT / "iteration" / "datasets"
+    ds_dir.mkdir(exist_ok=True)
+    ds_path = ds_dir / f"d0-{d0 or 'latest'}.pkl"
+    if ds_path.exists():
+        with open(ds_path, "rb") as f:
+            return pickle.load(f)
+
     import local_tushare_data as _real
     frames = _real._cached(f"kline_panel:{lb.PANEL_DAYS}:{d0}", 600,
                            lambda: _real._kline_panel_frames(lb.PANEL_DAYS, d0))
@@ -45,6 +55,8 @@ def _load_real_inputs(d0=None):
         bench = _real.real_index_series("000300.SH", lb.PANEL_DAYS, name="沪深300", d0=d0)
     except Exception as e:
         bench = {"note": f"指数基准获取失败(不补0): {str(e)[:80]}"}
+    with open(ds_path, "wb") as f:
+        pickle.dump((frames, name_map, st_codes, bench), f)
     return frames, name_map, st_codes, bench
 
 
