@@ -65,7 +65,7 @@ def main():
     spec_cand.update(CANDIDATE)
 
     default_picks = lb._scan_day(spec_default, frames, cols, idx_maps, dates, t, st_codes)
-    regime = _regime_ok(bench, day)
+    regime = lb.index_regime_ok(bench, day, spec_cand)
     cand_picks = (lb._scan_day(spec_cand, frames, cols, idx_maps, dates, t, st_codes)
                   if regime else [])
     rec = {
@@ -88,7 +88,7 @@ def main():
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     (outdir / f"{day}.json").write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(rec, ensure_ascii=False, indent=2))
-    return 0
+    return rec
 
 
 if __name__ == "__main__":
